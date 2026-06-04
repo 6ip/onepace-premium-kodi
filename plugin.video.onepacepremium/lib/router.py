@@ -83,9 +83,11 @@ def _catalog_url(catalog_type: str, catalog_id: str, extra: str):
 
 
 def _catalog_specs(manifest: dict, catalog_type: str):
+    # "anime" catalogs are treated as "series" so they use the proven series pipeline
+    match_types = {catalog_type, "anime"} if catalog_type == "series" else {catalog_type}
     specs = []
     for catalog in manifest.get("catalogs", ()):
-        if catalog["type"] != catalog_type:
+        if catalog["type"] not in match_types:
             continue
 
         catalog_id = catalog.get("id")
@@ -239,13 +241,11 @@ def _add_directory_items(items: list, total_items: Optional[int] = None):
 
 
 def _process_catalog_items(videos: list, catalog_type: str):
-    # Use "files" for series/anime to prevent Kodi making background stream
-    # resolution calls (which would fail with series-level IDs).
     xbmcplugin.setContent(
-        ADDON_HANDLE, "movies" if catalog_type == "movie" else "files"
+        ADDON_HANDLE, "movies" if catalog_type == "movie" else "tvshows"
     )
 
-    action = "list_seasons" if catalog_type in ("series", "anime") else "get_streams"
+    action = "list_seasons" if catalog_type == "series" else "get_streams"
     items = []
 
     for video in videos:
@@ -283,10 +283,9 @@ def list_root():
         return
 
     movie_specs = _catalog_specs(manifest, "movie")
-    series_specs = _catalog_specs(manifest, "series")
-    anime_specs = _catalog_specs(manifest, "anime")
+    series_specs = _catalog_specs(manifest, "series")  # also matches anime via _catalog_specs
 
-    if not movie_specs and not series_specs and not anime_specs:
+    if not movie_specs and not series_specs:
         _notify_error("No compatible catalogs found")
     else:
         items = []
@@ -302,14 +301,6 @@ def list_root():
             items.append(
                 (
                     build_url("list_catalog_type", catalog_type="series"),
-                    xbmcgui.ListItem(label="Series"),
-                    True,
-                )
-            )
-        if anime_specs:
-            items.append(
-                (
-                    build_url("list_catalog_type", catalog_type="anime"),
                     xbmcgui.ListItem(label="Anime"),
                     True,
                 )
@@ -465,12 +456,12 @@ def list_seasons(params):
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
 
     season_thumbnails = _season_thumbnails(videos)
-    # If no videos have a season field, treat everything as season 1.
     seasons = sorted(
         {
             season
             for video in videos
-            for season in [video.get("season") if video.get("season") is not None else 1]
+            for season in [video.get("season")]
+            if season is not None
         }
     )
     if 0 in seasons:
@@ -522,10 +513,7 @@ def list_episodes(params):
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
     season_videos = sorted(
-        (
-            video for video in videos
-            if (video.get("season") if video.get("season") is not None else 1) == selected_season
-        ),
+        (video for video in videos if video.get("season") == selected_season),
         key=lambda video: _episode_number(video) or 0,
     )
 
