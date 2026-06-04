@@ -239,8 +239,10 @@ def _add_directory_items(items: list, total_items: Optional[int] = None):
 
 
 def _process_catalog_items(videos: list, catalog_type: str):
+    # Use "files" for series/anime to prevent Kodi making background stream
+    # resolution calls (which would fail with series-level IDs).
     xbmcplugin.setContent(
-        ADDON_HANDLE, "movies" if catalog_type == "movie" else "tvshows"
+        ADDON_HANDLE, "movies" if catalog_type == "movie" else "files"
     )
 
     action = "list_seasons" if catalog_type in ("series", "anime") else "get_streams"
@@ -463,12 +465,12 @@ def list_seasons(params):
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
 
     season_thumbnails = _season_thumbnails(videos)
+    # If no videos have a season field, treat everything as season 1.
     seasons = sorted(
         {
             season
             for video in videos
-            for season in [video.get("season")]
-            if season is not None
+            for season in [video.get("season") if video.get("season") is not None else 1]
         }
     )
     if 0 in seasons:
@@ -520,7 +522,10 @@ def list_episodes(params):
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
     season_videos = sorted(
-        (video for video in videos if video.get("season") == selected_season),
+        (
+            video for video in videos
+            if (video.get("season") if video.get("season") is not None else 1) == selected_season
+        ),
         key=lambda video: _episode_number(video) or 0,
     )
 
