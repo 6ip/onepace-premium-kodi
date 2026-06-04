@@ -243,7 +243,7 @@ def _process_catalog_items(videos: list, catalog_type: str):
         ADDON_HANDLE, "movies" if catalog_type == "movie" else "tvshows"
     )
 
-    action = "list_seasons" if catalog_type == "series" else "get_streams"
+    action = "list_seasons" if catalog_type in ("series", "anime") else "get_streams"
     items = []
 
     for video in videos:
