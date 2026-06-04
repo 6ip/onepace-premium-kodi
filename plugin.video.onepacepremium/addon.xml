@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.onepacepremium" version="1.0.4" name="One Pace Premium" provider-name="6ip">
+<addon id="plugin.video.onepacepremium" version="1.0.5" name="One Pace Premium" provider-name="6ip">
     <requires>
         <import addon="xbmc.python" version="3.0.1" />
         <import addon="xbmc.metadata" version="2.1.0" />
         <import addon="script.module.requests" version="2.31.0" />
-        <import addon="plugin.video.elementum" version="0.1.112" optional="true" />
+        <import addon="plugin.video.elementum" version="0.0.7" optional="true" />
     </requires>
     <extension point="xbmc.python.pluginsource" library="main.py">
         <provides>video</provides>

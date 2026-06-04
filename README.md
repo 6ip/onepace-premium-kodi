@@ -2,6 +2,17 @@
 
 Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`repository.onepacepremium`). Watch the complete One Pace catalog with your debrid service directly inside Kodi.
 
+## 📋 Prerequisites
+
+**For torrent/P2P streams** (optional — debrid streams work without this):
+
+1. Download the Elementum repository zip:
+   `https://github.com/ElementumOrg/repository.elementumorg/releases/download/v0.0.7/repository.elementumorg-0.0.7.zip`
+2. In Kodi: **Add-ons** ➔ **Install from zip file** ➔ select the downloaded zip
+3. Then: **Install from repository** ➔ **Elementum Repository** ➔ **Video add-ons** ➔ **Elementum** ➔ **Install**
+
+> Debrid streams work without Elementum. You only need it when the P2P addon is announced.
+
 ## 🚀 Installation (Recommended)
 
 Using the repository ensures you receive automatic updates.
