@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="repository.onepacepremium" version="1.0.0" name="One Pace Premium Repository" provider-name="6ip">
+    <extension point="xbmc.addon.repository" name="One Pace Premium Repository">
+        <dir>
+            <info compressed="false">https://6ip.github.io/onepace-premium-kodi/addons.xml</info>
+            <checksum>https://6ip.github.io/onepace-premium-kodi/addons.xml.md5</checksum>
+            <datadir zip="true">https://6ip.github.io/onepace-premium-kodi/</datadir>
+        </dir>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary>One Pace Premium Repository</summary>
+        <description>Repository for the One Pace Premium Kodi add-on</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.png</fanart>
+        </assets>
+    </extension>
+</addon>
