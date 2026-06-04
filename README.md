@@ -6,12 +6,11 @@ Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`reposito
 
 **For torrent/P2P streams** (optional — debrid streams work without this):
 
-1. Download the Elementum repository zip:
-   `https://github.com/ElementumOrg/repository.elementumorg/releases/download/v0.0.7/repository.elementumorg-0.0.7.zip`
+1. Go to **https://elementum.surge.sh/** and download the **Universal** version under *Elementum Downloads*
 2. In Kodi: **Add-ons** ➔ **Install from zip file** ➔ select the downloaded zip
-3. Then: **Install from repository** ➔ **Elementum Repository** ➔ **Video add-ons** ➔ **Elementum** ➔ **Install**
+3. Elementum is now installed and ready for torrent playback
 
-> Debrid streams work without Elementum. You only need it when the P2P addon is announced.
+> Debrid streams work without Elementum.
 
 ## 🚀 Installation (Recommended)
 
