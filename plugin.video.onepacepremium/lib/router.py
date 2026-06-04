@@ -282,31 +282,54 @@ def list_root():
         xbmcplugin.endOfDirectory(ADDON_HANDLE)
         return
 
-    movie_specs = _catalog_specs(manifest, "movie")
     series_specs = _catalog_specs(manifest, "series")  # also matches anime via _catalog_specs
 
-    if not movie_specs and not series_specs:
+    if not series_specs:
         _notify_error("No compatible catalogs found")
-    else:
-        items = []
-        if movie_specs:
-            items.append(
-                (
-                    build_url("list_catalog_type", catalog_type="movie"),
-                    xbmcgui.ListItem(label="Movies"),
-                    True,
-                )
-            )
-        if series_specs:
-            items.append(
-                (
-                    build_url("list_catalog_type", catalog_type="series"),
-                    xbmcgui.ListItem(label="Anime"),
-                    True,
-                )
-            )
-        _add_directory_items(items)
+        xbmcplugin.endOfDirectory(ADDON_HANDLE)
+        return
 
+    # Go directly to catalog content — skip the type/catalog-name intermediate menus
+    spec = series_specs[0]
+    catalog_type = "series"
+    catalog_id = spec["id"]
+
+    xbmcplugin.setContent(ADDON_HANDLE, "tvshows")
+
+    response = fetch_data(_catalog_url(catalog_type, catalog_id, "skip=0"))
+    if not response:
+        xbmcplugin.endOfDirectory(ADDON_HANDLE)
+        return
+
+    videos = response.get("metas", ())
+    items = []
+
+    if spec.get("has_search"):
+        items.append(
+            (
+                build_url("search_catalog", catalog_type=catalog_type, catalog_id=catalog_id),
+                xbmcgui.ListItem(label="Search"),
+                True,
+            )
+        )
+
+    for video in videos:
+        video_id = video["id"]
+        video_name = video["name"]
+        list_item = xbmcgui.ListItem(label=video_name, offscreen=True)
+        tags = list_item.getVideoInfoTag()
+        _set_ids(tags, video_id)
+        _set_video_tags(tags, video, video_name)
+        _set_art(list_item, video)
+        items.append(
+            (
+                build_url("list_seasons", catalog_type=catalog_type, video_id=video_id),
+                list_item,
+                True,
+            )
+        )
+
+    _add_directory_items(items)
     xbmcplugin.endOfDirectory(ADDON_HANDLE)
 
 
