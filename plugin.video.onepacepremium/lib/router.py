@@ -479,6 +479,14 @@ def list_seasons(params):
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
 
     season_thumbnails = _season_thumbnails(videos)
+
+    # Use dedicated season posters from meta["seasons"] if available
+    season_poster_map = {
+        s["season"]: s["poster"]
+        for s in meta.get("seasons", [])
+        if s.get("season") is not None and s.get("poster")
+    }
+
     seasons = sorted(
         {
             season
@@ -498,7 +506,9 @@ def list_seasons(params):
         tags = list_item.getVideoInfoTag()
         tags.setTitle(label)
         tags.setTvShowTitle(show_title)
-        _set_season_art(list_item, meta, season_thumbnails.get(season))
+        # Prefer dedicated season poster, fall back to first-episode thumbnail
+        season_art = season_poster_map.get(season) or season_thumbnails.get(season)
+        _set_season_art(list_item, meta, season_art)
 
         items.append(
             (
@@ -575,12 +585,14 @@ def list_episodes(params):
         # Use the episode's own ID if present (custom addons like One Pace),
         # otherwise fall back to the standard seriesId:season:episode format.
         stream_video_id = video.get("id") or f"{video_id}:{selected_season}:{episode_number}"
+        episode_thumb = _upgrade_metahub_url(video.get("thumbnail")) or ""
         items.append(
             (
                 build_url(
                     "get_streams",
                     catalog_type=catalog_type,
                     video_id=stream_video_id,
+                    thumb=episode_thumb,
                 ),
                 list_item,
                 True,
@@ -601,6 +613,7 @@ def get_streams(params):
 
     catalog_type = params["catalog_type"]
     video_id = params["video_id"]
+    episode_thumb = params.get("thumb", "")
     stream_url = _compose_url(
         get_base_url(),
         f"{get_config_prefix()}stream/{catalog_type}/{video_id}.json?kodi=1",
@@ -646,6 +659,8 @@ def get_streams(params):
         list_item = xbmcgui.ListItem(
             label=stream_name, label2=stream_tagline, offscreen=True
         )
+        if episode_thumb:
+            list_item.setArt({"thumb": episode_thumb, "poster": episode_thumb})
         tags = list_item.getVideoInfoTag()
         tags.setTitle(stream_name)
         tags.setPlot(stream_description)
