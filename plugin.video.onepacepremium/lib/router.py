@@ -707,9 +707,12 @@ def get_streams(params):
                 stream.get("sources", []),
                 behavior_hints.get("filename", stream_name),
             )
+            file_idx = stream.get("fileIdx")
+            elementum_url = "plugin://plugin.video.elementum/play?uri=" + parse.quote_plus(magnet_link)
+            if file_idx is not None:
+                elementum_url += f"&file={file_idx}"
             resolved_stream_url = (
-                "plugin://plugin.video.elementum/play?uri="
-                + parse.quote_plus(magnet_link)
+                elementum_url
             )
         else:
             continue
