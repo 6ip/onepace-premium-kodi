@@ -29,12 +29,12 @@ Once installed, link the add-on to your account:
 
 1. Go to **Add-ons** ➔ **My add-ons** ➔ **Video add-ons** ➔ **One Pace Premium** ➔ **Configure**.
 2. Click **Configure/Reconfigure**.
-3. A **6-character setup code** will appear (e.g., `A3F7K2`).
+3. An **8-character hex setup code** will appear (e.g., `1a2b3c4d`).
 4. Open the configuration page on your phone or browser — the URL is shown on screen.
 5. Select your debrid provider and paste your API key.
 6. Click **Install Addon** — Kodi detects the setup automatically.
 
-> For torrent streams (P2P), install the [Elementum](https://elementum.surge.sh/) add-on. Debrid streams work without it.
+> Alternatively, open the configuration page manually, click **Setup Kodi** from the install menu, and enter the code shown in Kodi.
 
 ## 📦 Manual Installation
 
