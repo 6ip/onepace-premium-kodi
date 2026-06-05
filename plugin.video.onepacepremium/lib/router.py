@@ -215,8 +215,7 @@ def _set_episode_art(list_item, video: dict, meta: dict):
     episode_thumb = _upgrade_metahub_url(video.get("thumbnail"))
     poster = _upgrade_metahub_url(meta.get("poster"))
     background = _upgrade_metahub_url(meta.get("background"))
-    logo = meta.get("logo") or None
-    art = _build_art(episode_thumb, poster, episode_thumb or background or poster, logo)
+    art = _build_art(episode_thumb, poster, episode_thumb or background or poster)
     if art:
         list_item.setArt(art)
 
@@ -225,8 +224,7 @@ def _set_season_art(list_item, meta: dict, season_thumbnail: Optional[str]):
     season_thumb = _upgrade_metahub_url(season_thumbnail)
     poster = _upgrade_metahub_url(meta.get("poster"))
     background = _upgrade_metahub_url(meta.get("background")) or poster
-    logo = meta.get("logo") or None
-    art = _build_art(season_thumb, poster, background, logo)
+    art = _build_art(season_thumb, poster, background)
     if art:
         list_item.setArt(art)
 
