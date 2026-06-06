@@ -308,15 +308,6 @@ def list_root():
     videos = response.get("metas", ())
     items = []
 
-    if spec.get("has_search"):
-        items.append(
-            (
-                build_url("search_catalog", catalog_type=catalog_type, catalog_id=catalog_id),
-                xbmcgui.ListItem(label="Search"),
-                True,
-            )
-        )
-
     for video in videos:
         video_id = video["id"]
         video_name = video["name"]
