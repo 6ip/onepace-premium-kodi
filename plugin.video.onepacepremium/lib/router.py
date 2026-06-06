@@ -177,6 +177,7 @@ def _build_art(
         art.setdefault("banner", background)
     if logo:
         art["clearlogo"] = logo
+        art["tvshow.clearlogo"] = logo
     return art
 
 
@@ -216,7 +217,8 @@ def _set_episode_art(list_item, video: dict, meta: dict):
     episode_thumb = _upgrade_metahub_url(video.get("thumbnail"))
     poster = _upgrade_metahub_url(meta.get("poster"))
     background = _upgrade_metahub_url(meta.get("background"))
-    art = _build_art(episode_thumb, poster, episode_thumb or background or poster)
+    logo = meta.get("logo") or None
+    art = _build_art(episode_thumb, poster, episode_thumb or background or poster, logo)
     if art:
         list_item.setArt(art)
 
@@ -225,7 +227,8 @@ def _set_season_art(list_item, meta: dict, season_thumbnail: Optional[str]):
     season_thumb = _upgrade_metahub_url(season_thumbnail)
     poster = _upgrade_metahub_url(meta.get("poster"))
     background = _upgrade_metahub_url(meta.get("background")) or poster
-    art = _build_art(season_thumb, poster, background)
+    logo = meta.get("logo") or None
+    art = _build_art(season_thumb, poster, background, logo)
     if art:
         list_item.setArt(art)
 
@@ -589,6 +592,7 @@ def list_episodes(params):
                     catalog_type=catalog_type,
                     video_id=stream_video_id,
                     thumb=episode_thumb,
+                    logo=meta.get("logo") or "",
                 ),
                 list_item,
                 True,
@@ -610,6 +614,7 @@ def get_streams(params):
     catalog_type = params["catalog_type"]
     video_id = params["video_id"]
     episode_thumb = params.get("thumb", "")
+    series_logo = params.get("logo", "")
     stream_url = _compose_url(
         get_base_url(),
         f"{get_config_prefix()}stream/{catalog_type}/{video_id}.json?kodi=1",
@@ -638,7 +643,8 @@ def get_streams(params):
         season_number = None
         episode_number = None
     is_imdb = imdb_id.startswith("tt")
-    sub_id = video_id[3:] if video_id.startswith("pp_") else ""
+    sub_id = video_id if not is_imdb and ":" not in video_id else ""
+    log(f"get_streams video_id={video_id!r} sub_id={sub_id!r}")
 
     stream_items = []
     stream_count = len(streams)
@@ -722,6 +728,8 @@ def get_streams(params):
             playback_params["episode"] = episode
         if sub_id:
             playback_params["sub_id"] = sub_id
+        if series_logo:
+            playback_params["logo"] = series_logo
 
         stream_items.append(
             (build_url("play_video", **playback_params), list_item, False)
@@ -737,6 +745,7 @@ def play_video(params):
     season = params.get("season")
     episode = params.get("episode")
     sub_id = params.get("sub_id", "")
+    logo = params.get("logo", "")
 
     list_item = xbmcgui.ListItem(path=video_url)
     tags = list_item.getVideoInfoTag()
@@ -749,6 +758,9 @@ def play_video(params):
         xbmcgui.Window(10000).setProperty(
             "script.trakt.ids", json.dumps({"imdb": imdb})
         )
+
+    if logo:
+        list_item.setArt({"clearlogo": logo, "tvshow.clearlogo": logo})
 
     if sub_id:
         try:
