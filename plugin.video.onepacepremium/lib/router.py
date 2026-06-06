@@ -12,11 +12,12 @@ from .parser import parse_stream_info
 from .utils import (ADDON_HANDLE, ADDON_ID, build_url,
                     convert_info_hash_to_magnet, ensure_configured, fetch_data,
                     get_base_url, get_catalog_provider_url, get_config_prefix,
-                    is_elementum_installed_and_enabled, log)
+                    HTTP_SESSION, is_elementum_installed_and_enabled, log)
 
 CATALOG_PAGE_SIZE = 25
 SUPPORTED_CATALOG_TYPES = {"movie", "series", "anime"}
 SERIES_CATALOG_EXCLUDED_NAMES = {"last videos", "calendar videos"}
+_SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 
 _YEAR_RE = re.compile(r"\d{4}")
 _CATALOG_PRIORITY_MAP = {"popular": 0, "new": 1, "featured": 2}
@@ -637,6 +638,7 @@ def get_streams(params):
         season_number = None
         episode_number = None
     is_imdb = imdb_id.startswith("tt")
+    sub_id = video_id[3:] if video_id.startswith("pp_") else ""
 
     stream_items = []
     stream_count = len(streams)
@@ -718,6 +720,8 @@ def get_streams(params):
         if season is not None:
             playback_params["season"] = season
             playback_params["episode"] = episode
+        if sub_id:
+            playback_params["sub_id"] = sub_id
 
         stream_items.append(
             (build_url("play_video", **playback_params), list_item, False)
@@ -732,6 +736,7 @@ def play_video(params):
     imdb = params.get("imdb")
     season = params.get("season")
     episode = params.get("episode")
+    sub_id = params.get("sub_id", "")
 
     list_item = xbmcgui.ListItem(path=video_url)
     tags = list_item.getVideoInfoTag()
@@ -744,6 +749,17 @@ def play_video(params):
         xbmcgui.Window(10000).setProperty(
             "script.trakt.ids", json.dumps({"imdb": imdb})
         )
+
+    if sub_id:
+        try:
+            resp = HTTP_SESSION.get(_SUBS_URL, timeout=10)
+            if resp.ok:
+                all_subs = resp.json()
+                subs = all_subs.get(sub_id, [])
+                if subs:
+                    list_item.setSubtitles([s["url"] for s in subs])
+        except Exception:
+            pass
 
     xbmcplugin.setResolvedUrl(ADDON_HANDLE, True, list_item)
 
