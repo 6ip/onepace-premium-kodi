@@ -756,10 +756,13 @@ def play_video(params):
             if resp.ok:
                 all_subs = resp.json()
                 subs = all_subs.get(sub_id, [])
+                log(f"Subtitles for {sub_id}: {len(subs)} tracks found")
                 if subs:
                     list_item.setSubtitles([s["url"] for s in subs])
-        except Exception:
-            pass
+            else:
+                log(f"Subtitles fetch failed: HTTP {resp.status_code}")
+        except Exception as e:
+            log(f"Subtitles error: {e}")
 
     xbmcplugin.setResolvedUrl(ADDON_HANDLE, True, list_item)
 
