@@ -348,8 +348,9 @@ def list_root():
                 list_item.setInfo("video", {"mediatype": "tvshow"})
         else:
             list_item.setInfo("video", {"mediatype": "tvshow"})
+        series_ctx_label = "Mark as Unwatched" if (total and watched_count >= total) else "Mark as Watched"
         list_item.addContextMenuItems([(
-            "Mark as Watched / Unwatched",
+            series_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='series', series_id=video_id, catalog_type=catalog_type)})",
         )])
         items.append(
@@ -556,9 +557,11 @@ def list_seasons(params):
         season_art = season_poster_map.get(season) or season_thumbnails.get(season)
         _set_season_art(list_item, meta, season_art)
         ep_ids = season_ep_ids.get(season, [])
+        season_fully_watched = False
         if ep_ids:
             s_total = len(ep_ids)
             s_watched = sum(1 for eid in ep_ids if eid in series_watched)
+            season_fully_watched = s_watched >= s_total
             props = {
                 "UnWatchedEpisodes": str(s_total - s_watched),
                 "TotalEpisodes": str(s_total),
@@ -572,8 +575,9 @@ def list_seasons(params):
                 list_item.setInfo("video", {"mediatype": "season", "overlay": 0, "playcount": 0})
             else:
                 list_item.setInfo("video", {"mediatype": "season"})
+        season_ctx_label = "Mark as Unwatched" if season_fully_watched else "Mark as Watched"
         list_item.addContextMenuItems([(
-            "Mark as Watched / Unwatched",
+            season_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='season', series_id=video_id, catalog_type=catalog_type, season=season)})",
         )])
 
@@ -659,8 +663,9 @@ def list_episodes(params):
             tags.setGenres(meta_genres)
 
         _set_episode_art(list_item, video, meta)
+        ep_ctx_label = "Mark as Unwatched" if stream_video_id in series_watched else "Mark as Watched"
         list_item.addContextMenuItems([(
-            "Mark as Watched / Unwatched",
+            ep_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='episode', series_id=video_id, episode_id=stream_video_id)})",
         )])
         episode_thumb = _upgrade_metahub_url(video.get("thumbnail")) or ""
@@ -672,6 +677,7 @@ def list_episodes(params):
                     video_id=stream_video_id,
                     thumb=episode_thumb,
                     logo=meta.get("logo") or "",
+                    parent_id=video_id,
                 ),
                 list_item,
                 True,
@@ -694,6 +700,7 @@ def get_streams(params):
     video_id = params["video_id"]
     episode_thumb = params.get("thumb", "")
     series_logo = params.get("logo", "")
+    parent_id = params.get("parent_id", "")
     stream_url = _compose_url(
         get_base_url(),
         f"{get_config_prefix()}stream/{catalog_type}/{video_id}.json?kodi=1",
@@ -809,6 +816,9 @@ def get_streams(params):
             playback_params["sub_id"] = sub_id
         if series_logo:
             playback_params["logo"] = series_logo
+        if parent_id:
+            playback_params["series_id"]  = parent_id
+            playback_params["episode_id"] = video_id
 
         stream_items.append(
             (build_url("play_video", **playback_params), list_item, False)
@@ -818,7 +828,74 @@ def get_streams(params):
     xbmcplugin.endOfDirectory(ADDON_HANDLE)
 
 
+class _WatchMonitor(xbmc.Player):
+    """xbmc.Player subclass that records whether playback ended naturally."""
+    def __init__(self):
+        super().__init__()
+        self.ended_naturally = False
+
+    def onPlayBackEnded(self):
+        self.ended_naturally = True
+
+
+# Mutable counter so each monitor session can detect when it has been superseded.
+# Using a list avoids needing `global` declarations in nested functions.
+_MONITOR_GEN = [0]
+
+
+def _monitor_playback(series_id, episode_id):
+    """Block until playback ends, then auto-mark the episode watched if appropriate.
+
+    Called from play_video after setResolvedUrl so it runs inside the plugin
+    action thread — keeping the process alive for the duration of playback.
+    """
+    _MONITOR_GEN[0] += 1
+    my_gen = _MONITOR_GEN[0]
+
+    kodi_monitor = xbmc.Monitor()
+    player = _WatchMonitor()
+    last_time, total_time = 0.0, 0.0
+
+    # Wait up to 15 s for the player to actually start
+    for _ in range(15):
+        if player.isPlaying():
+            break
+        if kodi_monitor.waitForAbort(1):
+            return
+    if not player.isPlaying():
+        log(f"[monitor] playback never started for {episode_id!r}, giving up")
+        return
+
+    log(f"[monitor] tracking {episode_id!r} (gen={my_gen})")
+
+    # Poll every 5 s to save current position for the threshold check
+    while player.isPlaying():
+        if kodi_monitor.waitForAbort(5):
+            return  # Kodi is shutting down
+        try:
+            last_time  = player.getTime()
+            total_time = player.getTotalTime()
+        except Exception:
+            pass
+
+    # If a newer monitor session has started, let it handle the marking
+    if _MONITOR_GEN[0] != my_gen:
+        log(f"[monitor] superseded by gen={_MONITOR_GEN[0]}, skipping mark for {episode_id!r}")
+        return
+
+    # Decide whether to mark as watched
+    pct = (last_time / total_time) if total_time > 0 else 0.0
+    should_mark = player.ended_naturally or pct >= 0.85
+    log(f"[monitor] ended natural={player.ended_naturally} pct={pct*100:.0f}% → mark={should_mark}")
+    if should_mark:
+        _watched.set_episodes_watched(series_id, [episode_id], True)
+        xbmc.executebuiltin("Container.Refresh")
+
+
 def play_video(params):
+    series_id = params.get("series_id", "")
+    episode_id = params.get("episode_id", "")
+
     video_url = params["video_url"]
     imdb = params.get("imdb")
     season = params.get("season")
@@ -856,6 +933,9 @@ def play_video(params):
             log(f"Subtitles error: {e}")
 
     xbmcplugin.setResolvedUrl(ADDON_HANDLE, True, list_item)
+
+    if series_id and episode_id:
+        _monitor_playback(series_id, episode_id)
 
 
 def mark_watched(params):
