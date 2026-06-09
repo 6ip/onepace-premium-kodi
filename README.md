@@ -17,7 +17,11 @@ Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`reposito
 Using the repository ensures you receive automatic updates.
 
 1. **Add Source**: Go to **Settings** ➔ **File manager** ➔ **Add source**.
-2. **Enter URL**: Enter `https://6ip.github.io/onepace-premium-kodi` and name it `One Pace Premium`.
+2. **Enter URL**: Enter the URL below and name it `One Pace Premium`.
+
+   ```
+   https://6ip.github.io/onepace-premium-kodi
+   ```
 3. **Install Repository**: Go to **Add-ons** ➔ **Install from zip file** ➔ select `One Pace Premium` ➔ install `repository.onepacepremium-X.Y.Z.zip`.
 4. **Install Add-on**: Go to **Install from repository** ➔ **One Pace Premium Repository** ➔ **Video add-ons** ➔ **One Pace Premium** ➔ **Install**.
 

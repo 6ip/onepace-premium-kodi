@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.onepacepremium" version="1.2.5" name="One Pace Premium" provider-name="6ip">
+<addon id="plugin.video.onepacepremium" version="1.3.0" name="One Pace Premium" provider-name="6ip">
     <requires>
         <import addon="xbmc.python" version="3.0.1" />
         <import addon="xbmc.metadata" version="2.1.0" />
