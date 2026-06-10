@@ -64,7 +64,6 @@ def configure_addon():
         monitor = xbmc.Monitor()
 
         base_url = addon.getSetting("base_url")
-        secret_string = addon.getSetting("secret_string")
 
         entered_url = dialog.input("One Pace Premium server URL", base_url)
         if not entered_url:
@@ -72,15 +71,6 @@ def configure_addon():
 
         base_url = normalize_base_url(entered_url)
         addon.setSetting("base_url", base_url)
-
-        entered_secret = dialog.input(
-            "API configuration (optional — paste your config string)",
-            secret_string,
-            option=xbmcgui.ALPHANUM_HIDE_INPUT,
-        )
-        if entered_secret is not None:
-            secret_string = entered_secret
-            addon.setSetting("secret_string", secret_string)
 
         try:
             data = _post_json(
@@ -106,14 +96,11 @@ def configure_addon():
 
         addon.setSetting("stremio_api_prefix", stremio_api_prefix)
 
-        dialog.ok(
-            "One Pace Premium Kodi Setup",
-            f"Setup code: [B]{code}[/B]\nOpen the configuration page on your phone or browser and complete setup before the code expires.",
-        )
-
         if dialog.yesno(
             "One Pace Premium Kodi Setup",
-            "Open the configuration page now?",
+            f"Setup code: [B]{code}[/B]\nOpen the configuration page on your phone or browser and complete setup before the code expires.",
+            yeslabel="Open Browser",
+            nolabel="Got It",
         ):
             open_configuration_page(configure_url)
 
