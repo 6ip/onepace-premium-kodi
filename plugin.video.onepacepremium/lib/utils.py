@@ -1,3 +1,4 @@
+import os
 import sys
 from typing import List
 from urllib import parse
@@ -11,6 +12,8 @@ ADDON_HANDLE = int(sys.argv[1])
 ADDON = xbmcaddon.Addon()
 ADDON_PATH = sys.argv[0]
 ADDON_ID = ADDON.getAddonInfo("id")
+ADDON_DIR = ADDON.getAddonInfo("path")
+ALERT_ICON = os.path.join(ADDON_DIR, "resources", "media", "alert.png")
 
 REQUEST_TIMEOUT = 20
 HTTP_SESSION = requests.Session()

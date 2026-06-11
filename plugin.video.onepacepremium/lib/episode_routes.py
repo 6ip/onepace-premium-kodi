@@ -13,9 +13,10 @@ from .art import (_episode_number, _season_thumbnails, _set_episode_art,
 from .parser import parse_stream_info
 from .provider_api import _compose_url, _fetch_provider_meta, _parse_release_year
 from .route_common import _add_directory_items, _notify_error
-from .utils import (ADDON_HANDLE, build_url, convert_info_hash_to_magnet,
-                     ensure_configured, fetch_data, get_base_url,
-                     get_config_prefix, is_elementum_installed_and_enabled,
+from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
+                     convert_info_hash_to_magnet, ensure_configured,
+                     fetch_data, get_base_url, get_config_prefix,
+                     get_secret_string, is_elementum_installed_and_enabled,
                      log)
 
 
@@ -231,6 +232,20 @@ def check_resume(params):
 
 def get_streams(params):
     if not ensure_configured():
+        return
+
+    if not get_secret_string():
+        xbmcplugin.setContent(ADDON_HANDLE, "files")
+        list_item = xbmcgui.ListItem(label="Add-on Not Configured - Click to Set Up", offscreen=True)
+        list_item.setArt({"icon": ALERT_ICON, "thumb": ALERT_ICON})
+        tags = list_item.getVideoInfoTag()
+        tags.setMediaType("video")
+        tags.setPlot(
+            "Your One Pace Premium add-on hasn't been configured yet. "
+            "Click here to open Add-on Settings and complete setup."
+        )
+        _add_directory_items([(build_url("open_addon_settings"), list_item, True)])
+        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
         return
 
     catalog_type = params["catalog_type"]

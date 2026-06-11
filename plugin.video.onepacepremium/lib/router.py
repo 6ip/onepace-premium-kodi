@@ -8,6 +8,7 @@ from .catalog_routes import (list_catalog, list_catalog_type, list_root,
 from .episode_routes import (check_resume, get_streams, list_episodes,
                               list_seasons, mark_watched)
 from .playback import play_video
+from .route_common import open_addon_settings
 from .utils import ADDON_ID, log
 
 
@@ -19,6 +20,7 @@ def open_settings(_params):
 
 _ACTIONS = {
     "open_settings": open_settings,
+    "open_addon_settings": open_addon_settings,
     "list_catalog_type": list_catalog_type,
     "list_catalog": list_catalog,
     "search_catalog": search_catalog,
