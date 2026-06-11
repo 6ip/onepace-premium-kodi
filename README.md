@@ -6,6 +6,8 @@ Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`reposito
 
 **For torrent/P2P streams** (optional — debrid streams work without this):
 
+**[Elementum](https://howtomediacenter.com/en/install-elementum-kodi/)**: An exceptional add-on that offers high-quality streams via torrents.
+
 1. Go to **https://elementum.surge.sh/** and download the **Universal** version under *Elementum Downloads*
 2. In Kodi: **Add-ons** ➔ **Install from zip file** ➔ select the downloaded zip
 3. Elementum is now installed and ready for torrent playback
