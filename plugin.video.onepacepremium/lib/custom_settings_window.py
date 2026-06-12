@@ -1,4 +1,6 @@
+import json
 import os
+import random
 import subprocess
 import time
 import traceback
@@ -8,11 +10,28 @@ import requests
 import xbmc
 import xbmcaddon
 import xbmcgui
+import xbmcvfs
 
 ADDON_ID = "plugin.video.onepacepremium"
 REQUEST_TIMEOUT = 20
 POLL_INTERVAL_SECONDS = 3
 HTTP_SESSION = requests.Session()
+PENDING_SETUP_FILE = "pending_setup.json"
+CODE_COLORS = [
+    "ffffff",
+    "66BB6A",
+    "A7F3D0",
+    "60A5FA",
+    "80D8FF",
+    "E9D5FF",
+    "FF9100",
+    "FF6B35",
+    "FFC107",
+    "FBBF24",
+    "ccccff",
+    "ff9966",
+    "ff9999",
+]
 
 
 def normalize_base_url(url: str):
@@ -57,6 +76,44 @@ def _get_json(url: str):
     return response.json()
 
 
+def _pending_setup_path(addon):
+    profile_dir = xbmcvfs.translatePath(addon.getAddonInfo("profile"))
+    if not os.path.isdir(profile_dir):
+        os.makedirs(profile_dir, exist_ok=True)
+    return os.path.join(profile_dir, PENDING_SETUP_FILE)
+
+
+def _load_pending_setup(addon):
+    path = _pending_setup_path(addon)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _save_pending_setup(addon, code, configure_url, expires_at, base_url, color):
+    with open(_pending_setup_path(addon), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "code": code,
+                "configure_url": configure_url,
+                "expires_at": expires_at,
+                "base_url": base_url,
+                "color": color,
+            },
+            f,
+        )
+
+
+def _clear_pending_setup(addon):
+    path = _pending_setup_path(addon)
+    if os.path.isfile(path):
+        os.remove(path)
+
+
 def configure_addon():
     try:
         addon = xbmcaddon.Addon(ADDON_ID)
@@ -72,33 +129,54 @@ def configure_addon():
         base_url = normalize_base_url(entered_url)
         addon.setSetting("base_url", base_url)
 
-        try:
-            data = _post_json(
-                urljoin(base_url + "/", "kodi/generate_setup_code"),
-                {},
-            )
-        except requests.RequestException as exc:
-            dialog.notification(
-                "One Pace Premium",
-                "Failed to generate setup code",
-                xbmcgui.NOTIFICATION_ERROR,
-            )
-            xbmc.log(f"Failed to generate setup code: {exc}", xbmc.LOGERROR)
-            return
+        # Reuse an existing, unexpired setup code instead of spamming a new one
+        code = None
+        configure_url = None
+        expires_in = None
+        color = None
 
-        try:
-            code = data["code"]
-            configure_url = data["configure_url"]
-            expires_in = data["expires_in"]
-            stremio_api_prefix = data.get("stremio_api_prefix", "")
-        except (KeyError, ValueError, TypeError) as exc:
-            raise ValueError("Invalid response from /kodi/generate_setup_code") from exc
+        pending = _load_pending_setup(addon)
+        if pending and pending.get("base_url") == base_url:
+            remaining = pending.get("expires_at", 0) - time.time()
+            if remaining > 0:
+                code = pending["code"]
+                configure_url = pending["configure_url"]
+                expires_in = remaining
+                color = pending.get("color")
 
-        addon.setSetting("stremio_api_prefix", stremio_api_prefix)
+        if code is None:
+            try:
+                data = _post_json(
+                    urljoin(base_url + "/", "kodi/generate_setup_code"),
+                    {},
+                )
+            except requests.RequestException as exc:
+                dialog.notification(
+                    "One Pace Premium",
+                    "Failed to generate setup code",
+                    xbmcgui.NOTIFICATION_ERROR,
+                )
+                xbmc.log(f"Failed to generate setup code: {exc}", xbmc.LOGERROR)
+                return
+
+            try:
+                code = data["code"]
+                configure_url = data["configure_url"]
+                expires_in = data["expires_in"]
+                stremio_api_prefix = data.get("stremio_api_prefix", "")
+            except (KeyError, ValueError, TypeError) as exc:
+                raise ValueError("Invalid response from /kodi/generate_setup_code") from exc
+
+            addon.setSetting("stremio_api_prefix", stremio_api_prefix)
+            color = random.choice(CODE_COLORS)
+            _save_pending_setup(addon, code, configure_url, time.time() + expires_in, base_url, color)
+
+        if not color:
+            color = random.choice(CODE_COLORS)
 
         if dialog.yesno(
             "One Pace Premium Kodi Setup",
-            f"Setup code: [B]{code}[/B]\nOpen the configuration page on your phone or browser and complete setup before the code expires.",
+            f"Setup code: [COLOR FF{color}][B]{code}[/B][/COLOR]\nOpen the configuration page on your phone or browser and complete setup before the code expires.",
             yeslabel="Open Browser",
             nolabel="Got It",
         ):
@@ -131,6 +209,7 @@ def configure_addon():
                         addon.setSetting(
                             "stremio_api_prefix", manifest_data["stremio_api_prefix"]
                         )
+                    _clear_pending_setup(addon)
                     dialog.notification(
                         "One Pace Premium",
                         "Kodi setup complete!",
@@ -141,11 +220,14 @@ def configure_addon():
             if monitor.waitForAbort(POLL_INTERVAL_SECONDS):
                 return
 
-        dialog.notification(
-            "One Pace Premium",
-            "Setup code expired. Run setup again.",
-            xbmcgui.NOTIFICATION_ERROR,
-        )
+        pending = _load_pending_setup(addon)
+        if pending and pending.get("code") == code:
+            _clear_pending_setup(addon)
+            dialog.notification(
+                "One Pace Premium",
+                "Setup code expired. Run setup again.",
+                xbmcgui.NOTIFICATION_ERROR,
+            )
     except Exception:
         xbmc.log(
             "One Pace Premium Kodi setup crashed:\n" + traceback.format_exc(),
