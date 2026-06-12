@@ -190,6 +190,11 @@ def configure_addon():
 
         deadline = time.time() + expires_in
         while time.time() < deadline:
+            current_pending = _load_pending_setup(addon)
+            if not current_pending or current_pending.get("code") != code:
+                # Another poller already finished (or superseded) this code
+                return
+
             try:
                 manifest_data = _get_json(
                     urljoin(base_url + "/", f"kodi/get_manifest/{code}")
