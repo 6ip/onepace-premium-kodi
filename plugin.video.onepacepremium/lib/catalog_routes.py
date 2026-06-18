@@ -101,13 +101,8 @@ def list_root():
                 props["WatchedEpisodes"] = str(watched_count)
             list_item.setProperties(props)
             if watched_count >= total:
-                list_item.setInfo("video", {"mediatype": "tvshow", "overlay": 5, "playcount": 1})
-            elif watched_count > 0:
-                list_item.setInfo("video", {"mediatype": "tvshow", "overlay": 0, "playcount": 0})
-            else:
-                list_item.setInfo("video", {"mediatype": "tvshow"})
-        else:
-            list_item.setInfo("video", {"mediatype": "tvshow"})
+                tags.setPlaycount(1)
+        tags.setMediaType("tvshow")
         series_ctx_label = "Mark as Unwatched" if (total and watched_count >= total) else "Mark as Watched"
         list_item.addContextMenuItems([(
             series_ctx_label,

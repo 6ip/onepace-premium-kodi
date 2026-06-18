@@ -98,11 +98,8 @@ def list_seasons(params):
                 props["WatchedEpisodes"] = str(s_watched)
             list_item.setProperties(props)
             if s_watched >= s_total:
-                list_item.setInfo("video", {"mediatype": "season", "overlay": 5, "playcount": 1})
-            elif s_watched > 0:
-                list_item.setInfo("video", {"mediatype": "season", "overlay": 0, "playcount": 0})
-            else:
-                list_item.setInfo("video", {"mediatype": "season"})
+                tags.setPlaycount(1)
+        tags.setMediaType("season")
         season_ctx_label = "Mark as Unwatched" if season_fully_watched else "Mark as Watched"
         list_item.addContextMenuItems([(
             season_ctx_label,
@@ -180,10 +177,9 @@ def list_episodes(params):
         tags.setSeason(selected_season)
         tags.setEpisode(int(episode_number))
 
+        tags.setMediaType("episode")
         if stream_video_id in series_watched:
-            list_item.setInfo("video", {"mediatype": "episode", "overlay": 5, "playcount": 1})
-        else:
-            list_item.setInfo("video", {"mediatype": "episode"})
+            tags.setPlaycount(1)
             bm = _bookmarks.get(stream_video_id)
             if bm:
                 pos, total = bm.get("pos", 0), bm.get("total", 0)
