@@ -300,6 +300,8 @@ def get_streams(params):
         episode_number = int(episode) if episode is not None else None
     is_imdb = imdb_id.startswith("tt")
     sub_id = video_id if not is_imdb and ":" not in video_id else ""
+    if sub_id.startswith("pp_"):
+        sub_id = sub_id[3:]
     log(f"get_streams video_id={video_id!r} sub_id={sub_id!r}")
 
     stream_items = []
