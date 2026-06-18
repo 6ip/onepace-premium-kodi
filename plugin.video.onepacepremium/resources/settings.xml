@@ -4,6 +4,14 @@
         <setting label="Stremio API Prefix" id="stremio_api_prefix" type="text" default="" visible="false" />
         <setting label="Configuration" id="secret_string" type="text" default="" />
         <setting label="Configure/Reconfigure" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/custom_settings_window.py)" />
+    </category>
+    <category label="Tools">
+        <setting type="lsep" label="Check Services" />
         <setting label="Check Elementum" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />
+        <setting type="sep" />
+        <setting type="lsep" label="Cache" />
+        <setting label="Clear API Cache" id="clear_cache" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_cache)" />
+        <setting label="Clear Bookmarks" id="clear_bookmarks" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_bookmarks)" />
+        <setting label="Clear Watched History" id="clear_watched" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_watched)" />
     </category>
 </settings>

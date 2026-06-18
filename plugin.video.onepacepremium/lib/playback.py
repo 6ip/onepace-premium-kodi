@@ -114,21 +114,36 @@ def play_video(params):
     episode = params.get("episode")
     sub_id = params.get("sub_id", "")
     logo = params.get("logo", "")
-
+    series_name = params.get("series_name", "")
+    episode_title = params.get("episode_title", "")
+    season_poster = params.get("season_poster", "")
     list_item = xbmcgui.ListItem(path=video_url)
     tags = list_item.getVideoInfoTag()
 
+    if episode_title:
+        tags.setTitle(episode_title)
     if season and episode:
+        tags.setMediaType("episode")
         tags.setSeason(int(season))
         tags.setEpisode(int(episode))
+        if series_name:
+            tags.setTvShowTitle(series_name)
     if imdb:
         tags.setIMDBNumber(imdb)
         xbmcgui.Window(10000).setProperty(
             "script.trakt.ids", json.dumps({"imdb": imdb})
         )
 
+    art = {}
     if logo:
-        list_item.setArt({"clearlogo": logo, "tvshow.clearlogo": logo})
+        art["clearlogo"] = logo
+        art["tvshow.clearlogo"] = logo
+    if season_poster:
+        art["poster"] = season_poster
+        art["tvshow.poster"] = season_poster
+        art["season.poster"] = season_poster
+    if art:
+        list_item.setArt(art)
 
     if sub_id:
         try:

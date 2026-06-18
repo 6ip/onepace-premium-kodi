@@ -84,6 +84,10 @@ def convert_info_hash_to_magnet(
     return "&".join(magnet_parts)
 
 
+def get_setting(key):
+    return ADDON.getSetting(key)
+
+
 def get_base_url():
     return ADDON.getSetting("base_url").rstrip("/")
 

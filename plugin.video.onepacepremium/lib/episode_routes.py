@@ -16,8 +16,8 @@ from .route_common import _add_directory_items, _notify_error
 from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
                      fetch_data, get_base_url, get_config_prefix,
-                     get_secret_string, is_elementum_installed_and_enabled,
-                     log)
+                     get_secret_string,
+                     is_elementum_installed_and_enabled, log)
 
 
 def list_seasons(params):
@@ -154,6 +154,12 @@ def list_episodes(params):
     meta_genres = meta.get("genres")
     meta_release_info = meta.get("releaseInfo")
     series_watched = _watched.get_watched(video_id)
+    season_poster_map = {
+        s["season"]: s["poster"]
+        for s in meta.get("seasons", [])
+        if s.get("season") is not None and s.get("poster")
+    }
+    season_poster = season_poster_map.get(selected_season) or ""
     log(f"[watched] series={video_id!r} watched_count={len(series_watched)} ids={sorted(series_watched)}")
 
     items = []
@@ -212,6 +218,11 @@ def list_episodes(params):
                     thumb=episode_thumb,
                     logo=meta.get("logo") or "",
                     parent_id=video_id,
+                    series_name=show_title,
+                    episode_title=title,
+                    season=selected_season,
+                    episode=episode_number,
+                    season_poster=season_poster,
                 ),
                 list_item,
                 True,
@@ -253,6 +264,9 @@ def get_streams(params):
     episode_thumb = params.get("thumb", "")
     series_logo = params.get("logo", "")
     parent_id = params.get("parent_id", "")
+    series_name = params.get("series_name", "")
+    episode_title = params.get("episode_title", "")
+    season_poster = params.get("season_poster", "")
     episode_bookmark = _bookmarks.get(video_id)
     stream_url = _compose_url(
         get_base_url(),
@@ -280,10 +294,10 @@ def get_streams(params):
         episode_number = int(episode)
     else:
         imdb_id = video_id
-        season = None
-        episode = None
-        season_number = None
-        episode_number = None
+        season = params.get("season")
+        episode = params.get("episode")
+        season_number = int(season) if season is not None else None
+        episode_number = int(episode) if episode is not None else None
     is_imdb = imdb_id.startswith("tt")
     sub_id = video_id if not is_imdb and ":" not in video_id else ""
     log(f"get_streams video_id={video_id!r} sub_id={sub_id!r}")
@@ -377,6 +391,12 @@ def get_streams(params):
         if parent_id:
             playback_params["series_id"]  = parent_id
             playback_params["episode_id"] = video_id
+        if series_name:
+            playback_params["series_name"] = series_name
+        if episode_title:
+            playback_params["episode_title"] = episode_title
+        if season_poster:
+            playback_params["season_poster"] = season_poster
 
         stream_items.append(
             (build_url("play_video", **playback_params), list_item, False)
