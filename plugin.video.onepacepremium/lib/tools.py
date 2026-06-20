@@ -1,3 +1,6 @@
+import glob
+import os
+import sqlite3
 import sys
 
 import xbmcaddon
@@ -35,6 +38,33 @@ def clear_cache():
     )
 
 
+def _clear_kodi_bookmarks():
+    """Clear Kodi's own bookmark (resume) entries for our plugin from MyVideos.db."""
+    try:
+        db_dir = xbmcvfs.translatePath("special://profile/Database/")
+        db_files = sorted(glob.glob(os.path.join(db_dir, "MyVideos*.db")), reverse=True)
+        if not db_files:
+            return 0
+        con = sqlite3.connect(db_files[0])
+        cur = con.cursor()
+        cur.execute(
+            "SELECT idFile FROM files WHERE strFilename LIKE ?",
+            ("%plugin.video.onepacepremium%",)
+        )
+        file_ids = [str(r[0]) for r in cur.fetchall()]
+        count = 0
+        if file_ids:
+            ph = ",".join(file_ids)
+            cur.execute(f"DELETE FROM bookmark WHERE idFile IN ({ph})")
+            count = cur.rowcount
+            con.commit()
+        cur.close()
+        con.close()
+        return count
+    except Exception:
+        return 0
+
+
 def clear_bookmarks():
     dialog = xbmcgui.Dialog()
     if not dialog.yesno(
@@ -48,11 +78,32 @@ def clear_bookmarks():
     path = _profile() + "bookmarks.json"
     if xbmcvfs.exists(path):
         xbmcvfs.delete(path)
+    _clear_kodi_bookmarks()
     dialog.notification(
         "One Pace Premium",
         "All resume bookmarks cleared.",
         xbmcgui.NOTIFICATION_INFO,
     )
+
+
+def _reset_kodi_playcounts():
+    """Reset Kodi's playCount to 0 for all our plugin's file entries in MyVideos.db."""
+    try:
+        db_dir = xbmcvfs.translatePath("special://profile/Database/")
+        db_files = sorted(glob.glob(os.path.join(db_dir, "MyVideos*.db")), reverse=True)
+        if not db_files:
+            return
+        con = sqlite3.connect(db_files[0])
+        cur = con.cursor()
+        cur.execute(
+            "UPDATE files SET playCount=0 WHERE strFilename LIKE ?",
+            ("%plugin.video.onepacepremium%",)
+        )
+        con.commit()
+        cur.close()
+        con.close()
+    except Exception:
+        pass
 
 
 def clear_watched():
@@ -68,6 +119,7 @@ def clear_watched():
     path = _profile() + "watched.json"
     if xbmcvfs.exists(path):
         xbmcvfs.delete(path)
+    _reset_kodi_playcounts()
     dialog.notification(
         "One Pace Premium",
         "Watched history cleared.",

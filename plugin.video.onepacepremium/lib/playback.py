@@ -83,6 +83,7 @@ def _monitor_playback(series_id, episode_id):
                 marked = True
                 _watched.set_episodes_watched(series_id, [episode_id], True)
                 _bookmarks.clear(episode_id)
+
                 log(f"[monitor] marked watched at {pct*100:.0f}% for {episode_id!r}")
 
     # If a newer monitor session has started, let it handle the rest
@@ -96,6 +97,7 @@ def _monitor_playback(series_id, episode_id):
         if player.ended_naturally or pct >= 0.85:
             _watched.set_episodes_watched(series_id, [episode_id], True)
             _bookmarks.clear(episode_id)
+            _clear_kodi_bookmark(episode_id)
             log(f"[monitor] marked watched at end (natural={player.ended_naturally} pct={pct*100:.0f}%) for {episode_id!r}")
         elif last_time > 180 and total_time > 0:
             _bookmarks.set_bookmark(episode_id, last_time, total_time)
@@ -114,9 +116,12 @@ def play_video(params):
     episode = params.get("episode")
     sub_id = params.get("sub_id", "")
     logo = params.get("logo", "")
-    series_name = params.get("series_name", "")
+    series_name   = params.get("series_name", "")
     episode_title = params.get("episode_title", "")
     season_poster = params.get("season_poster", "")
+    stream_name   = params.get("stream_name", "")
+    stream_desc   = params.get("stream_desc", "")
+    episode_plot  = params.get("episode_plot", "")
     list_item = xbmcgui.ListItem(path=video_url)
     tags = list_item.getVideoInfoTag()
 
@@ -128,6 +133,18 @@ def play_video(params):
         tags.setEpisode(int(episode))
         if series_name:
             tags.setTvShowTitle(series_name)
+
+    plot_parts = []
+    if stream_name:
+        plot_parts.append(f"[B]{stream_name}[/B]")
+    if stream_desc:
+        plot_parts.append(stream_desc)
+    if episode_plot:
+        if plot_parts:
+            plot_parts.append("─" * 30)
+        plot_parts.append(episode_plot)
+    if plot_parts:
+        tags.setPlot("\n".join(plot_parts))
     if imdb:
         tags.setIMDBNumber(imdb)
         xbmcgui.Window(10000).setProperty(

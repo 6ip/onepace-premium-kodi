@@ -5,8 +5,8 @@ import xbmc
 
 from .catalog_routes import (list_catalog, list_catalog_type, list_root,
                               search_catalog)
-from .episode_routes import (check_resume, get_streams, list_episodes,
-                              list_seasons, mark_watched)
+from .episode_routes import (check_resume, clear_progress, get_streams,
+                              list_episodes, list_seasons, mark_watched)
 from .playback import play_video
 from .route_common import open_addon_settings
 from .utils import ADDON_ID, log
@@ -30,6 +30,7 @@ _ACTIONS = {
     "get_streams": get_streams,
     "play_video": play_video,
     "mark_watched": mark_watched,
+    "clear_progress": clear_progress,
 }
 
 

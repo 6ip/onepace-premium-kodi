@@ -81,6 +81,8 @@ def list_seasons(params):
         tags = list_item.getVideoInfoTag()
         tags.setTitle(label)
         tags.setTvShowTitle(show_title)
+        if meta.get("description"):
+            tags.setPlot(meta["description"])
         # Prefer dedicated season poster, fall back to first-episode thumbnail
         season_art = season_poster_map.get(season) or season_thumbnails.get(season)
         _set_season_art(list_item, meta, season_art)
@@ -189,6 +191,7 @@ def list_episodes(params):
                     pct = min(99, max(1, int(pos / total * 100)))
                     list_item.setProperty("WatchedProgress", str(pct))
                     list_item.setProperty("PercentPlayed", str(pct))
+                    tags.setResumePoint(pos, total)
 
         plot = video.get("overview") or meta_description
         if plot:
@@ -201,14 +204,19 @@ def list_episodes(params):
         if meta_genres:
             tags.setGenres(meta_genres)
 
-        if bm:
-            list_item.setLabel(f"[COLOR yellow]>>[/COLOR] {title}")
+        list_item.setProperty("IsPlayable", "true")
         _set_episode_art(list_item, video, meta)
         ep_ctx_label = "[B]Mark Unwatched[/B]" if stream_video_id in series_watched else "[B]Mark Watched[/B]"
-        list_item.addContextMenuItems([(
+        ctx_items = [(
             ep_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='episode', series_id=video_id, episode_id=stream_video_id)})",
-        )], replaceItems=True)
+        )]
+        if bm:
+            ctx_items.append((
+                "[B]Clear Progress[/B]",
+                f"RunPlugin({build_url('clear_progress', episode_id=stream_video_id)})",
+            ))
+        list_item.addContextMenuItems(ctx_items, replaceItems=True)
         episode_thumb = _upgrade_metahub_url(video.get("thumbnail")) or ""
         items.append(
             (
@@ -224,9 +232,10 @@ def list_episodes(params):
                     season=selected_season,
                     episode=episode_number,
                     season_poster=season_poster,
+                    episode_plot=video.get("overview") or meta_description or "",
                 ),
                 list_item,
-                True,
+                False,
             )
         )
 
@@ -239,7 +248,153 @@ def list_episodes(params):
 
 
 def check_resume(params):
-    get_streams(params)
+    from .playback import play_video as _play_video
+
+    def _fail():
+        xbmcplugin.setResolvedUrl(ADDON_HANDLE, False, xbmcgui.ListItem())
+
+    if not ensure_configured():
+        _fail(); return
+
+    if not get_secret_string():
+        xbmcgui.Dialog().ok(
+            "One Pace Premium",
+            "Add-on is not configured.\nPlease set up your configuration first."
+        )
+        xbmc.executebuiltin("Addon.OpenSettings(plugin.video.onepacepremium)")
+        _fail(); return
+
+    catalog_type = params["catalog_type"]
+    video_id     = params["video_id"]
+    episode_thumb = params.get("thumb", "")
+    series_logo   = params.get("logo", "")
+    parent_id     = params.get("parent_id", "")
+    series_name   = params.get("series_name", "")
+    episode_title = params.get("episode_title", "")
+    season_poster = params.get("season_poster", "")
+    episode_plot  = params.get("episode_plot", "")
+
+    stream_url = _compose_url(
+        get_base_url(),
+        f"{get_config_prefix()}stream/{catalog_type}/{video_id}.json?kodi=1",
+    )
+    response = _cache.get(stream_url)
+    if response is None:
+        response = fetch_data(stream_url)
+        if not response:
+            _fail(); return
+        _cache.set(stream_url, response, 3600)
+
+    streams = response.get("streams", ())
+    if not streams:
+        _notify_error("No streams available")
+        _fail(); return
+
+    # Detect server-side configuration error (externalUrl with no playable url/infoHash)
+    config_error = next(
+        (s for s in streams if s.get("externalUrl") and "url" not in s and "infoHash" not in s),
+        None
+    )
+    if config_error:
+        xbmcgui.Dialog().ok(
+            "One Pace Premium",
+            "Your configuration key is invalid or not recognized by the server.\n\n"
+            "Add-on settings will now open — please enter a valid configuration key."
+        )
+        xbmc.executebuiltin("Addon.OpenSettings(plugin.video.onepacepremium)")
+        _fail(); return
+
+    id_parts = video_id.split(":", 2)
+    if len(id_parts) == 3:
+        imdb_id, season, episode = id_parts
+    else:
+        imdb_id = video_id
+        season  = params.get("season")
+        episode = params.get("episode")
+    is_imdb = imdb_id.startswith("tt")
+    sub_id = video_id if not is_imdb and ":" not in video_id else ""
+    if sub_id.startswith("pp_"):
+        sub_id = sub_id[3:]
+
+    elementum_available   = None
+    elementum_warning_sent = False
+    valid_streams  = []
+    dialog_labels  = []
+
+    for stream in streams:
+        stream_name    = stream.get("name", "")
+        stream_desc    = stream.get("description") or stream.get("title", "")
+        behavior_hints = stream.get("behaviorHints", {})
+        video_info     = parse_stream_info(stream_name, stream_desc, behavior_hints)
+        stream_tagline = _stream_tagline(video_info)
+
+        if "url" in stream:
+            resolved_url = stream["url"]
+        elif "infoHash" in stream:
+            if elementum_available is None:
+                elementum_available = is_elementum_installed_and_enabled()
+            if not elementum_available:
+                if not elementum_warning_sent:
+                    _notify_error("Elementum is required for torrent playback.")
+                    elementum_warning_sent = True
+                continue
+            magnet_link = convert_info_hash_to_magnet(
+                stream["infoHash"],
+                stream.get("sources", []),
+                behavior_hints.get("filename", stream_name),
+            )
+            file_idx = stream.get("fileIdx")
+            elementum_url = "plugin://plugin.video.elementum/play?uri=" + parse.quote_plus(magnet_link)
+            if file_idx is not None:
+                elementum_url += f"&index={file_idx}&oindex={file_idx}"
+            resolved_url = elementum_url
+        else:
+            continue
+
+        playback_params = {"video_url": resolved_url}
+        if is_imdb:
+            playback_params["imdb"] = imdb_id
+        if season is not None:
+            playback_params["season"]   = season
+            playback_params["episode"]  = episode
+        if sub_id:
+            playback_params["sub_id"]   = sub_id
+        if series_logo:
+            playback_params["logo"]     = series_logo
+        if parent_id:
+            playback_params["series_id"]  = parent_id
+            playback_params["episode_id"] = video_id
+        if series_name:
+            playback_params["series_name"]  = series_name
+        if episode_title:
+            playback_params["episode_title"] = episode_title
+        if season_poster:
+            playback_params["season_poster"] = season_poster
+
+        playback_params["stream_name"] = stream_name
+        playback_params["stream_desc"] = stream_desc
+        if episode_plot:
+            playback_params["episode_plot"] = episode_plot
+
+        label = stream_name
+        if stream_tagline:
+            label += f"  [{stream_tagline}]"
+
+        valid_streams.append(playback_params)
+        dialog_labels.append(label)
+
+    if not valid_streams:
+        _notify_error("No streams available")
+        _fail(); return
+
+    if len(valid_streams) == 1:
+        selected = 0
+    else:
+        selected = xbmcgui.Dialog().select("Select Stream", dialog_labels)
+        if selected < 0:
+            _fail(); return
+
+    _play_video(valid_streams[selected])
 
 
 def get_streams(params):
@@ -409,6 +564,94 @@ def get_streams(params):
     xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
 
 
+def _get_kodi_episode_file_ids(cur, episode_id):
+    cur.execute(
+        "SELECT idFile FROM files WHERE strFilename LIKE ? AND "
+        "(strFilename LIKE ? OR strFilename LIKE ? OR "
+        " strFilename LIKE ? OR strFilename LIKE ?)",
+        (
+            "%plugin.video.onepacepremium%",
+            f"%video_id={episode_id}&%",
+            f"%video_id={episode_id}",
+            f"%episode_id={episode_id}&%",
+            f"%episode_id={episode_id}",
+        )
+    )
+    return [str(r[0]) for r in cur.fetchall()]
+
+
+def _kodi_db_connect():
+    import glob as _glob
+    import os as _os
+    import sqlite3
+    import xbmcvfs
+    db_dir = xbmcvfs.translatePath("special://profile/Database/")
+    db_files = sorted(_glob.glob(_os.path.join(db_dir, "MyVideos*.db")), reverse=True)
+    if not db_files:
+        return None
+    return sqlite3.connect(db_files[0])
+
+
+def _update_kodi_episode_playcount(episode_id, playcount):
+    """Sync Kodi's own watched state for this episode (files.playCount in MyVideos.db)."""
+    try:
+        con = _kodi_db_connect()
+        if not con:
+            return
+        cur = con.cursor()
+        file_ids = _get_kodi_episode_file_ids(cur, episode_id)
+        if file_ids:
+            ph = ",".join(file_ids)
+            cur.execute(f"UPDATE files SET playCount=? WHERE idFile IN ({ph})", (playcount,))
+            con.commit()
+            log(f"[watched] set Kodi playCount={playcount} for {episode_id!r} ({cur.rowcount} rows)")
+        cur.close()
+        con.close()
+    except Exception as e:
+        log(f"[watched] Kodi playCount update error: {e}")
+
+
+def _clear_kodi_episode_bookmark(episode_id):
+    """Clear Kodi's resume position for a specific episode from MyVideos.db."""
+    try:
+        import sqlite3
+        con = _kodi_db_connect()
+        if not con:
+            return
+        cur = con.cursor()
+        file_ids = _get_kodi_episode_file_ids(cur, episode_id)
+        if file_ids:
+            ph = ",".join(file_ids)
+            cur.execute(f"DELETE FROM bookmark WHERE idFile IN ({ph})")
+            con.commit()
+            log(f"[watched] cleared Kodi bookmark for {episode_id!r} ({cur.rowcount} rows)")
+        cur.close()
+        con.close()
+    except Exception as e:
+        log(f"[watched] Kodi bookmark clear error: {e}")
+
+
+def _clear_kodi_episode_streamdetails(episode_id):
+    """Clear Kodi's stream details for a specific episode from MyVideos.db.
+    Called before Container.Refresh so Kodi reads fresh data when rebuilding the list.
+    """
+    try:
+        con = _kodi_db_connect()
+        if not con:
+            return
+        cur = con.cursor()
+        file_ids = _get_kodi_episode_file_ids(cur, episode_id)
+        if file_ids:
+            ph = ",".join(file_ids)
+            cur.execute(f"DELETE FROM streamdetails WHERE idFile IN ({ph})")
+            con.commit()
+            log(f"[watched] cleared Kodi streamdetails for {episode_id!r} ({cur.rowcount} rows)")
+        cur.close()
+        con.close()
+    except Exception as e:
+        log(f"[watched] Kodi streamdetails clear error: {e}")
+
+
 def mark_watched(params):
     scope = params.get("scope", "episode")
     series_id = params["series_id"]
@@ -423,6 +666,11 @@ def mark_watched(params):
         log(f"[watched] episode {action}: {episode_id!r} (total watched: {len(after)})")
         if action == "marked":
             _bookmarks.clear(episode_id)
+            _clear_kodi_episode_bookmark(episode_id)
+            _clear_kodi_episode_streamdetails(episode_id)
+            _update_kodi_episode_playcount(episode_id, 1)
+        else:
+            _update_kodi_episode_playcount(episode_id, 0)
     else:
         catalog_type = params.get("catalog_type", "series")
         season_filter = int(params["season"]) if scope == "season" else None
@@ -450,4 +698,13 @@ def mark_watched(params):
         else:
             log(f"[watched] mark_watched WARNING: no episode IDs found for scope={scope!r}")
 
+    xbmc.executebuiltin("Container.Refresh")
+
+
+def clear_progress(params):
+    episode_id = params["episode_id"]
+    _bookmarks.clear(episode_id)
+    _clear_kodi_episode_bookmark(episode_id)
+    _clear_kodi_episode_streamdetails(episode_id)
+    log(f"[progress] cleared bookmark and streamdetails for {episode_id!r}")
     xbmc.executebuiltin("Container.Refresh")
