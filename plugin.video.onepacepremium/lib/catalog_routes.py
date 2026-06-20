@@ -103,7 +103,7 @@ def list_root():
             if watched_count >= total:
                 tags.setPlaycount(1)
         tags.setMediaType("tvshow")
-        series_ctx_label = "Mark as Unwatched" if (total and watched_count >= total) else "Mark as Watched"
+        series_ctx_label = "[B]Mark Unwatched[/B]" if (total and watched_count >= total) else "[B]Mark Watched[/B]"
         list_item.addContextMenuItems([(
             series_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='series', series_id=video_id, catalog_type=catalog_type)})",

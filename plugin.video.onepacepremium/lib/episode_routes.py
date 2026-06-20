@@ -100,7 +100,7 @@ def list_seasons(params):
             if s_watched >= s_total:
                 tags.setPlaycount(1)
         tags.setMediaType("season")
-        season_ctx_label = "Mark as Unwatched" if season_fully_watched else "Mark as Watched"
+        season_ctx_label = "[B]Mark Unwatched[/B]" if season_fully_watched else "[B]Mark Watched[/B]"
         list_item.addContextMenuItems([(
             season_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='season', series_id=video_id, catalog_type=catalog_type, season=season)})",
@@ -178,14 +178,17 @@ def list_episodes(params):
         tags.setEpisode(int(episode_number))
 
         tags.setMediaType("episode")
+        bm = None
         if stream_video_id in series_watched:
             tags.setPlaycount(1)
+        else:
             bm = _bookmarks.get(stream_video_id)
             if bm:
                 pos, total = bm.get("pos", 0), bm.get("total", 0)
                 if total > 0:
                     pct = min(99, max(1, int(pos / total * 100)))
                     list_item.setProperty("WatchedProgress", str(pct))
+                    list_item.setProperty("PercentPlayed", str(pct))
 
         plot = video.get("overview") or meta_description
         if plot:
@@ -198,8 +201,10 @@ def list_episodes(params):
         if meta_genres:
             tags.setGenres(meta_genres)
 
+        if bm:
+            list_item.setLabel(f"[COLOR yellow]>>[/COLOR] {title}")
         _set_episode_art(list_item, video, meta)
-        ep_ctx_label = "Mark as Unwatched" if stream_video_id in series_watched else "Mark as Watched"
+        ep_ctx_label = "[B]Mark Unwatched[/B]" if stream_video_id in series_watched else "[B]Mark Watched[/B]"
         list_item.addContextMenuItems([(
             ep_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='episode', series_id=video_id, episode_id=stream_video_id)})",
