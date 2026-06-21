@@ -124,6 +124,7 @@ def configure_addon():
 
         entered_url = dialog.input("One Pace Premium server URL", base_url)
         if not entered_url:
+            xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
             return
 
         base_url = normalize_base_url(entered_url)
@@ -157,6 +158,7 @@ def configure_addon():
                     xbmcgui.NOTIFICATION_ERROR,
                 )
                 xbmc.log(f"Failed to generate setup code: {exc}", xbmc.LOGERROR)
+                xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
                 return
 
             try:
@@ -217,9 +219,10 @@ def configure_addon():
                     _clear_pending_setup(addon)
                     dialog.notification(
                         "One Pace Premium",
-                        "Kodi setup complete!",
+                        "Setup complete!",
                         xbmcgui.NOTIFICATION_INFO,
                     )
+                    xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
                     return
 
             if monitor.waitForAbort(POLL_INTERVAL_SECONDS):
@@ -233,6 +236,7 @@ def configure_addon():
                 "Setup code expired. Run setup again.",
                 xbmcgui.NOTIFICATION_ERROR,
             )
+            xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
     except Exception:
         xbmc.log(
             "One Pace Premium Kodi setup crashed:\n" + traceback.format_exc(),

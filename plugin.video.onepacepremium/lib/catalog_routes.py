@@ -48,19 +48,41 @@ def list_root():
     if not ensure_configured():
         return
 
+    import os as _os
+    _skin_media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
+    _fanart     = f"special://home/addons/{ADDON_ID}/resources/fanart.png"
+
+    def _nav_item(label, icon):
+        item = xbmcgui.ListItem(label=label, offscreen=True)
+        item.setArt({"icon": icon, "thumb": icon, "poster": icon,
+                     "fanart": _fanart, "banner": icon, "landscape": icon})
+        item.getVideoInfoTag().setPlot("​")
+        return item
+
+    xbmcplugin.setContent(ADDON_HANDLE, "")
+    items = [
+        (build_url("list_my_lists"), _nav_item("My Lists", f"{_skin_media}/lists2.png"),  True),
+        (build_url("list_browse"),   _nav_item("Browse",   f"{_skin_media}/hat.png"),     True),
+    ]
+    _add_directory_items(items)
+    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+
+
+def list_browse(params):
+    if not ensure_configured():
+        return
+
     manifest = _fetch_provider_manifest()
     if not manifest:
         xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
         return
 
-    series_specs = _catalog_specs(manifest, "series")  # also matches anime via _catalog_specs
-
+    series_specs = _catalog_specs(manifest, "series")
     if not series_specs:
         _notify_error("No compatible catalogs found")
         xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
         return
 
-    # Go directly to catalog content — skip the type/catalog-name intermediate menus
     spec = series_specs[0]
     catalog_type = "series"
     catalog_id = spec["id"]
@@ -75,22 +97,6 @@ def list_root():
     videos = response.get("metas", ())
     series_stats = _watched.get_all_series_stats()
     items = []
-
-    # My Lists entry (In Progress + Next Episodes)
-    import os as _os
-    _lists_icon = _os.path.join(ADDON_DIR, "resources", "skins", "Default", "media", "lists2.png")
-    _fanart = _os.path.join(ADDON_DIR, "resources", "fanart.png")
-    lists_item = xbmcgui.ListItem(label="My Lists", offscreen=True)
-    lists_item.setArt({
-        "icon": _lists_icon,
-        "thumb": _lists_icon,
-        "poster": _lists_icon,
-        "fanart": _fanart,
-        "banner": _lists_icon,
-        "landscape": _lists_icon,
-    })
-    lists_item.getVideoInfoTag().setPlot("​")
-    items.append((build_url("list_my_lists"), lists_item, True))
 
     for video in videos:
         video_id = video["id"]

@@ -1,4 +1,6 @@
+import base64
 import glob
+import json
 import os
 import sqlite3
 import sys
@@ -127,6 +129,89 @@ def clear_watched():
     )
 
 
+def _parse_config(config):
+    """Detect the debrid service from the config string. Returns (service_name, masked_key)."""
+    _SERVICES = {
+        "rdkey":      "Real-Debrid",
+        "torbox":     "TorBox",
+        "alldebrid":  "AllDebrid",
+        "premiumize": "Premiumize",
+        "dlkey":      "DebridLink",
+    }
+    _PREFIXES = {
+        "rdkey=":      ("Real-Debrid",  "rdkey="),
+        "torbox=":     ("TorBox",       "torbox="),
+        "alldebrid=":  ("AllDebrid",    "alldebrid="),
+        "premiumize=": ("Premiumize",   "premiumize="),
+        "dlkey=":      ("DebridLink",   "dlkey="),
+    }
+    if not config:
+        return None, None
+
+    for prefix, (service, _) in _PREFIXES.items():
+        if config.startswith(prefix):
+            key = config[len(prefix):]
+            return service, key
+
+    try:
+        decoded = json.loads(base64.b64decode(config).decode("utf-8"))
+        for field, service in _SERVICES.items():
+            if decoded.get(field):
+                return service, decoded[field]
+    except Exception:
+        pass
+
+    return None, None
+
+
+def show_status():
+    config = xbmcaddon.Addon(ADDON_ID).getSetting("secret_string")
+    service, key = _parse_config(config)
+
+    if not service:
+        xbmcgui.Dialog().ok(
+            "Account Status",
+            "Not configured.\n\nUse [B]Configure / Reconfigure[/B] to set up your account."
+        )
+        return
+
+    masked = ("•" * max(0, len(key) - 4) + key[-4:]) if key and len(key) > 4 else "••••"
+    xbmcgui.Dialog().ok(
+        "Account Status",
+        f"[B]{service}[/B]\n\nKey: {masked}"
+    )
+
+
+def configure_account():
+    import xbmc
+    addon = xbmcaddon.Addon(ADDON_ID)
+    config = addon.getSetting("secret_string")
+    service, key = _parse_config(config)
+
+    if not config:
+        message = "No account configured yet.\n\nSet up your debrid service to start watching."
+        yes_label = "Configure"
+    elif not service:
+        message = "Configuration not recognized.\n\nReconfigure your account?"
+        yes_label = "Reconfigure"
+    else:
+        masked = ("•" * max(0, len(key) - 4) + key[-4:]) if key and len(key) > 4 else "••••"
+        message = f"Connected: [B]{service}[/B]\nKey: {masked}\n\nDo you want to reconfigure?"
+        yes_label = "Reconfigure"
+
+    if xbmcgui.Dialog().yesno(
+        "Configure / Reconfigure",
+        message,
+        nolabel="Cancel",
+        yeslabel=yes_label,
+    ):
+        # Close settings first so auth runs full-screen without settings in background
+        xbmc.executebuiltin("Dialog.Close(all,true)")
+        xbmc.executebuiltin(
+            f"RunScript(special://home/addons/{ADDON_ID}/lib/custom_settings_window.py)"
+        )
+
+
 if __name__ == "__main__":
     action = sys.argv[1].strip() if len(sys.argv) > 1 else ""
     if action == "clear_cache":
@@ -135,3 +220,7 @@ if __name__ == "__main__":
         clear_bookmarks()
     elif action == "clear_watched":
         clear_watched()
+    elif action == "show_status":
+        show_status()
+    elif action == "configure_account":
+        configure_account()

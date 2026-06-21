@@ -9,10 +9,7 @@ from .art import (_episode_number, _set_episode_art, _upgrade_metahub_url)
 from .provider_api import _fetch_provider_meta
 from .route_common import _add_directory_items
 
-def _notify_info(message):
-    xbmcgui.Dialog().notification("One Pace Premium", message,
-                                   xbmcgui.NOTIFICATION_INFO, sound=False)
-from .utils import ADDON_DIR, ADDON_HANDLE, build_url, log
+from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, log
 
 _CATALOG_TYPE = "series"
 _SKIN_MEDIA  = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media")
@@ -124,7 +121,7 @@ def _get_series_meta(series_id):
 
 
 def list_my_lists(params):
-    xbmcplugin.setContent(ADDON_HANDLE, "files")
+    xbmcplugin.setContent(ADDON_HANDLE, "")
     items = [
         (build_url("list_in_progress"),   _folder_item("In Progress",   _PLAYER_ICON), True),
         (build_url("list_next_episodes"),  _folder_item("Next Episodes", _NEXT_ICON),   True),
@@ -144,7 +141,6 @@ def list_in_progress(params):
             by_series.setdefault(sid, {})[ep_id] = bm
 
     if not by_series:
-        _notify_info("Nothing in progress yet")
         xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
         return
 
@@ -169,7 +165,6 @@ def list_in_progress(params):
                 built.append(result)
 
     if not built:
-        _notify_info("Nothing in progress yet")
         xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
         return
 
@@ -191,7 +186,6 @@ def list_next_episodes(params):
         all_series.add(sid)
 
     if not all_series:
-        _notify_info("Start watching to see your next episode")
         xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
         return
 
@@ -227,7 +221,6 @@ def list_next_episodes(params):
             built.append(result)
 
     if not built:
-        _notify_info("You're all caught up!")
         xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
         return
 

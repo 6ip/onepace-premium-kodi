@@ -6,7 +6,7 @@
         <setting type="sep" />
         <setting type="lsep" label="Account" />
         <setting label="Configuration" id="secret_string" type="text" default="" />
-        <setting label="Configure / Reconfigure" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/custom_settings_window.py)" />
+        <setting label="Configure / Reconfigure" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,configure_account)" />
     </category>
     <category label="Tools">
         <setting type="lsep" label="Check Services" />
