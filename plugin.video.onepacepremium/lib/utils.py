@@ -7,13 +7,14 @@ import requests
 import xbmc
 import xbmcaddon
 import xbmcgui
+import xbmcvfs
 
 ADDON_HANDLE = int(sys.argv[1])
 ADDON = xbmcaddon.Addon()
 ADDON_PATH = sys.argv[0]
 ADDON_ID = ADDON.getAddonInfo("id")
-ADDON_DIR = ADDON.getAddonInfo("path")
-ALERT_ICON = os.path.join(ADDON_DIR, "resources", "media", "alert.png")
+ADDON_DIR = xbmcvfs.translatePath(ADDON.getAddonInfo("path"))
+ALERT_ICON = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media", "alert.png")
 
 REQUEST_TIMEOUT = 20
 HTTP_SESSION = requests.Session()

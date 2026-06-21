@@ -34,6 +34,11 @@ def _save(data):
         xbmc.log(f"[One Pace Premium] bookmarks save error: {e}", xbmc.LOGERROR)
 
 
+def get_all():
+    """Return all bookmarks as {episode_id: {"pos": float, "total": float}}."""
+    return {k: v for k, v in _load().items() if isinstance(v, dict)}
+
+
 def get(episode_id):
     """Return {"pos": float, "total": float} or None if no bookmark exists."""
     entry = _load().get(episode_id)
@@ -42,10 +47,13 @@ def get(episode_id):
     return entry
 
 
-def set_bookmark(episode_id, position, total):
+def set_bookmark(episode_id, position, total, series_id=""):
     """Save resume position for an episode."""
     data = _load()
-    data[episode_id] = {"pos": round(float(position), 1), "total": round(float(total), 1)}
+    entry = {"pos": round(float(position), 1), "total": round(float(total), 1)}
+    if series_id:
+        entry["series_id"] = series_id
+    data[episode_id] = entry
     _save(data)
 
 

@@ -5,6 +5,7 @@ import xbmc
 
 from .catalog_routes import (list_catalog, list_catalog_type, list_root,
                               search_catalog)
+from .my_lists import list_in_progress, list_my_lists, list_next_episodes
 from .episode_routes import (check_resume, clear_progress, get_streams,
                               list_episodes, list_seasons, mark_watched)
 from .playback import play_video
@@ -31,6 +32,9 @@ _ACTIONS = {
     "play_video": play_video,
     "mark_watched": mark_watched,
     "clear_progress": clear_progress,
+    "list_my_lists": list_my_lists,
+    "list_in_progress": list_in_progress,
+    "list_next_episodes": list_next_episodes,
 }
 
 

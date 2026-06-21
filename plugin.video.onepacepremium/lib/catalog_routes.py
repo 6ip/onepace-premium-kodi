@@ -9,7 +9,7 @@ from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
                             _fetch_catalog, _fetch_provider_manifest,
                             _fetch_provider_meta)
 from .route_common import _add_directory_items, _notify_error
-from .utils import ADDON_HANDLE, build_url, ensure_configured, fetch_data
+from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, ensure_configured, fetch_data
 
 CATALOG_PAGE_SIZE = 25
 SUPPORTED_CATALOG_TYPES = {"movie", "series", "anime"}
@@ -75,6 +75,22 @@ def list_root():
     videos = response.get("metas", ())
     series_stats = _watched.get_all_series_stats()
     items = []
+
+    # My Lists entry (In Progress + Next Episodes)
+    import os as _os
+    _lists_icon = _os.path.join(ADDON_DIR, "resources", "skins", "Default", "media", "lists2.png")
+    _fanart = _os.path.join(ADDON_DIR, "resources", "fanart.png")
+    lists_item = xbmcgui.ListItem(label="My Lists", offscreen=True)
+    lists_item.setArt({
+        "icon": _lists_icon,
+        "thumb": _lists_icon,
+        "poster": _lists_icon,
+        "fanart": _fanart,
+        "banner": _lists_icon,
+        "landscape": _lists_icon,
+    })
+    lists_item.getVideoInfoTag().setPlot("​")
+    items.append((build_url("list_my_lists"), lists_item, True))
 
     for video in videos:
         video_id = video["id"]

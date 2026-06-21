@@ -79,6 +79,12 @@ def cache_total(series_id, total):
     _save(data)
 
 
+def get_all_series_ids():
+    """Return all series IDs that have watched episodes."""
+    data = _load()
+    return [sid for sid in data if sid != _TOTALS_KEY and data[sid]]
+
+
 def get_all_series_stats():
     """Return {series_id: (watched_count, total_or_None)} for all tracked series."""
     data = _load()

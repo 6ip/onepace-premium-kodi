@@ -592,6 +592,49 @@ def _kodi_db_connect():
     return sqlite3.connect(db_files[0])
 
 
+def _bulk_kodi_update(episode_ids, marking_watched):
+    """Bulk-update Kodi's DB for a set of episodes in one transaction.
+    If marking_watched: set playCount=1, clear bookmark + streamdetails.
+    If marking_unwatched: set playCount=0.
+    """
+    if not episode_ids:
+        return
+    try:
+        con = _kodi_db_connect()
+        if not con:
+            return
+        cur = con.cursor()
+        cur.execute(
+            "SELECT idFile, strFilename FROM files WHERE strFilename LIKE ?",
+            ("%plugin.video.onepacepremium%",)
+        )
+        all_files = cur.fetchall()
+
+        ep_id_set = set(episode_ids)
+        file_ids = []
+        for fid, fname in all_files:
+            for ep_id in ep_id_set:
+                if (f"video_id={ep_id}&" in fname or fname.endswith(f"video_id={ep_id}") or
+                        f"episode_id={ep_id}&" in fname or fname.endswith(f"episode_id={ep_id}")):
+                    file_ids.append(str(fid))
+                    break
+
+        if file_ids:
+            ph = ",".join(file_ids)
+            playcount = 1 if marking_watched else 0
+            cur.execute(f"UPDATE files SET playCount=? WHERE idFile IN ({ph})", (playcount,))
+            if marking_watched:
+                cur.execute(f"DELETE FROM bookmark WHERE idFile IN ({ph})")
+                cur.execute(f"DELETE FROM streamdetails WHERE idFile IN ({ph})")
+            con.commit()
+            log(f"[watched] bulk Kodi update playCount={playcount} for {len(file_ids)} file(s)")
+
+        cur.close()
+        con.close()
+    except Exception as e:
+        log(f"[watched] bulk Kodi update error: {e}")
+
+
 def _update_kodi_episode_playcount(episode_id, playcount):
     """Sync Kodi's own watched state for this episode (files.playCount in MyVideos.db)."""
     try:
@@ -693,8 +736,13 @@ def mark_watched(params):
             all_watched_before = all(eid in before for eid in episode_ids)
             _watched.toggle_batch(series_id, episode_ids)
             after = _watched.get_watched(series_id)
+            marking_watched = not all_watched_before
             action = "unmarked all" if all_watched_before else "marked all"
             log(f"[watched] {action} — {len(episode_ids)} episodes, total watched now: {len(after)}")
+            if marking_watched:
+                for eid in episode_ids:
+                    _bookmarks.clear(eid)
+            _bulk_kodi_update(episode_ids, marking_watched)
         else:
             log(f"[watched] mark_watched WARNING: no episode IDs found for scope={scope!r}")
 
