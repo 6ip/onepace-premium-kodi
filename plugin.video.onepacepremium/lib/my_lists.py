@@ -81,7 +81,7 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
     if selected_season is not None:
         ctx_items.append((
             "[B]Browse Season...[/B]",
-            f"Container.Update({build_url('list_episodes', catalog_type=_CATALOG_TYPE, video_id=series_id, season=selected_season)})",
+            f"ActivateWindow(Videos,{build_url('list_episodes', catalog_type=_CATALOG_TYPE, video_id=series_id, season=selected_season)},return)",
         ))
     list_item.addContextMenuItems(ctx_items, replaceItems=True)
 
