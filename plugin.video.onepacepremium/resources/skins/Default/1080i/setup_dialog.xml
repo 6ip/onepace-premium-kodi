@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+    <controls>
+
+        <!-- Dimmed background overlay -->
+        <control type="image">
+            <left>0</left><top>0</top>
+            <width>1920</width><height>1080</height>
+            <texture colordiffuse="E60A0C10">../media/white.png</texture>
+            <animation type="WindowOpen" reversible="false">
+                <effect type="fade" start="0" end="100" time="200" tween="sine" easing="in"/>
+            </animation>
+            <animation type="WindowClose" reversible="false">
+                <effect type="fade" start="100" end="0" time="150" tween="sine" easing="out"/>
+            </animation>
+        </control>
+
+        <!-- Dialog Group: 900x480, centered on 1080p -->
+        <control type="group">
+            <left>510</left><top>300</top>
+            <animation type="WindowOpen" reversible="false">
+                <effect type="fade" start="0" end="100" time="200" tween="sine" easing="in"/>
+                <effect type="zoom" start="95" end="100" time="200" center="auto" tween="quadratic" easing="out"/>
+            </animation>
+            <animation type="WindowClose" reversible="false">
+                <effect type="fade" start="100" end="0" time="150" tween="sine" easing="out"/>
+                <effect type="zoom" start="100" end="95" time="150" center="auto" tween="quadratic" easing="out"/>
+            </animation>
+
+            <!-- Faux outer border (rounded) -->
+            <control type="image">
+                <left>-1</left><top>-1</top>
+                <width>902</width><height>482</height>
+                <texture colordiffuse="26FFFFFF" border="16">../media/round_dialog.png</texture>
+            </control>
+
+            <!-- Main dialog background (rounded) -->
+            <control type="image">
+                <left>0</left><top>0</top>
+                <width>900</width><height>480</height>
+                <texture colordiffuse="FF14191E" border="16">../media/round_dialog.png</texture>
+            </control>
+
+            <!-- ── HEADER ── -->
+
+            <!-- Addon icon -->
+            <control type="image" id="201">
+                <left>30</left><top>17</top>
+                <width>44</width><height>44</height>
+                <aspectratio>keep</aspectratio>
+                <texture>$INFO[Window.Property(pp.icon)]</texture>
+            </control>
+
+            <!-- Title (height matches icon so aligny=center lines them up) -->
+            <control type="label">
+                <left>86</left><top>17</top>
+                <width>760</width><height>44</height>
+                <font>font14</font>
+                <textcolor>FFFFFFFF</textcolor>
+                <align>left</align>
+                <aligny>center</aligny>
+                <label>[B]One Pace Premium[/B]</label>
+            </control>
+
+            <!-- Hairline separator -->
+            <control type="image">
+                <left>0</left><top>78</top>
+                <width>900</width><height>1</height>
+                <texture colordiffuse="1AFFFFFF">../media/white.png</texture>
+            </control>
+
+            <!-- ── LEFT COLUMN: QR CODE ── -->
+
+            <!-- QR image (id=200, set via setImage in onInit) -->
+            <control type="image" id="200">
+                <left>30</left><top>95</top>
+                <width>280</width><height>280</height>
+                <aspectratio>keep</aspectratio>
+            </control>
+
+            <!-- Scan hint -->
+            <control type="label">
+                <left>30</left><top>382</top>
+                <width>280</width><height>20</height>
+                <font>font12</font>
+                <textcolor>FF888899</textcolor>
+                <align>center</align>
+                <label>Scan with your phone</label>
+            </control>
+
+            <!-- ── RIGHT COLUMN: TEXT ── -->
+
+            <!-- "YOUR SETUP CODE" label -->
+            <control type="label">
+                <left>340</left><top>95</top>
+                <width>530</width><height>20</height>
+                <font>font12</font>
+                <textcolor>FF81A6C6</textcolor>
+                <align>left</align>
+                <label>[B][UPPERCASE]Your Setup Code[/UPPERCASE][/B]</label>
+            </control>
+
+            <!-- Code value -->
+            <control type="label">
+                <left>340</left><top>122</top>
+                <width>530</width><height>55</height>
+                <font>font16</font>
+                <textcolor>$INFO[Window.Property(pp.codeColor)]</textcolor>
+                <align>left</align>
+                <label>[B]$INFO[Window.Property(pp.code)][/B]</label>
+            </control>
+
+            <!-- Thin rule under code -->
+            <control type="image">
+                <left>340</left><top>182</top>
+                <width>530</width><height>1</height>
+                <texture colordiffuse="14FFFFFF">../media/white.png</texture>
+            </control>
+
+            <!-- Instructions -->
+            <control type="textbox">
+                <left>340</left><top>194</top>
+                <width>530</width><height>180</height>
+                <font>font13</font>
+                <textcolor>FFCCCCCC</textcolor>
+                <align>left</align>
+                <label>Open the configuration page on your phone or browser, and enter this code to securely connect your device.</label>
+            </control>
+
+            <!-- ── BUTTONS ── -->
+
+            <!-- BUTTON 10: Open Browser (primary) -->
+            <control type="button" id="10">
+                <left>340</left><top>400</top>
+                <width>256</width><height>52</height>
+                <onleft>11</onleft>
+                <onright>11</onright>
+                <onup>10</onup>
+                <ondown>10</ondown>
+                <label>[B]Open Browser[/B]</label>
+                <font>font13</font>
+                <textcolor>FF14191E</textcolor>
+                <focusedcolor>FF14191E</focusedcolor>
+                <texturefocus colordiffuse="FF81A6C6" border="14">../media/round_btn.png</texturefocus>
+                <texturenofocus colordiffuse="CC81A6C6" border="14">../media/round_btn.png</texturenofocus>
+                <align>center</align>
+                <aligny>center</aligny>
+            </control>
+
+            <!-- BUTTON 11: Got It (secondary) -->
+            <control type="button" id="11">
+                <left>614</left><top>400</top>
+                <width>256</width><height>52</height>
+                <onleft>10</onleft>
+                <onright>10</onright>
+                <onup>11</onup>
+                <ondown>11</ondown>
+                <label>[B]Got It[/B]</label>
+                <font>font13</font>
+                <textcolor>FF888899</textcolor>
+                <focusedcolor>FF14191E</focusedcolor>
+                <texturefocus colordiffuse="FFFFFFFF" border="14">../media/round_btn.png</texturefocus>
+                <texturenofocus colordiffuse="18FFFFFF" border="14">../media/round_btn.png</texturenofocus>
+                <align>center</align>
+                <aligny>center</aligny>
+            </control>
+
+        </control>
+    </controls>
+</window>

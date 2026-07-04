@@ -12,6 +12,8 @@ import xbmcaddon
 import xbmcgui
 import xbmcvfs
 
+from setup_dialog import show_setup_dialog
+
 ADDON_ID = "plugin.video.onepacepremium"
 REQUEST_TIMEOUT = 20
 POLL_INTERVAL_SECONDS = 3
@@ -122,15 +124,7 @@ def configure_addon():
 
         base_url = addon.getSetting("base_url")
 
-        entered_url = dialog.input("One Pace Premium server URL", base_url)
-        if not entered_url:
-            xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
-            return
-
-        base_url = normalize_base_url(entered_url)
-        addon.setSetting("base_url", base_url)
-
-        # Reuse an existing, unexpired setup code instead of spamming a new one
+        # If a valid pending code already exists, skip URL input and show it immediately
         code = None
         configure_url = None
         expires_in = None
@@ -146,6 +140,14 @@ def configure_addon():
                 color = pending.get("color")
 
         if code is None:
+            # No valid pending code — ask for URL and generate a new one
+            entered_url = dialog.input("One Pace Premium server URL", base_url)
+            if not entered_url:
+                xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+                return
+
+            base_url = normalize_base_url(entered_url)
+            addon.setSetting("base_url", base_url)
             try:
                 data = _post_json(
                     urljoin(base_url + "/", "kodi/generate_setup_code"),
@@ -176,12 +178,42 @@ def configure_addon():
         if not color:
             color = random.choice(CODE_COLORS)
 
-        if dialog.yesno(
-            "One Pace Premium Kodi Setup",
-            f"Setup code: [COLOR FF{color}][B]{code}[/B][/COLOR]\nOpen the configuration page on your phone or browser and complete setup before the code expires.",
-            yeslabel="Open Browser",
-            nolabel="Got It",
-        ):
+        profile_dir = os.path.dirname(_pending_setup_path(addon))
+        poll_url = urljoin(base_url + "/", f"kodi/get_manifest/{code}")
+
+        result = show_setup_dialog(
+            code, color, configure_url, profile_dir,
+            poll_url=poll_url, expires_in=expires_in,
+        )
+
+        # ── Case 1: dialog detected setup completion in the background ──────
+        if result.setup_complete:
+            manifest_data = result.manifest_data
+            addon.setSetting("secret_string", manifest_data["secret_string"])
+            if "stremio_api_prefix" in manifest_data:
+                addon.setSetting("stremio_api_prefix", manifest_data["stremio_api_prefix"])
+            _clear_pending_setup(addon)
+            dialog.notification(
+                "One Pace Premium",
+                "Setup complete!",
+                xbmcgui.NOTIFICATION_INFO,
+            )
+            xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+            return
+
+        # ── Case 2: code expired while dialog was open ───────────────────────
+        if result.expired:
+            _clear_pending_setup(addon)
+            dialog.notification(
+                "One Pace Premium",
+                "Setup code expired. Run setup again.",
+                xbmcgui.NOTIFICATION_ERROR,
+            )
+            xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+            return
+
+        # ── Case 3: user dismissed dialog (Got It or Open Browser) ──────────
+        if result.open_browser:
             open_configuration_page(configure_url)
 
         dialog.notification(

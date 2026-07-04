@@ -99,7 +99,7 @@ def _monitor_playback(series_id, episode_id):
             _bookmarks.clear(episode_id)
             _clear_kodi_bookmark(episode_id)
             log(f"[monitor] marked watched at end (natural={player.ended_naturally} pct={pct*100:.0f}%) for {episode_id!r}")
-        elif last_time > 180 and total_time > 0:
+        elif last_time > 60 and total_time > 0:
             _bookmarks.set_bookmark(episode_id, last_time, total_time, series_id)
             log(f"[monitor] saved bookmark {episode_id!r} at {last_time:.1f}s / {total_time:.1f}s")
     # No Container.Refresh here — cacheToDisc=False means Kodi re-runs the plugin
