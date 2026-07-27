@@ -11,7 +11,8 @@ from .art import (_episode_number, _season_thumbnails, _set_episode_art,
                    _set_ids, _set_season_art, _stream_tagline,
                    _upgrade_metahub_url)
 from .parser import parse_stream_info
-from .provider_api import _compose_url, _fetch_provider_meta, _parse_release_year
+from .provider_api import (_compose_url, _fetch_provider_meta, _parse_air_date,
+                            _parse_release_year)
 from .route_common import _add_directory_items, _notify_error
 from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
@@ -152,6 +153,7 @@ def list_episodes(params):
     meta_description = meta.get("description")
     meta_genres = meta.get("genres")
     meta_release_info = meta.get("releaseInfo")
+    meta_age_rating = meta.get("ageRating")
     series_watched = _watched.get_watched(video_id)
     season_poster_map = {
         s["season"]: s["poster"]
@@ -200,6 +202,17 @@ def list_episodes(params):
         release_year = _parse_release_year(video.get("released") or meta_release_info)
         if release_year:
             tags.setYear(release_year)
+
+        # Air date and age rating are what the skin renders as its
+        # "28/06/2026 • TV-14" info line. ageRating is series-level, so every
+        # episode inherits it — but only alongside a date: some skins join these
+        # with a literal separator and would leave a stray "• TV-14" otherwise.
+        air_date = _parse_air_date(video)
+        if air_date:
+            tags.setPremiered(air_date)
+            tags.setFirstAired(air_date)
+            if meta_age_rating:
+                tags.setMpaa(meta_age_rating)
 
         if meta_genres:
             tags.setGenres(meta_genres)

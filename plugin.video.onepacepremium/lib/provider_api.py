@@ -8,6 +8,7 @@ from .utils import fetch_data, get_catalog_provider_url
 SERIES_CATALOG_EXCLUDED_NAMES = {"last videos", "calendar videos"}
 
 _YEAR_RE = re.compile(r"\d{4}")
+_AIR_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 _CATALOG_PRIORITY_MAP = {"popular": 0, "new": 1, "featured": 2}
 _PROVIDER_CONTEXT_CACHE: Optional[Tuple[str, str]] = None
 
@@ -115,3 +116,16 @@ def _parse_release_year(release_info):
         return None
     match = _YEAR_RE.search(str(release_info))
     return int(match.group()) if match else None
+
+
+def _parse_air_date(video):
+    """Episode air date as YYYY-MM-DD, which is what Kodi's info tags expect.
+
+    The feed carries full ISO timestamps ("2026-06-28T14:15:00.000Z"); Kodi wants
+    just the date part. firstAired wins over released when both are present.
+    """
+    for field in ("firstAired", "released"):
+        match = _AIR_DATE_RE.match(str(video.get(field) or ""))
+        if match:
+            return match.group(1)
+    return None

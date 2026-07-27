@@ -130,55 +130,92 @@ def clear_watched():
 
 
 def _parse_config(config):
-    """Detect the debrid service from the config string. Returns (service_name, masked_key)."""
-    _SERVICES = {
+    """Parse config string. Returns list of human-readable service labels (empty = unrecognized)."""
+    _LEGACY_PREFIXES = [
+        ("rdkey=",      "Real-Debrid"),
+        ("torbox=",     "TorBox"),
+        ("alldebrid=",  "AllDebrid"),
+        ("premiumize=", "Premiumize"),
+        ("dlkey=",      "DebridLink"),
+    ]
+    _LEGACY_KEYS = {
         "rdkey":      "Real-Debrid",
         "torbox":     "TorBox",
         "alldebrid":  "AllDebrid",
         "premiumize": "Premiumize",
         "dlkey":      "DebridLink",
     }
-    _PREFIXES = {
-        "rdkey=":      ("Real-Debrid",  "rdkey="),
-        "torbox=":     ("TorBox",       "torbox="),
-        "alldebrid=":  ("AllDebrid",    "alldebrid="),
-        "premiumize=": ("Premiumize",   "premiumize="),
-        "dlkey=":      ("DebridLink",   "dlkey="),
+    _SERVICE_LABELS = {
+        "realdebrid":  "Real-Debrid",
+        "torbox":      "TorBox",
+        "alldebrid":   "AllDebrid",
+        "premiumize":  "Premiumize",
+        "debridlink":  "DebridLink",
     }
-    if not config:
-        return None, None
 
-    for prefix, (service, _) in _PREFIXES.items():
+    if not config:
+        return []
+
+    # 1. Legacy plaintext: rdkey=..., torbox=..., etc.
+    for prefix, label in _LEGACY_PREFIXES:
         if config.startswith(prefix):
-            key = config[len(prefix):]
-            return service, key
+            return [label] if config[len(prefix):] else []
 
     try:
         decoded = json.loads(base64.b64decode(config).decode("utf-8"))
-        for field, service in _SERVICES.items():
-            if decoded.get(field):
-                return service, decoded[field]
+
+        # 2. Multi-service: {"debridServices": [{"service": ..., "apiKey": ...}]}
+        if isinstance(decoded.get("debridServices"), list):
+            seen = set()
+            labels = []
+            for entry in decoded["debridServices"]:
+                if not isinstance(entry, dict):
+                    continue  # skip a malformed entry, keep the valid ones
+                svc = entry.get("service", "")
+                key = entry.get("apiKey", "")
+                label = _SERVICE_LABELS.get(svc)
+                if label and key and label not in seen:
+                    seen.add(label)
+                    labels.append(label)
+            return labels
+
+        # 3. Legacy base64 JSON: {"rdkey": "..."}
+        labels = []
+        seen = set()
+        for field, label in _LEGACY_KEYS.items():
+            if decoded.get(field) and label not in seen:
+                seen.add(label)
+                labels.append(label)
+        return labels
+
     except Exception:
         pass
 
-    return None, None
+    return []
 
 
 def show_status():
     config = xbmcaddon.Addon(ADDON_ID).getSetting("secret_string")
-    service, key = _parse_config(config)
+    services = _parse_config(config)
 
-    if not service:
+    if not config:
         xbmcgui.Dialog().ok(
             "Account Status",
             "Not configured.\n\nUse [B]Configure / Reconfigure[/B] to set up your account."
         )
         return
 
-    masked = ("•" * max(0, len(key) - 4) + key[-4:]) if key and len(key) > 4 else "••••"
+    if not services:
+        xbmcgui.Dialog().ok(
+            "Account Status",
+            "Configuration not recognized.\n\nUse [B]Configure / Reconfigure[/B] to set up again."
+        )
+        return
+
+    connected = " + ".join(f"[B]{s}[/B]" for s in services)
     xbmcgui.Dialog().ok(
         "Account Status",
-        f"[B]{service}[/B]\n\nKey: {masked}"
+        f"Connected: {connected}"
     )
 
 
@@ -186,17 +223,17 @@ def configure_account():
     import xbmc
     addon = xbmcaddon.Addon(ADDON_ID)
     config = addon.getSetting("secret_string")
-    service, key = _parse_config(config)
+    services = _parse_config(config)
 
     if not config:
         message = "No account configured yet.\n\nSet up your debrid service to start watching."
         yes_label = "Configure"
-    elif not service:
+    elif not services:
         message = "Configuration not recognized.\n\nReconfigure your account?"
         yes_label = "Reconfigure"
     else:
-        masked = ("•" * max(0, len(key) - 4) + key[-4:]) if key and len(key) > 4 else "••••"
-        message = f"Connected: [B]{service}[/B]\nKey: {masked}\n\nDo you want to reconfigure?"
+        connected = " + ".join(f"[B]{s}[/B]" for s in services)
+        message = f"Connected: {connected}\n\nDo you want to reconfigure?"
         yes_label = "Reconfigure"
 
     if xbmcgui.Dialog().yesno(

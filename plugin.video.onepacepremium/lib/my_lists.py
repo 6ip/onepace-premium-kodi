@@ -6,7 +6,7 @@ import xbmcplugin
 from . import bookmarks as _bookmarks
 from . import watched as _watched
 from .art import (_episode_number, _set_episode_art, _upgrade_metahub_url)
-from .provider_api import _fetch_provider_meta
+from .provider_api import _fetch_provider_meta, _parse_air_date, _parse_release_year
 from .route_common import _add_directory_items
 
 from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, log
@@ -64,6 +64,26 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
     plot = video.get("overview") or meta.get("description") or ""
     if plot:
         tags.setPlot(plot)
+
+    release_year = _parse_release_year(video.get("released") or meta.get("releaseInfo"))
+    if release_year:
+        tags.setYear(release_year)
+
+    # Air date and age rating are what the skin renders as its
+    # "28/06/2026 • TV-14" info line. ageRating is series-level, so every
+    # episode inherits it — but only alongside a date: some skins join these
+    # with a literal separator and would leave a stray "• TV-14" otherwise.
+    air_date = _parse_air_date(video)
+    if air_date:
+        tags.setPremiered(air_date)
+        tags.setFirstAired(air_date)
+        age_rating = meta.get("ageRating")
+        if age_rating:
+            tags.setMpaa(age_rating)
+
+    genres = meta.get("genres")
+    if genres:
+        tags.setGenres(genres)
 
     list_item.setProperty("IsPlayable", "true")
     _set_episode_art(list_item, video, meta)
