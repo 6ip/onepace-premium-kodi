@@ -9,8 +9,9 @@
         <setting label="Configure / Reconfigure" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,configure_account)" />
     </category>
     <category label="Tools">
-        <setting type="lsep" label="Check Services" />
-        <setting label="Check Elementum" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />
+        <setting type="lsep" label="Elementum (Torrent)" />
+        <setting label="Check Availability" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />
+        <setting label="Direct Playback (experimental)" id="elementum_direct" type="bool" default="false" />
         <setting type="sep" />
         <setting type="lsep" label="Cache" />
         <setting label="Clear API Cache" id="clear_cache" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_cache)" />

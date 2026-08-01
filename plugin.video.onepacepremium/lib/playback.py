@@ -6,6 +6,7 @@ import xbmcgui
 import xbmcplugin
 
 from . import bookmarks as _bookmarks
+from . import elementum as _elementum
 from . import watched as _watched
 from .utils import ADDON_HANDLE, HTTP_SESSION, log
 
@@ -131,6 +132,14 @@ def play_video(params):
     episode_id = params.get("episode_id", "")
 
     video_url = params["video_url"]
+
+    # Resolve Elementum here rather than handing off, so our ListItem stays the
+    # playing item. Any failure falls back to the plugin:// URL unchanged.
+    if _elementum.direct_enabled() and video_url.startswith(_elementum.PLUGIN_PREFIX):
+        direct_url = _elementum.resolve_plugin_url(video_url)
+        if direct_url:
+            video_url = direct_url
+
     imdb = params.get("imdb")
     season = params.get("season")
     episode = params.get("episode")
