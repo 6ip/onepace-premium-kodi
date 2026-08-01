@@ -360,6 +360,8 @@ def check_resume(params):
             elementum_url = "plugin://plugin.video.elementum/play?uri=" + parse.quote_plus(magnet_link)
             if file_idx is not None:
                 elementum_url += f"&index={file_idx}&oindex={file_idx}"
+            # Resume is ours (bookmarks + Kodi's dialog); stop Elementum asking too.
+            elementum_url += "&doresume=false"
             resolved_url = elementum_url
         else:
             continue
@@ -543,6 +545,8 @@ def get_streams(params):
             elementum_url = "plugin://plugin.video.elementum/play?uri=" + parse.quote_plus(magnet_link)
             if file_idx is not None:
                 elementum_url += f"&index={file_idx}&oindex={file_idx}"
+            # Resume is ours (bookmarks + Kodi's dialog); stop Elementum asking too.
+            elementum_url += "&doresume=false"
             resolved_stream_url = (
                 elementum_url
             )

@@ -117,6 +117,8 @@ def _set_episode_art(list_item, video: dict, meta: dict):
     background = _upgrade_metahub_url(meta.get("background"))
     logo = meta.get("logo") or None
     art = _build_art(episode_thumb, poster, episode_thumb or background or poster, logo)
+    # No icon, so the skin draws its own watched/resume marker
+    art.pop("icon", None)
     if art:
         list_item.setArt(art)
 

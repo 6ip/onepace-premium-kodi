@@ -20,6 +20,7 @@ _BUFFER_TIMEOUT = 900  # the daemon holds the request open while buffering
 
 
 def direct_enabled():
+    # Defaults off: getSetting returns "" before the settings dialog is opened.
     return ADDON.getSetting("elementum_direct") == "true"
 
 
@@ -50,6 +51,8 @@ def resolve_stream(uri, file_idx=None):
     url = f"{base}/play?uri={parse.quote(uri, safe='')}"
     if file_idx is not None:
         url += f"&index={file_idx}&oindex={file_idx}"
+    # Resume is ours (bookmarks + Kodi's dialog); stop Elementum asking too.
+    url += "&doresume=false"
 
     session = requests.Session()
     session.trust_env = False  # daemon is local; ignore system proxy settings
