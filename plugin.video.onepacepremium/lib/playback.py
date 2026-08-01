@@ -1,4 +1,5 @@
 import json
+import os
 
 import xbmc
 import xbmcgui
@@ -9,6 +10,11 @@ from . import watched as _watched
 from .utils import ADDON_HANDLE, HTTP_SESSION, log
 
 _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
+
+# Safety cap only. Real failure is detected via Kodi's error dialog, so a
+# plugin:// handoff can buffer as long as it needs.
+_START_CAP_DIRECT = 60
+_START_CAP_HANDOFF = 900
 
 
 class _WatchMonitor(xbmc.Player):
@@ -26,7 +32,9 @@ class _WatchMonitor(xbmc.Player):
 _MONITOR_GEN = [0]
 
 
-def _monitor_playback(series_id, episode_id):
+
+
+def _monitor_playback(series_id, episode_id, video_url=""):
     """Block until playback ends, then auto-mark the episode watched if appropriate.
 
     Called from play_video after setResolvedUrl so it runs inside the plugin
@@ -34,22 +42,34 @@ def _monitor_playback(series_id, episode_id):
     """
     _MONITOR_GEN[0] += 1
     my_gen = _MONITOR_GEN[0]
+    # _MONITOR_GEN is per-process, so pid distinguishes duplicate invocations.
+    pid = os.getpid()
 
     kodi_monitor = xbmc.Monitor()
     player = _WatchMonitor()
     last_time, total_time = 0.0, 0.0
 
-    # Wait up to 15 s for the player to actually start
-    for _ in range(15):
-        if player.isPlaying():
-            break
+    is_handoff = video_url.startswith("plugin://")
+    cap = _START_CAP_HANDOFF if is_handoff else _START_CAP_DIRECT
+
+    # Wait for playback. Kodi's error dialog is the real failure signal; the
+    # cap is only a safety net so a wedged process can't live forever.
+    waited = 0
+    while not player.isPlaying():
         if kodi_monitor.waitForAbort(1):
             return
-    if not player.isPlaying():
-        log(f"[monitor] playback never started for {episode_id!r}, giving up")
-        return
+        waited += 1
+        if xbmc.getCondVisibility("Window.IsTopMost(okdialog)"):
+            log(f"[monitor] playback failed for {episode_id!r} "
+                f"after {waited}s (error dialog shown)")
+            return
+        if waited >= cap:
+            log(f"[monitor] playback never started for {episode_id!r} "
+                f"after {waited}s, giving up (cap)")
+            return
 
-    log(f"[monitor] tracking {episode_id!r} (gen={my_gen})")
+    log(f"[monitor] tracking {episode_id!r} (pid={pid}, gen={my_gen}"
+        f"{', handoff' if is_handoff else ''}, waited={waited}s)")
 
     # If a bookmark exists, detect whether Kodi's native dialog resumed (seeked
     # near the saved position) or the user picked "Play from beginning" (stayed
@@ -179,4 +199,4 @@ def play_video(params):
     xbmcplugin.setResolvedUrl(ADDON_HANDLE, True, list_item)
 
     if series_id and episode_id:
-        _monitor_playback(series_id, episode_id)
+        _monitor_playback(series_id, episode_id, video_url)
