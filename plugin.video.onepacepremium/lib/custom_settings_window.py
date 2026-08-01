@@ -36,8 +36,48 @@ CODE_COLORS = [
 ]
 
 
+# {"debridServices":[{"service":"p2p"}]} — P2P needs no key, so no server round trip.
+TORRENT_ONLY_CONFIG = "eyJkZWJyaWRTZXJ2aWNlcyI6W3sic2VydmljZSI6InAycCJ9XX0="
+
+MODE_TORRENT = 1
+MODE_LABELS = [
+    "Debrid Account  (Real-Debrid, TorBox, AllDebrid...)",
+    "Torrent Only  (P2P - no account needed)",
+]
+
+
 def normalize_base_url(url: str):
     return url.rstrip("/")
+
+
+def _elementum_available():
+    try:
+        xbmcaddon.Addon("plugin.video.elementum")
+        return True
+    except Exception:
+        return False
+
+
+def _configure_torrent_only(addon, dialog):
+    """Apply the fixed P2P config. Returns False if the user backed out."""
+    if not _elementum_available():
+        if not dialog.yesno(
+            "Torrent Only",
+            "Elementum is not installed, so torrent streams cannot play.\n\n"
+            "Enable torrent mode anyway?",
+            nolabel="Cancel",
+            yeslabel="Continue",
+        ):
+            return False
+
+    addon.setSetting("secret_string", TORRENT_ONLY_CONFIG)
+    _clear_pending_setup(addon)
+    dialog.notification(
+        "One Pace Premium",
+        "Torrent mode enabled",
+        xbmcgui.NOTIFICATION_INFO,
+    )
+    return True
 
 
 def open_configuration_page(url: str):
@@ -122,6 +162,14 @@ def configure_addon():
         dialog = xbmcgui.Dialog()
         monitor = xbmc.Monitor()
 
+        mode = dialog.select("Configure One Pace Premium", MODE_LABELS)
+        if mode < 0:
+            return  # cancelled — leave the existing configuration untouched
+        if mode == MODE_TORRENT:
+            if _configure_torrent_only(addon, dialog):
+                xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+            return
+
         base_url = addon.getSetting("base_url")
 
         # If a valid pending code already exists, skip URL input and show it immediately
@@ -140,13 +188,17 @@ def configure_addon():
                 color = pending.get("color")
 
         if code is None:
-            # No valid pending code — ask for URL and generate a new one
-            entered_url = dialog.input("One Pace Premium server URL", base_url)
-            if not entered_url:
+            # No valid pending code — generate one against the configured server.
+            if not base_url:
+                dialog.notification(
+                    "One Pace Premium",
+                    "Set the Server URL in settings first",
+                    xbmcgui.NOTIFICATION_ERROR,
+                )
                 xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
                 return
 
-            base_url = normalize_base_url(entered_url)
+            base_url = normalize_base_url(base_url)
             addon.setSetting("base_url", base_url)
             try:
                 data = _post_json(

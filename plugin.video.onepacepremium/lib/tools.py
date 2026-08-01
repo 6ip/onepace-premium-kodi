@@ -151,7 +151,10 @@ def _parse_config(config):
         "alldebrid":   "AllDebrid",
         "premiumize":  "Premiumize",
         "debridlink":  "DebridLink",
+        "p2p":         "Torrent",
     }
+    # P2P carries no apiKey; every debrid service must have one.
+    _KEYLESS = {"p2p"}
 
     if not config:
         return []
@@ -174,9 +177,12 @@ def _parse_config(config):
                 svc = entry.get("service", "")
                 key = entry.get("apiKey", "")
                 label = _SERVICE_LABELS.get(svc)
-                if label and key and label not in seen:
-                    seen.add(label)
-                    labels.append(label)
+                if not label or label in seen:
+                    continue
+                if svc not in _KEYLESS and not key:
+                    continue
+                seen.add(label)
+                labels.append(label)
             return labels
 
         # 3. Legacy base64 JSON: {"rdkey": "..."}
