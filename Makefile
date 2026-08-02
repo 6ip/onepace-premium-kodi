@@ -11,6 +11,8 @@ all: clean
 	@echo "🚀 Building One Pace Premium Kodi Repository (Plugin v$(V_ADDON) / Repo v$(V_REPO))..."
 	@$(MAKE) build-zip ID=$(ADDON) VER=$(V_ADDON) IS_ADDON=1 --no-print-directory
 	@$(MAKE) build-zip ID=$(REPO)  VER=$(V_REPO) --no-print-directory
+	@echo "🔗 Fetching third-party add-ons..."
+	@python3 fetch_vendored.py
 	@echo "📦 Generating repository index..."
 	@python3 generate_repository.py
 	@sed -e 's|ADDON_URL|$(ADDON)/$(ADDON)-$(V_ADDON).zip|g' \
