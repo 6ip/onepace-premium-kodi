@@ -162,6 +162,18 @@ def configure_addon():
         dialog = xbmcgui.Dialog()
         monitor = xbmc.Monitor()
 
+        # Both modes stream from the server, so the URL is required either way.
+        # Check it first — the mode picker can't fix a missing one.
+        base_url = addon.getSetting("base_url")
+        if not base_url:
+            dialog.notification(
+                "One Pace Premium",
+                "Set the Server URL in settings first",
+                xbmcgui.NOTIFICATION_ERROR,
+            )
+            xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+            return
+
         mode = dialog.select("Configure One Pace Premium", MODE_LABELS)
         if mode < 0:
             return  # cancelled — leave the existing configuration untouched
@@ -169,8 +181,6 @@ def configure_addon():
             if _configure_torrent_only(addon, dialog):
                 xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
             return
-
-        base_url = addon.getSetting("base_url")
 
         # If a valid pending code already exists, skip URL input and show it immediately
         code = None
@@ -189,15 +199,6 @@ def configure_addon():
 
         if code is None:
             # No valid pending code — generate one against the configured server.
-            if not base_url:
-                dialog.notification(
-                    "One Pace Premium",
-                    "Set the Server URL in settings first",
-                    xbmcgui.NOTIFICATION_ERROR,
-                )
-                xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
-                return
-
             base_url = normalize_base_url(base_url)
             addon.setSetting("base_url", base_url)
             try:
