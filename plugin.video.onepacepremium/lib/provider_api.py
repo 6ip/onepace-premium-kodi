@@ -7,6 +7,9 @@ from .utils import fetch_data, get_catalog_provider_url
 
 SERIES_CATALOG_EXCLUDED_NAMES = {"last videos", "calendar videos"}
 
+# Not in the feed, but constant for the source series.
+SERIES_STUDIOS = ["Toei Animation", "Fuji TV"]
+
 _YEAR_RE = re.compile(r"\d{4}")
 _AIR_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 _CATALOG_PRIORITY_MAP = {"popular": 0, "new": 1, "featured": 2}
@@ -129,3 +132,12 @@ def _parse_air_date(video):
         if match:
             return match.group(1)
     return None
+
+
+def _parse_runtime_seconds(video):
+    """Episode runtime in seconds. The feed carries minutes as a string."""
+    try:
+        minutes = int(str(video.get("runtime") or "").strip())
+    except ValueError:
+        return None
+    return minutes * 60 if minutes > 0 else None

@@ -11,8 +11,9 @@ from .art import (_episode_number, _season_thumbnails, _set_episode_art,
                    _set_ids, _set_season_art, _stream_tagline,
                    _upgrade_metahub_url)
 from .parser import parse_stream_info
-from .provider_api import (_compose_url, _fetch_provider_meta, _parse_air_date,
-                            _parse_release_year)
+from .provider_api import (SERIES_STUDIOS, _compose_url, _fetch_provider_meta,
+                            _parse_air_date, _parse_release_year,
+                            _parse_runtime_seconds)
 from .route_common import _add_directory_items, _notify_error
 from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
@@ -211,8 +212,15 @@ def list_episodes(params):
         if air_date:
             tags.setPremiered(air_date)
             tags.setFirstAired(air_date)
-            if meta_age_rating:
-                tags.setMpaa(meta_age_rating)
+
+        if meta_age_rating:
+            tags.setMpaa(meta_age_rating)
+
+        runtime = _parse_runtime_seconds(video)
+        if runtime:
+            tags.setDuration(runtime)
+
+        tags.setStudios(SERIES_STUDIOS)
 
         if meta_genres:
             tags.setGenres(meta_genres)

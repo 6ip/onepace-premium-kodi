@@ -6,7 +6,9 @@ import xbmcplugin
 from . import bookmarks as _bookmarks
 from . import watched as _watched
 from .art import (_episode_number, _set_episode_art, _upgrade_metahub_url)
-from .provider_api import _fetch_provider_meta, _parse_air_date, _parse_release_year
+from .provider_api import (SERIES_STUDIOS, _fetch_provider_meta,
+                            _parse_air_date, _parse_release_year,
+                            _parse_runtime_seconds)
 from .route_common import _add_directory_items
 
 from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, log
@@ -77,9 +79,16 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
     if air_date:
         tags.setPremiered(air_date)
         tags.setFirstAired(air_date)
-        age_rating = meta.get("ageRating")
-        if age_rating:
-            tags.setMpaa(age_rating)
+
+    age_rating = meta.get("ageRating")
+    if age_rating:
+        tags.setMpaa(age_rating)
+
+    runtime = _parse_runtime_seconds(video)
+    if runtime:
+        tags.setDuration(runtime)
+
+    tags.setStudios(SERIES_STUDIOS)
 
     genres = meta.get("genres")
     if genres:
