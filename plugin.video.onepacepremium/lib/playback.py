@@ -1,9 +1,13 @@
 import json
 import os
+import re
+from concurrent import futures
 
+import requests
 import xbmc
 import xbmcgui
 import xbmcplugin
+import xbmcvfs
 
 from . import bookmarks as _bookmarks
 from . import elementum as _elementum
@@ -127,6 +131,103 @@ def _monitor_playback(series_id, episode_id, video_url=""):
     # fresh when the user navigates back, so the watched state is already correct.
 
 
+# Kodi reads the language from the filename, and variant files end in an extra
+# token ("_en_cc") it can't parse. Saving a copy as "CC.eng.vtt" fixes that.
+_SUBS_CACHE = "special://temp/onepace-subs/"
+_SUBS_BUDGET = 3.0          # seconds spent fetching before we stop
+_VARIANT_RE = re.compile(r"\(([^)]*)\)\s*$")
+
+
+def _cache_path(track, sub_id):
+    """Where a variant would live, or None if it isn't one."""
+    label = track.get("label")
+    if not (label and track.get("url") and track.get("lang")):
+        return None
+    match = _VARIANT_RE.search(label)
+    if not match:
+        return None
+    variant = re.sub(r"[^\w.-]", "_", match.group(1))
+    return f"{_SUBS_CACHE}{sub_id}/{variant}.{track['lang']}.vtt"
+
+
+def _fetch_subtitle(url, path):
+    """Save one .vtt. Returns the path, or None so the caller falls back.
+
+    Written under a .part name and renamed, so an interrupted write can never
+    leave a truncated file that later looks cached.
+    """
+    name = path.rsplit("/", 1)[-1]
+    partial = path + ".part"
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        content = response.content
+        if not content.lstrip()[:6] == b"WEBVTT":
+            log(f"[subs] {name} is not a WEBVTT file, skipping")
+            return None
+        with xbmcvfs.File(partial, "w") as handle:
+            handle.write(content)
+        if not xbmcvfs.rename(partial, path):
+            xbmcvfs.delete(partial)
+            return None
+        return path
+    except Exception as exc:
+        log(f"[subs] could not cache {name}: {exc}")
+        try:
+            xbmcvfs.delete(partial)
+        except Exception:
+            pass
+        return None
+
+
+def _subtitle_paths(subs, sub_id):
+    """Local paths for variants, plain URLs for everything else.
+
+    Variants are fetched in parallel; whatever misses the budget stays a URL.
+    """
+    targets = {}
+    for index, track in enumerate(subs):
+        path = _cache_path(track, sub_id)
+        if path and not xbmcvfs.exists(path):
+            targets[index] = (track["url"], path)
+
+    done = {}
+    if targets:
+        xbmcvfs.mkdirs(f"{_SUBS_CACHE}{sub_id}/")
+        # Not a `with` block: that waits for stragglers on exit, which would
+        # defeat the budget. Any that land late still warm the cache.
+        pool = futures.ThreadPoolExecutor(max_workers=8)
+        try:
+            pending = {pool.submit(_fetch_subtitle, url, path): index
+                       for index, (url, path) in targets.items()}
+            try:
+                for future in futures.as_completed(pending, timeout=_SUBS_BUDGET):
+                    result = future.result()
+                    if result:
+                        done[pending[future]] = result
+            except futures.TimeoutError:
+                pass
+        except Exception as exc:
+            log(f"[subs] caching stopped: {exc}")
+        finally:
+            pool.shutdown(wait=False)
+
+    paths, cached = [], 0
+    for index, track in enumerate(subs):
+        path = done.get(index) or _cache_path(track, sub_id)
+        if path and xbmcvfs.exists(path):
+            paths.append(path)
+            cached += 1
+        else:
+            paths.append(track["url"])
+
+    if targets:
+        missed = len(targets) - len(done)
+        log(f"[subs] {sub_id}: {cached} variant(s) local"
+            + (f", {missed} fell back (over {_SUBS_BUDGET:.0f}s)" if missed else ""))
+    return paths
+
+
 def _filter_subtitles(subs, sub_id):
     """Narrow the track list to the user's languages, dropping variants by default.
 
@@ -220,7 +321,7 @@ def play_video(params):
                 all_subs = resp.json()
                 subs = _filter_subtitles(all_subs.get(sub_id, []), sub_id)
                 if subs:
-                    list_item.setSubtitles([s["url"] for s in subs])
+                    list_item.setSubtitles(_subtitle_paths(subs, sub_id))
             else:
                 log(f"Subtitles fetch failed: HTTP {resp.status_code}")
         except Exception as e:
