@@ -296,6 +296,7 @@ def choose_sub_langs():
             return
 
     addon.setSetting("sub_langs", ",".join(selected))
+    addon.setSetting("sub_langs_display", summary)
     xbmcgui.Dialog().notification(
         "Subtitle Languages", summary, xbmcgui.NOTIFICATION_INFO
     )

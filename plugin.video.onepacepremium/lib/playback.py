@@ -229,19 +229,15 @@ def _subtitle_paths(subs, sub_id):
 
 
 def _filter_subtitles(subs, sub_id):
-    """Narrow the track list to the user's languages, dropping variants by default.
+    """Narrow the track list to the user's languages. Empty means all.
 
-    Variant tracks (CC, DUB, ALT) are the ones Kodi shows as "Unknown", since
-    their filenames carry an extra token it can't parse.
+    Alternate versions (CC, DUB, ALT) are always kept — some episodes only
+    have an extended or alternate cut.
     """
     if not subs:
         return subs
 
     total = len(subs)
-    # Defaults on: getSetting returns "" before the settings dialog is opened.
-    if get_setting("sub_variants") == "false":
-        subs = [s for s in subs if not s.get("label")]
-
     wanted = [c for c in get_setting("sub_langs").split(",") if c]
     if wanted:
         subs = [s for s in subs if s.get("lang") in wanted]

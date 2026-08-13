@@ -15,7 +15,7 @@
         <setting type="sep" />
         <setting type="lsep" label="Subtitles" />
         <setting label="Subtitle Languages" id="choose_sub_langs" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_sub_langs)" />
-        <setting label="Include alternate versions (CC, DUB, ALT)" id="sub_variants" type="bool" default="true" />
+        <setting label="Showing" id="sub_langs_display" type="text" default="All languages" enable="false" subsetting="true" />
         <setting id="sub_langs" type="text" default="" visible="false" />
         <setting type="sep" />
         <setting type="lsep" label="Cache" />
