@@ -11,6 +11,16 @@ import xbmcvfs
 
 ADDON_ID = "plugin.video.onepacepremium"
 
+# ISO 639-2/B codes used by the subtitles feed.
+LANG_NAMES = {
+    "ara": "Arabic",     "cze": "Czech",      "dut": "Dutch",
+    "eng": "English",    "fin": "Finnish",    "fre": "French",
+    "ger": "German",     "heb": "Hebrew",     "ind": "Indonesian",
+    "ita": "Italian",    "jpn": "Japanese",   "pol": "Polish",
+    "por": "Portuguese", "rus": "Russian",    "spa": "Spanish",
+    "tur": "Turkish",    "vie": "Vietnamese",
+}
+
 
 def _profile():
     p = xbmcvfs.translatePath(xbmcaddon.Addon(ADDON_ID).getAddonInfo("profile"))
@@ -255,6 +265,42 @@ def configure_account():
         )
 
 
+def choose_sub_langs():
+    """Pick which subtitle languages to show. Empty selection means all."""
+    import xbmc
+
+    addon = xbmcaddon.Addon(ADDON_ID)
+    codes = sorted(LANG_NAMES, key=lambda c: LANG_NAMES[c])
+    names = [LANG_NAMES[c] for c in codes]
+
+    current = [c for c in addon.getSetting("sub_langs").split(",") if c]
+    preselect = [i for i, c in enumerate(codes) if c in current]
+
+    chosen = xbmcgui.Dialog().multiselect(
+        "Subtitle Languages", names, preselect=preselect
+    )
+    if chosen is None:
+        return  # cancelled — leave the current choice alone
+
+    selected = [codes[i] for i in chosen]
+    summary = ", ".join(LANG_NAMES[c] for c in selected) if selected else "All languages"
+
+    # The settings window holds its own copy and writes it back when it closes,
+    # which would overwrite this. Close it first, then save.
+    monitor = xbmc.Monitor()
+    xbmc.executebuiltin("Dialog.Close(addonsettings, true)")
+    for _ in range(30):
+        if not xbmc.getCondVisibility("Window.IsActive(addonsettings)"):
+            break
+        if monitor.waitForAbort(0.1):
+            return
+
+    addon.setSetting("sub_langs", ",".join(selected))
+    xbmcgui.Dialog().notification(
+        "Subtitle Languages", summary, xbmcgui.NOTIFICATION_INFO
+    )
+
+
 if __name__ == "__main__":
     action = sys.argv[1].strip() if len(sys.argv) > 1 else ""
     if action == "clear_cache":
@@ -267,3 +313,5 @@ if __name__ == "__main__":
         show_status()
     elif action == "configure_account":
         configure_account()
+    elif action == "choose_sub_langs":
+        choose_sub_langs()

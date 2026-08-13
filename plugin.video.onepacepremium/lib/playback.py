@@ -8,7 +8,7 @@ import xbmcplugin
 from . import bookmarks as _bookmarks
 from . import elementum as _elementum
 from . import watched as _watched
-from .utils import ADDON_HANDLE, HTTP_SESSION, log
+from .utils import ADDON_HANDLE, HTTP_SESSION, get_setting, log
 
 _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 
@@ -127,6 +127,28 @@ def _monitor_playback(series_id, episode_id, video_url=""):
     # fresh when the user navigates back, so the watched state is already correct.
 
 
+def _filter_subtitles(subs, sub_id):
+    """Narrow the track list to the user's languages, dropping variants by default.
+
+    Variant tracks (CC, DUB, ALT) are the ones Kodi shows as "Unknown", since
+    their filenames carry an extra token it can't parse.
+    """
+    if not subs:
+        return subs
+
+    total = len(subs)
+    # Defaults on: getSetting returns "" before the settings dialog is opened.
+    if get_setting("sub_variants") == "false":
+        subs = [s for s in subs if not s.get("label")]
+
+    wanted = [c for c in get_setting("sub_langs").split(",") if c]
+    if wanted:
+        subs = [s for s in subs if s.get("lang") in wanted]
+
+    log(f"Subtitles for {sub_id}: {len(subs)} of {total} tracks after filtering")
+    return subs
+
+
 def play_video(params):
     series_id = params.get("series_id", "")
     episode_id = params.get("episode_id", "")
@@ -196,8 +218,7 @@ def play_video(params):
             resp = HTTP_SESSION.get(_SUBS_URL, timeout=10)
             if resp.ok:
                 all_subs = resp.json()
-                subs = all_subs.get(sub_id, [])
-                log(f"Subtitles for {sub_id}: {len(subs)} tracks found")
+                subs = _filter_subtitles(all_subs.get(sub_id, []), sub_id)
                 if subs:
                     list_item.setSubtitles([s["url"] for s in subs])
             else:
