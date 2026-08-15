@@ -50,6 +50,34 @@ def clear_cache():
     )
 
 
+def clear_subs_cache():
+    dialog = xbmcgui.Dialog()
+    if not dialog.yesno(
+        "Clear Subtitle Cache",
+        "This will delete all cached subtitle files. They will be fetched again on the next playback.\n\nAre you sure?",
+        nolabel="No",
+        yeslabel="Yes",
+    ):
+        return
+
+    root = "special://temp/onepace-subs/"
+    count = 0
+    if xbmcvfs.exists(root):
+        # One folder per episode, files inside — no deeper nesting.
+        for folder in xbmcvfs.listdir(root)[0]:
+            path = f"{root}{folder}/"
+            for name in xbmcvfs.listdir(path)[1]:
+                if xbmcvfs.delete(path + name):
+                    count += 1
+            xbmcvfs.rmdir(path)
+
+    dialog.notification(
+        "One Pace Premium",
+        f"Subtitle cache cleared ({count} file{'s' if count != 1 else ''} removed).",
+        xbmcgui.NOTIFICATION_INFO,
+    )
+
+
 def _clear_kodi_bookmarks():
     """Clear Kodi's own bookmark (resume) entries for our plugin from MyVideos.db."""
     try:
@@ -306,6 +334,8 @@ if __name__ == "__main__":
     action = sys.argv[1].strip() if len(sys.argv) > 1 else ""
     if action == "clear_cache":
         clear_cache()
+    elif action == "clear_subs_cache":
+        clear_subs_cache()
     elif action == "clear_bookmarks":
         clear_bookmarks()
     elif action == "clear_watched":

@@ -180,16 +180,17 @@ def _fetch_subtitle(url, path):
         return None
 
 
-def _subtitle_paths(subs, sub_id):
+def _subtitle_paths(subs, sub_id, fetch=True):
     """Local paths for variants, plain URLs for everything else.
 
-    Variants are fetched in parallel; whatever misses the budget stays a URL.
+    With fetch off, cached files are still used but nothing new is downloaded.
     """
     targets = {}
-    for index, track in enumerate(subs):
-        path = _cache_path(track, sub_id)
-        if path and not xbmcvfs.exists(path):
-            targets[index] = (track["url"], path)
+    if fetch:
+        for index, track in enumerate(subs):
+            path = _cache_path(track, sub_id)
+            if path and not xbmcvfs.exists(path):
+                targets[index] = (track["url"], path)
 
     done = {}
     if targets:
@@ -228,7 +229,11 @@ def _subtitle_paths(subs, sub_id):
     return paths
 
 
-def _filter_subtitles(subs, sub_id):
+def _wanted_langs():
+    return [c for c in get_setting("sub_langs").split(",") if c]
+
+
+def _filter_subtitles(subs, sub_id, wanted):
     """Narrow the track list to the user's languages. Empty means all.
 
     Alternate versions (CC, DUB, ALT) are always kept — some episodes only
@@ -238,7 +243,6 @@ def _filter_subtitles(subs, sub_id):
         return subs
 
     total = len(subs)
-    wanted = [c for c in get_setting("sub_langs").split(",") if c]
     if wanted:
         subs = [s for s in subs if s.get("lang") in wanted]
 
@@ -310,14 +314,18 @@ def play_video(params):
     if art:
         list_item.setArt(art)
 
-    if sub_id:
+    if sub_id and get_setting("subs_enabled") != "false":
         try:
             resp = HTTP_SESSION.get(_SUBS_URL, timeout=10)
             if resp.ok:
                 all_subs = resp.json()
-                subs = _filter_subtitles(all_subs.get(sub_id, []), sub_id)
+                wanted = _wanted_langs()
+                subs = _filter_subtitles(all_subs.get(sub_id, []), sub_id, wanted)
                 if subs:
-                    list_item.setSubtitles(_subtitle_paths(subs, sub_id))
+                    # Only worth downloading for languages the user picked.
+                    list_item.setSubtitles(
+                        _subtitle_paths(subs, sub_id, fetch=bool(wanted))
+                    )
             else:
                 log(f"Subtitles fetch failed: HTTP {resp.status_code}")
         except Exception as e:
