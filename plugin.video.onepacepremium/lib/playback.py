@@ -120,7 +120,8 @@ def _monitor_playback(series_id, episode_id, video_url=""):
         if player.ended_naturally or pct >= 0.85:
             _watched.set_episodes_watched(series_id, [episode_id], True)
             _bookmarks.clear(episode_id)
-            _clear_kodi_bookmark(episode_id)
+            from .episode_routes import _clear_kodi_episode_state
+            _clear_kodi_episode_state(episode_id)
             log(f"[monitor] marked watched at end (natural={player.ended_naturally} pct={pct*100:.0f}%) for {episode_id!r}")
         elif last_time > 60 and total_time > 0:
             _bookmarks.set_bookmark(episode_id, last_time, total_time, series_id)

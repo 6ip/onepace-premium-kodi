@@ -674,9 +674,8 @@ def _bulk_kodi_update(episode_ids, marking_watched):
             ph = ",".join(file_ids)
             playcount = 1 if marking_watched else 0
             cur.execute(f"UPDATE files SET playCount=? WHERE idFile IN ({ph})", (playcount,))
-            if marking_watched:
-                cur.execute(f"DELETE FROM bookmark WHERE idFile IN ({ph})")
-                cur.execute(f"DELETE FROM streamdetails WHERE idFile IN ({ph})")
+            cur.execute(f"DELETE FROM bookmark WHERE idFile IN ({ph})")
+            cur.execute(f"DELETE FROM streamdetails WHERE idFile IN ({ph})")
             con.commit()
             log(f"[watched] bulk Kodi update playCount={playcount} for {len(file_ids)} file(s)")
 
@@ -705,30 +704,15 @@ def _update_kodi_episode_playcount(episode_id, playcount):
         log(f"[watched] Kodi playCount update error: {e}")
 
 
-def _clear_kodi_episode_bookmark(episode_id):
-    """Clear Kodi's resume position for a specific episode from MyVideos.db."""
-    try:
-        import sqlite3
-        con = _kodi_db_connect()
-        if not con:
-            return
-        cur = con.cursor()
-        file_ids = _get_kodi_episode_file_ids(cur, episode_id)
-        if file_ids:
-            ph = ",".join(file_ids)
-            cur.execute(f"DELETE FROM bookmark WHERE idFile IN ({ph})")
-            con.commit()
-            log(f"[watched] cleared Kodi bookmark for {episode_id!r} ({cur.rowcount} rows)")
-        cur.close()
-        con.close()
-    except Exception as e:
-        log(f"[watched] Kodi bookmark clear error: {e}")
+def _clear_kodi_episode_state(episode_id, remove_file=False):
+    """Drop Kodi's resume point and stream details for one episode.
 
-
-def _clear_kodi_episode_streamdetails(episode_id):
-    """Clear Kodi's stream details for a specific episode from MyVideos.db.
-    Called before Container.Refresh so Kodi reads fresh data when rebuilding the list.
+    remove_file also drops the files row, which holds playCount — so only the
+    full reset in clear_progress uses it.
     """
+    tables = ["bookmark", "streamdetails"]
+    if remove_file:
+        tables.append("files")
     try:
         con = _kodi_db_connect()
         if not con:
@@ -737,13 +721,14 @@ def _clear_kodi_episode_streamdetails(episode_id):
         file_ids = _get_kodi_episode_file_ids(cur, episode_id)
         if file_ids:
             ph = ",".join(file_ids)
-            cur.execute(f"DELETE FROM streamdetails WHERE idFile IN ({ph})")
+            for table in tables:
+                cur.execute(f"DELETE FROM {table} WHERE idFile IN ({ph})")
             con.commit()
-            log(f"[watched] cleared Kodi streamdetails for {episode_id!r} ({cur.rowcount} rows)")
+            log(f"[watched] cleared {'+'.join(tables)} for {episode_id!r}")
         cur.close()
         con.close()
     except Exception as e:
-        log(f"[watched] Kodi streamdetails clear error: {e}")
+        log(f"[watched] Kodi state clear error: {e}")
 
 
 def mark_watched(params):
@@ -760,11 +745,8 @@ def mark_watched(params):
         log(f"[watched] episode {action}: {episode_id!r} (total watched: {len(after)})")
         if action == "marked":
             _bookmarks.clear(episode_id)
-            _clear_kodi_episode_bookmark(episode_id)
-            _clear_kodi_episode_streamdetails(episode_id)
-            _update_kodi_episode_playcount(episode_id, 1)
-        else:
-            _update_kodi_episode_playcount(episode_id, 0)
+        _clear_kodi_episode_state(episode_id)
+        _update_kodi_episode_playcount(episode_id, 1 if action == "marked" else 0)
     else:
         catalog_type = params.get("catalog_type", "series")
         season_filter = int(params["season"]) if scope == "season" else None
@@ -803,7 +785,6 @@ def mark_watched(params):
 def clear_progress(params):
     episode_id = params["episode_id"]
     _bookmarks.clear(episode_id)
-    _clear_kodi_episode_bookmark(episode_id)
-    _clear_kodi_episode_streamdetails(episode_id)
-    log(f"[progress] cleared bookmark and streamdetails for {episode_id!r}")
+    _clear_kodi_episode_state(episode_id, remove_file=True)
+    log(f"[progress] reset Kodi state for {episode_id!r}")
     xbmc.executebuiltin("Container.Refresh")
