@@ -91,6 +91,7 @@ def list_browse(params):
     catalog_id = spec["id"]
 
     xbmcplugin.setContent(ADDON_HANDLE, "tvshows")
+    xbmcplugin.setPluginCategory(ADDON_HANDLE, "Browse")
 
     response = _fetch_catalog(_catalog_url(catalog_type, catalog_id, "skip=0"))
     if not response:

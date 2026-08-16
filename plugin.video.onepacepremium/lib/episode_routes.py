@@ -21,6 +21,16 @@ from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
                      get_secret_string,
                      is_elementum_installed_and_enabled, log)
 
+# Notice cards that sit in an episode slot but aren't episodes.
+_NOTICE_ID_PREFIX = "pp_COMPLETE"
+
+
+def _episode_label(title, season, episode, episode_id):
+    """"1x01. Title", except where a number would be noise."""
+    if season == 0 or str(episode_id).startswith(_NOTICE_ID_PREFIX):
+        return title
+    return f"{season}x{int(episode):02d}. {title}"
+
 
 def list_seasons(params):
     if not ensure_configured():
@@ -75,6 +85,9 @@ def list_seasons(params):
         if s is not None and eid:
             season_ep_ids.setdefault(s, []).append(eid)
 
+
+    if show_title:
+        xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
 
     items = []
     for season in seasons:
@@ -164,6 +177,8 @@ def list_episodes(params):
     season_poster = season_poster_map.get(selected_season) or ""
     log(f"[watched] series={video_id!r} watched_count={len(series_watched)} ids={sorted(series_watched)}")
 
+    if show_title:
+        xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
     items = []
     for video in season_videos:
         episode_number = _episode_number(video)
@@ -174,10 +189,11 @@ def list_episodes(params):
         stream_video_id = video.get("id") or f"{video_id}:{selected_season}:{episode_number}"
 
         title = video.get("name") or video.get("title") or f"Episode {episode_number}"
-        list_item = xbmcgui.ListItem(label=title, offscreen=True)
+        label = _episode_label(title, selected_season, episode_number, stream_video_id)
+        list_item = xbmcgui.ListItem(label=label, offscreen=True)
         tags = list_item.getVideoInfoTag()
         _set_ids(tags, video_id)
-        tags.setTitle(title)
+        tags.setTitle(label)
         tags.setTvShowTitle(show_title)
         tags.setSeason(selected_season)
         tags.setEpisode(int(episode_number))

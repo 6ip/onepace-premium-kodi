@@ -151,6 +151,7 @@ def _get_series_meta(series_id):
 
 def list_my_lists(params):
     xbmcplugin.setContent(ADDON_HANDLE, "")
+    xbmcplugin.setPluginCategory(ADDON_HANDLE, "My Lists")
     items = [
         (build_url("list_in_progress"),   _folder_item("In Progress",   _PLAYER_ICON), True),
         (build_url("list_next_episodes"),  _folder_item("Next Episodes", _NEXT_ICON),   True),
@@ -174,6 +175,7 @@ def list_in_progress(params):
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
+    xbmcplugin.setPluginCategory(ADDON_HANDLE, "In Progress")
     _prefetch_metas(_CATALOG_TYPE, by_series)
     built = []
 
@@ -220,6 +222,7 @@ def list_next_episodes(params):
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
+    xbmcplugin.setPluginCategory(ADDON_HANDLE, "Next Episodes")
     _prefetch_metas(_CATALOG_TYPE, all_series)
     built = []
 
