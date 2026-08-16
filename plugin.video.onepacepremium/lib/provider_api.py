@@ -1,6 +1,5 @@
 import re
 import time
-from concurrent import futures
 from typing import Optional, Tuple
 from urllib import parse
 
@@ -93,6 +92,7 @@ def _prefetch_metas(catalog_type: str, video_ids):
     ]
     if len(missing) < 2:
         return
+    from concurrent import futures
     started = time.time()
     with futures.ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda vid: _fetch_provider_meta(catalog_type, vid), missing))

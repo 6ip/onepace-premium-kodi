@@ -3,7 +3,6 @@ import sys
 from typing import List
 from urllib import parse
 
-import requests
 import xbmc
 import xbmcaddon
 import xbmcgui
@@ -17,7 +16,16 @@ ADDON_DIR = xbmcvfs.translatePath(ADDON.getAddonInfo("path"))
 ALERT_ICON = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media", "alert.png")
 
 REQUEST_TIMEOUT = 20
-HTTP_SESSION = requests.Session()
+_SESSION = None
+
+
+def session():
+    """requests costs ~400ms to import, so load it only when we really fetch."""
+    global _SESSION
+    if _SESSION is None:
+        import requests
+        _SESSION = requests.Session()
+    return _SESSION
 
 
 def log(message: str, level=xbmc.LOGINFO):
@@ -34,8 +42,9 @@ def build_url(action: str, **params):
 
 
 def fetch_data(url: str):
+    import requests
     try:
-        response = HTTP_SESSION.get(url, timeout=REQUEST_TIMEOUT)
+        response = session().get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as exc:

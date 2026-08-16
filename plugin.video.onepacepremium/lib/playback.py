@@ -1,9 +1,7 @@
 import json
 import os
 import re
-from concurrent import futures
 
-import requests
 import xbmc
 import xbmcgui
 import xbmcplugin
@@ -12,7 +10,7 @@ import xbmcvfs
 from . import bookmarks as _bookmarks
 from . import elementum as _elementum
 from . import watched as _watched
-from .utils import ADDON_HANDLE, HTTP_SESSION, get_setting, log
+from .utils import ADDON_HANDLE, get_setting, log, session
 
 _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 
@@ -160,6 +158,7 @@ def _fetch_subtitle(url, path):
     name = path.rsplit("/", 1)[-1]
     partial = path + ".part"
     try:
+        import requests
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         content = response.content
@@ -195,6 +194,7 @@ def _subtitle_paths(subs, sub_id, fetch=True):
 
     done = {}
     if targets:
+        from concurrent import futures
         xbmcvfs.mkdirs(f"{_SUBS_CACHE}{sub_id}/")
         # Not a `with` block: that waits for stragglers on exit, which would
         # defeat the budget. Any that land late still warm the cache.
@@ -323,7 +323,7 @@ def play_video(params):
 
     if sub_id and get_setting("subs_enabled") != "false":
         try:
-            resp = HTTP_SESSION.get(_SUBS_URL, timeout=10)
+            resp = session().get(_SUBS_URL, timeout=10)
             if resp.ok:
                 all_subs = resp.json()
                 wanted = _wanted_langs()

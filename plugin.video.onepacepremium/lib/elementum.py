@@ -7,7 +7,6 @@ Elementum still does all torrent work and shows its own progress dialog.
 """
 from urllib import parse
 
-import requests
 import xbmcaddon
 
 from .utils import ADDON, log
@@ -54,6 +53,7 @@ def resolve_stream(uri, file_idx=None):
     # Resume is ours (bookmarks + Kodi's dialog); stop Elementum asking too.
     url += "&doresume=false"
 
+    import requests
     session = requests.Session()
     session.trust_env = False  # daemon is local; ignore system proxy settings
     try:
