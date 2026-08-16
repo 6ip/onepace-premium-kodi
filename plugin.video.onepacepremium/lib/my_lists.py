@@ -12,7 +12,8 @@ from .provider_api import (_fetch_provider_meta,
                             _parse_runtime_seconds, _prefetch_metas)
 from .route_common import _add_directory_items, end_directory
 
-from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, log
+from .utils import (ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url,
+                    get_setting, log)
 
 _CATALOG_TYPE = "series"
 _SKIN_MEDIA  = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media")
@@ -47,7 +48,8 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
 
     selected_season = video.get("season")
     title = video.get("name") or video.get("title") or f"Episode {episode_number}"
-    display_label = f"[[COLOR fff502f4]{show_title}[/COLOR]] {title}" if show_title else title
+    colour = get_setting("highlight_color") or "fff502f4"
+    display_label = f"[[COLOR {colour}]{show_title}[/COLOR]] {title}" if show_title else title
     list_item = xbmcgui.ListItem(label=display_label, offscreen=True)
     tags = list_item.getVideoInfoTag()
     tags.setTitle(title)

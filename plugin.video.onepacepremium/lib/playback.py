@@ -10,7 +10,7 @@ import xbmcvfs
 from . import bookmarks as _bookmarks
 from . import elementum as _elementum
 from . import watched as _watched
-from .utils import ADDON_HANDLE, get_setting, log, session
+from .utils import ADDON_HANDLE, ADDON_ID, get_setting, log, session
 
 _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 
@@ -18,6 +18,29 @@ _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 # plugin:// handoff can buffer as long as it needs.
 _START_CAP_DIRECT = 60
 _START_CAP_HANDOFF = 900
+
+
+def _keep_resume_cleared(episode_id, monitor, attempts=6, delay=0.5):
+    """Kodi can save its resume point after we delete it — Elementum's teardown
+    is slow enough to lose that race. Re-clear until it stops coming back.
+    """
+    from .episode_routes import _clear_kodi_episode_state, kodi_episode_has_bookmark
+    for _ in range(attempts):
+        if monitor.waitForAbort(delay):
+            return
+        if not kodi_episode_has_bookmark(episode_id):
+            return
+        _clear_kodi_episode_state(episode_id, ("bookmark",))
+        log(f"[monitor] Kodi re-saved a resume point for {episode_id!r}, cleared again")
+
+
+def _watched_threshold():
+    """Fraction of an episode that counts as watched."""
+    try:
+        percent = int(get_setting("watched_threshold"))
+    except (TypeError, ValueError):
+        percent = 85
+    return min(100, max(50, percent)) / 100.0
 
 
 class _WatchMonitor(xbmc.Player):
@@ -51,6 +74,7 @@ def _monitor_playback(series_id, episode_id, video_url=""):
     kodi_monitor = xbmc.Monitor()
     player = _WatchMonitor()
     last_time, total_time = 0.0, 0.0
+    threshold = _watched_threshold()
 
     is_handoff = video_url.startswith("plugin://")
     cap = _START_CAP_HANDOFF if is_handoff else _START_CAP_DIRECT
@@ -90,7 +114,7 @@ def _monitor_playback(series_id, episode_id, video_url=""):
         except Exception:
             pass
 
-    # Poll every 1 s; mark as soon as the 85% threshold is reached during playback
+    # Poll every 1 s; mark as soon as the threshold is reached during playback
     marked = False
     while player.isPlaying():
         if kodi_monitor.waitForAbort(1):
@@ -102,7 +126,7 @@ def _monitor_playback(series_id, episode_id, video_url=""):
             pass
         if not marked and series_id and episode_id and total_time > 0:
             pct = last_time / total_time
-            if pct >= 0.85:
+            if pct >= threshold:
                 marked = True
                 _watched.set_episodes_watched(series_id, [episode_id], True)
                 _bookmarks.clear(episode_id)
@@ -117,15 +141,33 @@ def _monitor_playback(series_id, episode_id, video_url=""):
     # If threshold wasn't hit during playback, decide now based on end-of-stream signals
     if not marked:
         pct = (last_time / total_time) if total_time > 0 else 0.0
-        if player.ended_naturally or pct >= 0.85:
+        if player.ended_naturally or pct >= threshold:
+            marked = True
             _watched.set_episodes_watched(series_id, [episode_id], True)
             _bookmarks.clear(episode_id)
-            from .episode_routes import _clear_kodi_episode_state
-            _clear_kodi_episode_state(episode_id)
             log(f"[monitor] marked watched at end (natural={player.ended_naturally} pct={pct*100:.0f}%) for {episode_id!r}")
         elif last_time > 60 and total_time > 0:
             _bookmarks.set_bookmark(episode_id, last_time, total_time, series_id)
             log(f"[monitor] saved bookmark {episode_id!r} at {last_time:.1f}s / {total_time:.1f}s")
+
+    # Kodi saves its own resume point when playback stops short. Left behind, a
+    # skin draws "resumable" instead of the watched tick.
+    if episode_id:
+        from .episode_routes import (_clear_kodi_episode_state,
+                                     _update_kodi_episode_playcount)
+        if marked:
+            _clear_kodi_episode_state(episode_id)
+            _update_kodi_episode_playcount(episode_id, 1)
+            _keep_resume_cleared(episode_id, kodi_monitor)
+        else:
+            # Kodi calls anything stopped in the last few percent "watched"
+            # (ignorepercentatend). Our threshold decides, so put it back.
+            _update_kodi_episode_playcount(episode_id, 0)
+        # Kodi rebuilt the list before we got here, so it still shows the old
+        # state. Redraw now that the rows are correct.
+        if ADDON_ID in xbmc.getInfoLabel("Container.FolderPath"):
+            xbmc.executebuiltin("Container.Refresh")
+            log(f"[monitor] refreshed list for {episode_id!r}")
 
     # No Container.Refresh — Kodi re-runs the plugin when you return from the
     # player anyway, and refreshing on top of that redraws the list twice.

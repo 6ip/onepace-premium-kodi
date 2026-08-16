@@ -293,10 +293,46 @@ def configure_account():
         )
 
 
+HIGHLIGHT_COLORS = (
+    ("Pink", "fff502f4"), ("Cyan", "ff00d4ff"), ("Green", "ff00c853"),
+    ("Orange", "ffff8f00"), ("Red", "ffe53935"), ("Purple", "ff8e24aa"),
+    ("Yellow", "ffffd600"), ("White", "ffffffff"), ("Grey", "ff9e9e9e"),
+)
+
+
+def _save_settings(addon, values):
+    """The settings window writes its own copy back on close, so shut it first."""
+    import xbmc
+    monitor = xbmc.Monitor()
+    xbmc.executebuiltin("Dialog.Close(addonsettings, true)")
+    for _ in range(30):
+        if not xbmc.getCondVisibility("Window.IsActive(addonsettings)"):
+            break
+        if monitor.waitForAbort(0.1):
+            return False
+    for key, value in values.items():
+        addon.setSetting(key, value)
+    return True
+
+
+def choose_highlight_color():
+    """Pick the colour used for the show name in My Lists."""
+    addon = xbmcaddon.Addon(ADDON_ID)
+    names = [f"[COLOR {hexval}]{name}[/COLOR]" for name, hexval in HIGHLIGHT_COLORS]
+    current = addon.getSetting("highlight_color")
+    preselect = next((i for i, (_, h) in enumerate(HIGHLIGHT_COLORS) if h == current), 0)
+
+    chosen = xbmcgui.Dialog().select("Show Name Colour", names, preselect=preselect)
+    if chosen < 0:
+        return
+
+    name, hexval = HIGHLIGHT_COLORS[chosen]
+    if _save_settings(addon, {"highlight_color": hexval, "highlight_color_display": name}):
+        xbmcgui.Dialog().notification("Show Name Colour", name, xbmcgui.NOTIFICATION_INFO)
+
+
 def choose_sub_langs():
     """Pick which subtitle languages to show. Empty selection means all."""
-    import xbmc
-
     addon = xbmcaddon.Addon(ADDON_ID)
     codes = sorted(LANG_NAMES, key=lambda c: LANG_NAMES[c])
     names = [LANG_NAMES[c] for c in codes]
@@ -313,21 +349,11 @@ def choose_sub_langs():
     selected = [codes[i] for i in chosen]
     summary = ", ".join(LANG_NAMES[c] for c in selected) if selected else "All languages"
 
-    # The settings window holds its own copy and writes it back when it closes,
-    # which would overwrite this. Close it first, then save.
-    monitor = xbmc.Monitor()
-    xbmc.executebuiltin("Dialog.Close(addonsettings, true)")
-    for _ in range(30):
-        if not xbmc.getCondVisibility("Window.IsActive(addonsettings)"):
-            break
-        if monitor.waitForAbort(0.1):
-            return
-
-    addon.setSetting("sub_langs", ",".join(selected))
-    addon.setSetting("sub_langs_display", summary)
-    xbmcgui.Dialog().notification(
-        "Subtitle Languages", summary, xbmcgui.NOTIFICATION_INFO
-    )
+    if _save_settings(addon, {"sub_langs": ",".join(selected),
+                              "sub_langs_display": summary}):
+        xbmcgui.Dialog().notification(
+            "Subtitle Languages", summary, xbmcgui.NOTIFICATION_INFO
+        )
 
 
 if __name__ == "__main__":
@@ -346,3 +372,5 @@ if __name__ == "__main__":
         configure_account()
     elif action == "choose_sub_langs":
         choose_sub_langs()
+    elif action == "choose_highlight_color":
+        choose_highlight_color()

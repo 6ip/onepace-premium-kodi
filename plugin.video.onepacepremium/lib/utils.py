@@ -28,7 +28,17 @@ def session():
     return _SESSION
 
 
+_DEBUG = None
+
+
 def log(message: str, level=xbmc.LOGINFO):
+    """Info lines are debug-only; warnings and errors always go through."""
+    global _DEBUG
+    if level == xbmc.LOGINFO:
+        if _DEBUG is None:
+            _DEBUG = ADDON.getSetting("debug_logging") == "true"
+        if not _DEBUG:
+            return
     xbmc.log(f"[One Pace Premium] {message}", level)
 
 

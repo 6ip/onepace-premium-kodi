@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 from urllib import parse
 
 from . import cache as _cache
-from .utils import fetch_data, get_catalog_provider_url, log
+from .utils import fetch_data, get_catalog_provider_url, get_setting, log
 
 SERIES_CATALOG_EXCLUDED_NAMES = {"last videos", "calendar videos"}
 
@@ -97,6 +97,15 @@ def _prefetch_metas(catalog_type: str, video_ids):
     with futures.ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda vid: _fetch_provider_meta(catalog_type, vid), missing))
     log(f"[meta] prefetched {len(missing)} series in {time.time() - started:.2f}s")
+
+
+def countable_episode_ids(meta: dict):
+    """Episode ids that count toward totals — specials excluded when hidden."""
+    keep_specials = get_setting("show_specials") != "false"
+    return [
+        v["id"] for v in meta.get("videos", ())
+        if v.get("id") and (keep_specials or v.get("season") != 0)
+    ]
 
 
 def _catalog_url(catalog_type: str, catalog_id: str, extra: str):

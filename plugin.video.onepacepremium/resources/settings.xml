@@ -8,17 +8,36 @@
         <setting label="Configuration" id="secret_string" type="text" default="" />
         <setting label="Configure / Reconfigure" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,configure_account)" />
     </category>
-    <category label="Tools">
+    <category label="Playback">
         <setting type="lsep" label="Elementum (Torrent)" />
         <setting label="Check Availability" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />
         <setting label="Direct Playback (experimental)" id="elementum_direct" type="bool" default="false" />
         <setting type="sep" />
-        <setting type="lsep" label="Subtitles" />
+        <setting type="lsep" label="Watched" />
+        <setting label="Mark Watched At (%)" id="watched_threshold" type="slider" default="85" range="50,5,100" option="int" />
+    </category>
+    <category label="Lists">
+        <setting type="lsep" label="Episodes" />
+        <setting label="Episode Title Format" id="episode_title_format" type="enum" default="0" values="1x01. Title|Title" />
+        <setting label="Hide Watched Episodes" id="hide_watched" type="bool" default="false" />
+        <setting label="Use Episode Thumbnail As Background" id="thumb_fanart" type="bool" default="false" />
+        <setting type="sep" />
+        <setting type="lsep" label="Seasons" />
+        <setting label="Show Specials" id="show_specials" type="bool" default="true" />
+        <setting label="Skip Season List When Only One" id="flatten_single_season" type="bool" default="false" />
+        <setting type="sep" />
+        <setting type="lsep" label="Appearance" />
+        <setting label="Show Name Colour" id="choose_highlight_color" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_highlight_color)" />
+        <setting label="Showing" id="highlight_color_display" type="text" default="Pink" enable="false" subsetting="true" />
+        <setting id="highlight_color" type="text" default="fff502f4" visible="false" />
+    </category>
+    <category label="Subtitles">
         <setting label="Enable External Subtitles" id="subs_enabled" type="bool" default="true" />
         <setting label="Subtitle Languages" id="choose_sub_langs" type="action" enable="eq(-1,true)" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_sub_langs)" />
         <setting label="Showing" id="sub_langs_display" type="text" default="All languages" enable="false" subsetting="true" />
         <setting id="sub_langs" type="text" default="" visible="false" />
-        <setting type="sep" />
+    </category>
+    <category label="Tools">
         <setting type="lsep" label="Browsing" />
         <setting label="Menu Caching" id="menu_cache" type="bool" default="true" />
         <setting type="sep" />
@@ -27,5 +46,8 @@
         <setting label="Clear Subtitle Cache" id="clear_subs_cache" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_subs_cache)" />
         <setting label="Clear Bookmarks" id="clear_bookmarks" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_bookmarks)" />
         <setting label="Clear Watched History" id="clear_watched" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_watched)" />
+        <setting type="sep" />
+        <setting type="lsep" label="Debugging" />
+        <setting label="Debug Logging" id="debug_logging" type="bool" default="false" />
     </category>
 </settings>

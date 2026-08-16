@@ -3,7 +3,7 @@ from typing import Optional
 import xbmc
 
 from .provider_api import SERIES_STUDIOS, _parse_air_date, _parse_release_year
-from .utils import build_url
+from .utils import build_url, get_setting
 
 _TAGLINE_KEYS = (
     "videoInfo",
@@ -190,6 +190,8 @@ def _set_episode_art(list_item, video: dict, meta: dict,
     poster = _upgrade_metahub_url(season_poster) or show_poster
     background = _upgrade_metahub_url(meta.get("background")) or show_poster
     logo = meta.get("logo") or None
+    if episode_thumb and get_setting("thumb_fanart") == "true":
+        background = episode_thumb
 
     art = {
         "thumb": episode_thumb or poster,

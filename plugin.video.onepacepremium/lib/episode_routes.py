@@ -12,7 +12,7 @@ from .art import (_cast_list, _episode_number, _season_thumbnails,
                    _set_season_art, _set_show_tags, _set_video_tags,
                    _stream_tagline, _upgrade_metahub_url)
 from .parser import parse_stream_info
-from .provider_api import (_compose_url, _fetch_provider_meta,
+from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode_ids,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
 from .route_common import _add_directory_items, _notify_error, end_directory
@@ -20,7 +20,7 @@ from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
                      fetch_data, get_base_url, get_config_prefix,
                      get_secret_string,
-                     is_elementum_installed_and_enabled, log)
+                     get_setting, is_elementum_installed_and_enabled, log)
 
 # Notice cards that sit in an episode slot but aren't episodes.
 _NOTICE_ID_PREFIX = "pp_COMPLETE"
@@ -28,7 +28,8 @@ _NOTICE_ID_PREFIX = "pp_COMPLETE"
 
 def _episode_label(title, season, episode, episode_id):
     """"1x01. Title", except where a number would be noise."""
-    if season == 0 or str(episode_id).startswith(_NOTICE_ID_PREFIX):
+    if (get_setting("episode_title_format") == "1" or season == 0
+            or str(episode_id).startswith(_NOTICE_ID_PREFIX)):
         return title
     return f"{season}x{int(episode):02d}. {title}"
 
@@ -68,13 +69,18 @@ def list_seasons(params):
             if season is not None
         }
     )
-    if 0 in seasons:
+    if get_setting("show_specials") == "false":
+        seasons = [season for season in seasons if season != 0]
+    elif 0 in seasons:
         seasons = [season for season in seasons if season != 0] + [0]
+
+    if len(seasons) == 1 and get_setting("flatten_single_season") == "true":
+        return list_episodes({**params, "season": str(seasons[0])})
 
     show_title = meta.get("name") or ""
 
     series_watched = _watched.get_watched(video_id)
-    all_ep_ids = [v["id"] for v in videos if v.get("id")]
+    all_ep_ids = countable_episode_ids(meta)
     if all_ep_ids:
         _watched.cache_total(video_id, len(all_ep_ids))
 
@@ -181,6 +187,7 @@ def list_episodes(params):
     if show_title:
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
     series_actors = _cast_list(meta)
+    hide_watched = get_setting("hide_watched") == "true"
     items = []
     n_watched = n_resume = 0
     for video in season_videos:
@@ -190,6 +197,9 @@ def list_episodes(params):
 
         # Compute episode ID early — needed for watched check and context menu.
         stream_video_id = video.get("id") or f"{video_id}:{selected_season}:{episode_number}"
+
+        if hide_watched and stream_video_id in series_watched:
+            continue
 
         title = video.get("name") or video.get("title") or f"Episode {episode_number}"
         label = _episode_label(title, selected_season, episode_number, stream_video_id)
@@ -729,6 +739,26 @@ def _clear_kodi_episode_state(episode_id, tables=("bookmark", "streamdetails")):
         log(f"[watched] Kodi state clear error: {e}")
 
 
+def kodi_episode_has_bookmark(episode_id):
+    """True if Kodi still holds a resume point for this episode."""
+    try:
+        con = _kodi_db_connect()
+        if not con:
+            return False
+        cur = con.cursor()
+        file_ids = _get_kodi_episode_file_ids(cur, episode_id)
+        found = False
+        if file_ids:
+            ph = ",".join(file_ids)
+            cur.execute(f"SELECT 1 FROM bookmark WHERE idFile IN ({ph}) LIMIT 1")
+            found = cur.fetchone() is not None
+        cur.close()
+        con.close()
+        return found
+    except Exception:
+        return False
+
+
 def mark_watched(params):
     scope = params.get("scope", "episode")
     series_id = params["series_id"]
@@ -753,7 +783,7 @@ def mark_watched(params):
             log(f"[watched] mark_watched ERROR: could not fetch meta for {series_id!r}")
             return
         all_videos = meta.get("videos", ())
-        all_ep_ids = [v["id"] for v in all_videos if v.get("id")]
+        all_ep_ids = countable_episode_ids(meta)
         if all_ep_ids:
             _watched.cache_total(series_id, len(all_ep_ids))
         episode_ids = [

@@ -7,7 +7,8 @@ from . import watched as _watched
 from .art import _set_art, _set_ids, _set_show_tags, _set_video_tags
 from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
                             _fetch_catalog, _fetch_provider_manifest,
-                            _fetch_provider_meta, _prefetch_metas)
+                            _fetch_provider_meta, _prefetch_metas,
+                            countable_episode_ids)
 from .route_common import _add_directory_items, _notify_error, end_directory
 from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, ensure_configured, fetch_data
 
@@ -117,13 +118,14 @@ def list_browse(params):
         _set_video_tags(tags, video, video_name)
         _set_art(list_item, video)
         s_meta = _fetch_provider_meta(catalog_type, video_id)
+        watched_count, total = series_stats.get(video_id, (0, None))
         if s_meta:
             _set_show_tags(tags, s_meta)
-        watched_count, total = series_stats.get(video_id, (0, None))
-        if total is None and s_meta:
-            all_ep_ids = [v["id"] for v in s_meta.get("videos", ()) if v.get("id")]
-            if all_ep_ids:
-                total = len(all_ep_ids)
+            # Count from the meta so hiding specials changes the total too.
+            countable = set(countable_episode_ids(s_meta))
+            total = len(countable) or None
+            watched_count = len(_watched.get_watched(video_id) & countable)
+            if total:
                 _watched.cache_total(video_id, total)
         if total:
             props = {
