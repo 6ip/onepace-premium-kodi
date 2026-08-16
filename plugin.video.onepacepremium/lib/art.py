@@ -62,7 +62,6 @@ def _build_art(
         art["icon"] = primary
         art["fanart"] = primary
         art["landscape"] = primary
-        art["banner"] = primary
     if poster:
         art.setdefault("poster", poster)
         art.setdefault("icon", poster)
@@ -70,7 +69,6 @@ def _build_art(
     if background:
         art.setdefault("fanart", background)
         art.setdefault("landscape", background)
-        art.setdefault("banner", background)
     if logo:
         art["clearlogo"] = logo
         art["tvshow.clearlogo"] = logo
@@ -128,7 +126,6 @@ def _set_episode_art(list_item, video: dict, meta: dict,
         "season.poster": poster,
         "tvshow.poster": show_poster,
         "fanart": background,
-        "banner": background,
     }
     if logo:
         art["clearlogo"] = logo
@@ -150,7 +147,6 @@ def _set_season_art(list_item, meta: dict, season_thumbnail: Optional[str]):
         "icon": poster or "DefaultAddonNone.png",
         "fanart": background,
         "landscape": background,
-        "banner": background,
     }
     if logo:
         art["clearlogo"] = logo
