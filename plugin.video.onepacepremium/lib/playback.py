@@ -322,6 +322,12 @@ def play_video(params):
     if art:
         list_item.setArt(art)
 
+    # Kodi only writes stream details into an empty row, so clear the old ones
+    # or the codec badges keep showing the previous encode.
+    if episode_id:
+        from .episode_routes import _clear_kodi_episode_state
+        _clear_kodi_episode_state(episode_id, ("streamdetails",))
+
     if sub_id and get_setting("subs_enabled") != "false":
         try:
             resp = session().get(_SUBS_URL, timeout=10)

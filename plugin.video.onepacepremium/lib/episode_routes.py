@@ -704,15 +704,13 @@ def _update_kodi_episode_playcount(episode_id, playcount):
         log(f"[watched] Kodi playCount update error: {e}")
 
 
-def _clear_kodi_episode_state(episode_id, remove_file=False):
-    """Drop Kodi's resume point and stream details for one episode.
+def _clear_kodi_episode_state(episode_id, tables=("bookmark", "streamdetails")):
+    """Drop Kodi's per-episode rows for one episode.
 
-    remove_file also drops the files row, which holds playCount — so only the
-    full reset in clear_progress uses it.
+    Kodi only writes streamdetails when the row is empty, so clearing it before
+    playback is what keeps the codec badges current. The files row holds
+    playCount, so only the full reset in clear_progress includes it.
     """
-    tables = ["bookmark", "streamdetails"]
-    if remove_file:
-        tables.append("files")
     try:
         con = _kodi_db_connect()
         if not con:
@@ -785,6 +783,6 @@ def mark_watched(params):
 def clear_progress(params):
     episode_id = params["episode_id"]
     _bookmarks.clear(episode_id)
-    _clear_kodi_episode_state(episode_id, remove_file=True)
+    _clear_kodi_episode_state(episode_id, ("bookmark", "streamdetails", "files"))
     log(f"[progress] reset Kodi state for {episode_id!r}")
     xbmc.executebuiltin("Container.Refresh")
