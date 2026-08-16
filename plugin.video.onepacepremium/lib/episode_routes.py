@@ -10,9 +10,10 @@ from . import watched as _watched
 from .art import (_cast_list, _episode_number, _season_thumbnails,
                    _set_episode_art, _set_episode_rating, _set_ids,
                    _set_season_art, _set_show_tags, _set_video_tags,
-                   _stream_tagline, _upgrade_metahub_url)
+                   _stream_tagline)
 from .parser import parse_stream_info
 from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode_ids,
+                            episode_play_url,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
 from .route_common import _add_directory_items, _notify_error, end_directory
@@ -302,23 +303,10 @@ def list_episodes(params):
                 f"RunPlugin({build_url('clear_progress', episode_id=stream_video_id)})",
             ))
         list_item.addContextMenuItems(ctx_items, replaceItems=True)
-        episode_thumb = _upgrade_metahub_url(video.get("thumbnail")) or ""
         items.append(
             (
-                build_url(
-                    "check_resume",
-                    catalog_type=catalog_type,
-                    video_id=stream_video_id,
-                    thumb=episode_thumb,
-                    logo=meta.get("logo") or "",
-                    parent_id=video_id,
-                    series_name=show_title,
-                    episode_title=title,
-                    season=selected_season,
-                    episode=episode_number,
-                    season_poster=season_poster,
-                    episode_plot=video.get("overview") or meta_description or "",
-                ),
+                episode_play_url(video, meta, video_id, catalog_type,
+                                 season_poster, stream_video_id),
                 list_item,
                 False,
             )

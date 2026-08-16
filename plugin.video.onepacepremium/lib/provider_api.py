@@ -4,7 +4,8 @@ from typing import Optional, Tuple
 from urllib import parse
 
 from . import cache as _cache
-from .utils import fetch_data, get_catalog_provider_url, get_setting, log
+from .utils import (build_url, fetch_data, get_catalog_provider_url,
+                    get_setting, log)
 
 SERIES_CATALOG_EXCLUDED_NAMES = {"last videos", "calendar videos"}
 
@@ -97,6 +98,30 @@ def _prefetch_metas(catalog_type: str, video_ids):
     with futures.ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda vid: _fetch_provider_meta(catalog_type, vid), missing))
     log(f"[meta] prefetched {len(missing)} series in {time.time() - started:.2f}s")
+
+
+def episode_play_url(video, meta, series_id, catalog_type="series",
+                     season_poster="", episode_id=None):
+    """The check_resume URL for one episode, with the art and labels playback needs."""
+    from .art import _episode_number, _upgrade_metahub_url
+
+    season = video.get("season")
+    number = _episode_number(video)
+    title = video.get("name") or video.get("title") or f"Episode {number}"
+    return build_url(
+        "check_resume",
+        catalog_type=catalog_type,
+        video_id=episode_id or video.get("id"),
+        thumb=_upgrade_metahub_url(video.get("thumbnail")) or "",
+        logo=meta.get("logo") or "",
+        parent_id=series_id,
+        series_name=meta.get("name") or "",
+        episode_title=title,
+        season=season,
+        episode=number,
+        season_poster=season_poster,
+        episode_plot=video.get("overview") or meta.get("description") or "",
+    )
 
 
 def countable_episode_ids(meta: dict):

@@ -53,9 +53,10 @@ class _WatchMonitor(xbmc.Player):
         self.ended_naturally = True
 
 
-# Mutable counter so each monitor session can detect when it has been superseded.
-# Using a list avoids needing `global` declarations in nested functions.
+# Which monitor session is current, and for which episode. Lists avoid needing
+# `global` declarations in nested functions.
 _MONITOR_GEN = [0]
+_MONITOR_EPISODE = [""]
 
 
 
@@ -67,6 +68,7 @@ def _monitor_playback(series_id, episode_id, video_url=""):
     action thread — keeping the process alive for the duration of playback.
     """
     _MONITOR_GEN[0] += 1
+    _MONITOR_EPISODE[0] = episode_id
     my_gen = _MONITOR_GEN[0]
     # _MONITOR_GEN is per-process, so pid distinguishes duplicate invocations.
     pid = os.getpid()
@@ -133,9 +135,11 @@ def _monitor_playback(series_id, episode_id, video_url=""):
 
                 log(f"[monitor] marked watched at {pct*100:.0f}% for {episode_id!r}")
 
-    # If a newer monitor session has started, let it handle the rest
-    if _MONITOR_GEN[0] != my_gen:
-        log(f"[monitor] superseded by gen={_MONITOR_GEN[0]}, skipping for {episode_id!r}")
+    # A newer session for the *same* episode owns its state, so stand aside. One
+    # for a different episode (playing the next one) leaves ours to finish.
+    if _MONITOR_GEN[0] != my_gen and _MONITOR_EPISODE[0] == episode_id:
+        log(f"[monitor] superseded by gen={_MONITOR_GEN[0]} for the same episode, "
+            f"skipping {episode_id!r}")
         return
 
     # If threshold wasn't hit during playback, decide now based on end-of-stream signals

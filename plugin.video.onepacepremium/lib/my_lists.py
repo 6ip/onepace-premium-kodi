@@ -6,10 +6,11 @@ import xbmcplugin
 from . import bookmarks as _bookmarks
 from . import watched as _watched
 from .art import (_cast_list, _episode_number, _set_episode_art,
-                   _set_episode_rating, _set_show_tags, _upgrade_metahub_url)
+                   _set_episode_rating, _set_show_tags)
 from .provider_api import (_fetch_provider_meta,
                             _parse_air_date, _parse_release_year,
-                            _parse_runtime_seconds, _prefetch_metas)
+                            _parse_runtime_seconds, _prefetch_metas,
+                            episode_play_url)
 from .route_common import _add_directory_items, end_directory
 
 from .utils import (ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url,
@@ -115,23 +116,8 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
         ))
     list_item.addContextMenuItems(ctx_items, replaceItems=True)
 
-    episode_thumb = _upgrade_metahub_url(video.get("thumbnail")) or ""
-    season_poster = season_poster_map.get(selected_season) or ""
-
-    url = build_url(
-        "check_resume",
-        catalog_type=_CATALOG_TYPE,
-        video_id=ep_id,
-        thumb=episode_thumb,
-        logo=meta.get("logo") or "",
-        parent_id=series_id,
-        series_name=show_title,
-        episode_title=title,
-        season=selected_season,
-        episode=episode_number,
-        season_poster=season_poster,
-        episode_plot=plot,
-    )
+    url = episode_play_url(video, meta, series_id, _CATALOG_TYPE,
+                           season_poster_map.get(selected_season) or "", ep_id)
     sort_key = (selected_season or 0, int(episode_number))
     return sort_key, url, list_item
 
