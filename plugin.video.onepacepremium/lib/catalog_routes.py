@@ -8,7 +8,7 @@ from .art import _set_art, _set_ids, _set_video_tags
 from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
                             _fetch_catalog, _fetch_provider_manifest,
                             _fetch_provider_meta, _prefetch_metas)
-from .route_common import _add_directory_items, _notify_error
+from .route_common import _add_directory_items, _notify_error, end_directory
 from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, ensure_configured, fetch_data
 
 CATALOG_PAGE_SIZE = 25
@@ -68,7 +68,7 @@ def list_root():
          _nav_item("Settings", f"{_skin_media}/settings.png"), False),
     ]
     _add_directory_items(items)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory(cache=True)
 
 
 def list_browse(params):
@@ -77,13 +77,13 @@ def list_browse(params):
 
     manifest = _fetch_provider_manifest()
     if not manifest:
-        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+        end_directory()
         return
 
     series_specs = _catalog_specs(manifest, "series")
     if not series_specs:
         _notify_error("No compatible catalogs found")
-        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+        end_directory()
         return
 
     spec = series_specs[0]
@@ -95,7 +95,7 @@ def list_browse(params):
 
     response = _fetch_catalog(_catalog_url(catalog_type, catalog_id, "skip=0"))
     if not response:
-        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+        end_directory()
         return
 
     videos = response.get("metas", ())
@@ -149,7 +149,7 @@ def list_browse(params):
         )
 
     _add_directory_items(items)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory()
 
 
 def list_catalog_type(params):
@@ -207,7 +207,7 @@ def list_catalog_type(params):
         )
 
     _add_directory_items(items)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory(cache=True)
 
 
 def list_catalog(params):
@@ -245,7 +245,7 @@ def list_catalog(params):
             ]
         )
 
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory()
 
 
 def search_catalog(params):
@@ -270,4 +270,4 @@ def search_catalog(params):
         return
 
     _process_catalog_items(videos, catalog_type)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory()

@@ -7,6 +7,9 @@ import xbmcvfs
 _ADDON = xbmcaddon.Addon()
 _TOTALS_KEY = "__totals__"
 
+# Read once per plugin call — list views ask for this in a loop.
+_CACHED = None
+
 
 def _path():
     profile = xbmcvfs.translatePath(_ADDON.getAddonInfo("profile"))
@@ -15,24 +18,31 @@ def _path():
     return profile + "watched.json"
 
 
-def _load():
+def _load(fresh=False):
+    global _CACHED
+    if _CACHED is not None and not fresh:
+        return _CACHED
+    data = {}
     try:
         p = _path()
         if xbmcvfs.exists(p):
             with xbmcvfs.File(p, "r") as f:
-                return json.loads(f.read() or "{}")
+                data = json.loads(f.read() or "{}")
     except Exception:
         pass
-    return {}
+    _CACHED = data
+    return _CACHED
 
 
 def _save(data):
+    global _CACHED
     try:
         xbmcvfs.mkdirs(xbmcvfs.translatePath(_ADDON.getAddonInfo("profile")))
         with xbmcvfs.File(_path(), "w") as f:
             f.write(json.dumps(data))
     except Exception as e:
         xbmc.log(f"[One Pace Premium] watched save error: {e}", xbmc.LOGERROR)
+    _CACHED = data
 
 
 def get_watched(series_id):
@@ -42,7 +52,7 @@ def get_watched(series_id):
 
 def set_episodes_watched(series_id, episode_ids, watched=True):
     """Mark or unmark a list of episode IDs for a series."""
-    data = _load()
+    data = _load(fresh=True)
     current = set(data.get(series_id, []))
     if watched:
         current.update(episode_ids)
@@ -70,7 +80,7 @@ def toggle_batch(series_id, episode_ids):
 
 def cache_total(series_id, total):
     """Cache the total episode count for a series so list views can show X/total."""
-    data = _load()
+    data = _load(fresh=True)
     totals = data.get(_TOTALS_KEY, {})
     if totals.get(series_id) == total:
         return

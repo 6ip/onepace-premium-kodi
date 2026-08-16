@@ -19,6 +19,9 @@
         <setting label="Showing" id="sub_langs_display" type="text" default="All languages" enable="false" subsetting="true" />
         <setting id="sub_langs" type="text" default="" visible="false" />
         <setting type="sep" />
+        <setting type="lsep" label="Browsing" />
+        <setting label="Menu Caching" id="menu_cache" type="bool" default="true" />
+        <setting type="sep" />
         <setting type="lsep" label="Cache" />
         <setting label="Clear API Cache" id="clear_cache" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_cache)" />
         <setting label="Clear Subtitle Cache" id="clear_subs_cache" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_subs_cache)" />

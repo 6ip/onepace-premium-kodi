@@ -9,7 +9,7 @@ from .art import (_episode_number, _set_episode_art, _upgrade_metahub_url)
 from .provider_api import (SERIES_STUDIOS, _fetch_provider_meta,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds, _prefetch_metas)
-from .route_common import _add_directory_items
+from .route_common import _add_directory_items, end_directory
 
 from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, log
 
@@ -157,7 +157,7 @@ def list_my_lists(params):
         (build_url("list_next_episodes"),  _folder_item("Next Episodes", _NEXT_ICON),   True),
     ]
     _add_directory_items(items)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory(cache=True)
 
 
 def list_in_progress(params):
@@ -171,7 +171,7 @@ def list_in_progress(params):
             by_series.setdefault(sid, {})[ep_id] = bm
 
     if not by_series:
-        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+        end_directory()
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
@@ -197,12 +197,12 @@ def list_in_progress(params):
                 built.append(result)
 
     if not built:
-        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+        end_directory()
         return
 
     built.sort(key=lambda x: x[0])
     _add_directory_items([(url, li, False) for _, url, li in built])
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory()
     log(f"[my_lists] in_progress: {len(built)} episode(s) across {len(by_series)} series")
 
 
@@ -218,7 +218,7 @@ def list_next_episodes(params):
         all_series.add(sid)
 
     if not all_series:
-        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+        end_directory()
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
@@ -255,10 +255,10 @@ def list_next_episodes(params):
             built.append(result)
 
     if not built:
-        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+        end_directory()
         return
 
     built.sort(key=lambda x: x[0])
     _add_directory_items([(url, li, False) for _, url, li in built])
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory()
     log(f"[my_lists] next_episodes: {len(built)} series")

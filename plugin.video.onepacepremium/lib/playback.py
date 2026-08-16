@@ -127,8 +127,9 @@ def _monitor_playback(series_id, episode_id, video_url=""):
         elif last_time > 60 and total_time > 0:
             _bookmarks.set_bookmark(episode_id, last_time, total_time, series_id)
             log(f"[monitor] saved bookmark {episode_id!r} at {last_time:.1f}s / {total_time:.1f}s")
-    # No Container.Refresh here — cacheToDisc=False means Kodi re-runs the plugin
-    # fresh when the user navigates back, so the watched state is already correct.
+
+    # No Container.Refresh — Kodi re-runs the plugin when you return from the
+    # player anyway, and refreshing on top of that redraws the list twice.
 
 
 # Kodi reads the language from the filename, and variant files end in an extra
@@ -271,6 +272,7 @@ def play_video(params):
     series_name   = params.get("series_name", "")
     episode_title = params.get("episode_title", "")
     season_poster = params.get("season_poster", "")
+    episode_thumb = params.get("thumb", "")
     stream_name   = params.get("stream_name", "")
     stream_desc   = params.get("stream_desc", "")
     episode_plot  = params.get("episode_plot", "")
@@ -303,10 +305,15 @@ def play_video(params):
             "script.trakt.ids", json.dumps({"imdb": imdb})
         )
 
+    # Same values the list row uses, so the OSD and info dialog match it.
     art = {}
     if logo:
         art["clearlogo"] = logo
         art["tvshow.clearlogo"] = logo
+    if episode_thumb:
+        art["thumb"] = episode_thumb
+        art["icon"] = episode_thumb
+        art["landscape"] = episode_thumb
     if season_poster:
         art["poster"] = season_poster
         art["tvshow.poster"] = season_poster

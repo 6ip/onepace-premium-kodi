@@ -6,6 +6,9 @@ import xbmcvfs
 
 _ADDON = xbmcaddon.Addon()
 
+# Read once per plugin call — episode lists ask for this in a loop.
+_CACHED = None
+
 
 def _path():
     profile = xbmcvfs.translatePath(_ADDON.getAddonInfo("profile"))
@@ -14,24 +17,31 @@ def _path():
     return profile + "bookmarks.json"
 
 
-def _load():
+def _load(fresh=False):
+    global _CACHED
+    if _CACHED is not None and not fresh:
+        return _CACHED
+    data = {}
     try:
         p = _path()
         if xbmcvfs.exists(p):
             with xbmcvfs.File(p, "r") as f:
-                return json.loads(f.read() or "{}")
+                data = json.loads(f.read() or "{}")
     except Exception:
         pass
-    return {}
+    _CACHED = data
+    return _CACHED
 
 
 def _save(data):
+    global _CACHED
     try:
         xbmcvfs.mkdirs(xbmcvfs.translatePath(_ADDON.getAddonInfo("profile")))
         with xbmcvfs.File(_path(), "w") as f:
             f.write(json.dumps(data))
     except Exception as e:
         xbmc.log(f"[One Pace Premium] bookmarks save error: {e}", xbmc.LOGERROR)
+    _CACHED = data
 
 
 def get_all():
@@ -49,7 +59,7 @@ def get(episode_id):
 
 def set_bookmark(episode_id, position, total, series_id=""):
     """Save resume position for an episode."""
-    data = _load()
+    data = _load(fresh=True)
     entry = {"pos": round(float(position), 1), "total": round(float(total), 1)}
     if series_id:
         entry["series_id"] = series_id
@@ -59,7 +69,7 @@ def set_bookmark(episode_id, position, total, series_id=""):
 
 def clear(episode_id):
     """Remove resume position for an episode (no-op if none exists)."""
-    data = _load()
+    data = _load(fresh=True)
     if episode_id in data:
         del data[episode_id]
         _save(data)

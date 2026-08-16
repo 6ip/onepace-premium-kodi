@@ -14,7 +14,7 @@ from .parser import parse_stream_info
 from .provider_api import (SERIES_STUDIOS, _compose_url, _fetch_provider_meta,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
-from .route_common import _add_directory_items, _notify_error
+from .route_common import _add_directory_items, _notify_error, end_directory
 from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
                      fetch_data, get_base_url, get_config_prefix,
@@ -137,7 +137,7 @@ def list_seasons(params):
         )
 
     _add_directory_items(items)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory()
 
 
 def list_episodes(params):
@@ -175,11 +175,11 @@ def list_episodes(params):
         if s.get("season") is not None and s.get("poster")
     }
     season_poster = season_poster_map.get(selected_season) or ""
-    log(f"[watched] series={video_id!r} watched_count={len(series_watched)} ids={sorted(series_watched)}")
 
     if show_title:
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
     items = []
+    n_watched = n_resume = 0
     for video in season_videos:
         episode_number = _episode_number(video)
         if episode_number is None:
@@ -202,6 +202,7 @@ def list_episodes(params):
         bm = None
         if stream_video_id in series_watched:
             tags.setPlaycount(1)
+            n_watched += 1
         else:
             bm = _bookmarks.get(stream_video_id)
             if bm:
@@ -211,6 +212,7 @@ def list_episodes(params):
                     list_item.setProperty("WatchedProgress", str(pct))
                     list_item.setProperty("PercentPlayed", str(pct))
                     tags.setResumePoint(pos, total)
+                    n_resume += 1
 
         plot = video.get("overview") or meta_description
         if plot:
@@ -280,8 +282,10 @@ def list_episodes(params):
         _notify_error("No episodes available")
         return
 
+    log(f"[list] {video_id} s{selected_season}: {len(items)} rows, "
+        f"{n_watched}/{len(series_watched)} watched, {n_resume} resumable")
     _add_directory_items(items)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory(cache=True)
 
 
 def check_resume(params):
@@ -409,6 +413,8 @@ def check_resume(params):
             playback_params["episode_title"] = episode_title
         if season_poster:
             playback_params["season_poster"] = season_poster
+        if episode_thumb:
+            playback_params["thumb"] = episode_thumb
 
         playback_params["stream_name"] = stream_name
         playback_params["stream_desc"] = stream_desc
@@ -451,7 +457,7 @@ def get_streams(params):
             "Click here to open Add-on Settings and complete setup."
         )
         _add_directory_items([(build_url("open_addon_settings"), list_item, True)])
-        xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+        end_directory()
         return
 
     catalog_type = params["catalog_type"]
@@ -596,13 +602,15 @@ def get_streams(params):
             playback_params["episode_title"] = episode_title
         if season_poster:
             playback_params["season_poster"] = season_poster
+        if episode_thumb:
+            playback_params["thumb"] = episode_thumb
 
         stream_items.append(
             (build_url("play_video", **playback_params), list_item, False)
         )
 
     _add_directory_items(stream_items, stream_count)
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=False)
+    end_directory()
 
 
 def _get_kodi_episode_file_ids(cur, episode_id):
