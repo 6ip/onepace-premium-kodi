@@ -25,6 +25,40 @@ from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
 # Notice cards that sit in an episode slot but aren't episodes.
 _NOTICE_ID_PREFIX = "pp_COMPLETE"
 
+# bingeGroup is "onepace|<service>|<version>". The service preference stores the
+# code directly; the version is an enum.
+_VERSION_BY_INDEX = {"1": "standard", "2": "extended"}
+
+
+def _binge_part(group, index):
+    parts = str(group or "").split("|")
+    return parts[index] if len(parts) > index else ""
+
+
+def _preferred_streams(groups):
+    """Narrow the streams to the preferred service and version.
+
+    A preference that matches nothing is ignored rather than leaving no
+    choices, and a missing version falls back to the standard cut.
+    """
+    indexes = list(range(len(groups)))
+
+    service = get_setting("preferred_service")
+    if service:
+        matched = [i for i in indexes if _binge_part(groups[i], 1) == service]
+        if matched:
+            indexes = matched
+
+    version = _VERSION_BY_INDEX.get(get_setting("preferred_version"))
+    if version:
+        matched = [i for i in indexes if _binge_part(groups[i], 2) == version]
+        if not matched and version != "standard":
+            matched = [i for i in indexes if _binge_part(groups[i], 2) == "standard"]
+        if matched:
+            indexes = matched
+
+    return indexes
+
 
 def _episode_label(title, season, episode, episode_id):
     """"1x01. Title", except where a number would be noise."""
@@ -373,6 +407,7 @@ def check_resume(params):
     elementum_warning_sent = False
     valid_streams  = []
     dialog_labels  = []
+    binge_groups   = []
 
     for stream in streams:
         stream_name    = stream.get("name", "")
@@ -439,17 +474,23 @@ def check_resume(params):
 
         valid_streams.append(playback_params)
         dialog_labels.append(label)
+        binge_groups.append(behavior_hints.get("bingeGroup", ""))
 
     if not valid_streams:
         _notify_error("No streams available")
         _fail(); return
 
-    if len(valid_streams) == 1:
-        selected = 0
+    choices = _preferred_streams(binge_groups)
+    log(f"[streams] {len(valid_streams)} available, {len(choices)} after preferences")
+    if len(choices) == 1:
+        selected = choices[0]
     else:
-        selected = xbmcgui.Dialog().select("Select Stream", dialog_labels)
-        if selected < 0:
+        pick = xbmcgui.Dialog().select(
+            "Select Stream", [dialog_labels[i] for i in choices]
+        )
+        if pick < 0:
             _fail(); return
+        selected = choices[pick]
 
     _play_video(valid_streams[selected])
 

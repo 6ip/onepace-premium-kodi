@@ -22,6 +22,17 @@ LANG_NAMES = {
 }
 
 
+# config key, bingeGroup code, display label
+SERVICES = (
+    ("realdebrid", "rd",  "Real-Debrid"),
+    ("premiumize", "pm",  "Premiumize"),
+    ("debridlink", "dl",  "DebridLink"),
+    ("torbox",     "tb",  "TorBox"),
+    ("alldebrid",  "ad",  "AllDebrid"),
+    ("p2p",        "p2p", "Torrent"),
+)
+
+
 def _profile():
     p = xbmcvfs.translatePath(xbmcaddon.Addon(ADDON_ID).getAddonInfo("profile"))
     return p if p.endswith(("/", "\\")) else p + "/"
@@ -168,29 +179,22 @@ def clear_watched():
 
 
 def _parse_config(config):
-    """Parse config string. Returns list of human-readable service labels (empty = unrecognized)."""
+    """Parse the config string into service keys (empty = unrecognized)."""
     _LEGACY_PREFIXES = [
-        ("rdkey=",      "Real-Debrid"),
-        ("torbox=",     "TorBox"),
-        ("alldebrid=",  "AllDebrid"),
-        ("premiumize=", "Premiumize"),
-        ("dlkey=",      "DebridLink"),
+        ("rdkey=",      "realdebrid"),
+        ("torbox=",     "torbox"),
+        ("alldebrid=",  "alldebrid"),
+        ("premiumize=", "premiumize"),
+        ("dlkey=",      "debridlink"),
     ]
     _LEGACY_KEYS = {
-        "rdkey":      "Real-Debrid",
-        "torbox":     "TorBox",
-        "alldebrid":  "AllDebrid",
-        "premiumize": "Premiumize",
-        "dlkey":      "DebridLink",
+        "rdkey":      "realdebrid",
+        "torbox":     "torbox",
+        "alldebrid":  "alldebrid",
+        "premiumize": "premiumize",
+        "dlkey":      "debridlink",
     }
-    _SERVICE_LABELS = {
-        "realdebrid":  "Real-Debrid",
-        "torbox":      "TorBox",
-        "alldebrid":   "AllDebrid",
-        "premiumize":  "Premiumize",
-        "debridlink":  "DebridLink",
-        "p2p":         "Torrent",
-    }
+    _SERVICE_LABELS = {key: key for key, _, _ in SERVICES}
     # P2P carries no apiKey; every debrid service must have one.
     _KEYLESS = {"p2p"}
 
@@ -238,6 +242,11 @@ def _parse_config(config):
     return []
 
 
+def service_labels(keys):
+    labels = {key: label for key, _, label in SERVICES}
+    return [labels.get(k, k) for k in keys]
+
+
 def show_status():
     config = xbmcaddon.Addon(ADDON_ID).getSetting("secret_string")
     services = _parse_config(config)
@@ -256,7 +265,7 @@ def show_status():
         )
         return
 
-    connected = " + ".join(f"[B]{s}[/B]" for s in services)
+    connected = " + ".join(f"[B]{s}[/B]" for s in service_labels(services))
     xbmcgui.Dialog().ok(
         "Account Status",
         f"Connected: {connected}"
@@ -276,7 +285,7 @@ def configure_account():
         message = "Configuration not recognized.\n\nReconfigure your account?"
         yes_label = "Reconfigure"
     else:
-        connected = " + ".join(f"[B]{s}[/B]" for s in services)
+        connected = " + ".join(f"[B]{s}[/B]" for s in service_labels(services))
         message = f"Connected: {connected}\n\nDo you want to reconfigure?"
         yes_label = "Reconfigure"
 
@@ -313,6 +322,36 @@ def _save_settings(addon, values):
     for key, value in values.items():
         addon.setSetting(key, value)
     return True
+
+
+def choose_preferred_service():
+    """Pick which service to stream from. Only configured ones are offered."""
+    addon = xbmcaddon.Addon(ADDON_ID)
+    configured = _parse_config(addon.getSetting("secret_string"))
+    if not configured:
+        xbmcgui.Dialog().ok(
+            "Preferred Service",
+            "No services configured.\n\nUse [B]Configure / Reconfigure[/B] first."
+        )
+        return
+
+    codes = {key: code for key, code, _ in SERVICES}
+    labels = {key: label for key, _, label in SERVICES}
+    options = [(("", "Always ask"))] + [(codes[k], labels[k]) for k in configured if k in codes]
+
+    current = addon.getSetting("preferred_service")
+    preselect = next((i for i, (c, _) in enumerate(options) if c == current), 0)
+
+    chosen = xbmcgui.Dialog().select(
+        "Preferred Service", [name for _, name in options], preselect=preselect
+    )
+    if chosen < 0:
+        return
+
+    code, name = options[chosen]
+    if _save_settings(addon, {"preferred_service": code,
+                              "preferred_service_display": name}):
+        xbmcgui.Dialog().notification("Preferred Service", name, xbmcgui.NOTIFICATION_INFO)
 
 
 def choose_highlight_color():
@@ -374,3 +413,5 @@ if __name__ == "__main__":
         choose_sub_langs()
     elif action == "choose_highlight_color":
         choose_highlight_color()
+    elif action == "choose_preferred_service":
+        choose_preferred_service()

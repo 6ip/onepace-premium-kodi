@@ -13,6 +13,12 @@
         <setting label="Check Availability" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />
         <setting label="Direct Playback (experimental)" id="elementum_direct" type="bool" default="false" />
         <setting type="sep" />
+        <setting type="lsep" label="Stream Selection" />
+        <setting label="Preferred Service" id="choose_preferred_service" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_preferred_service)" />
+        <setting label="Showing" id="preferred_service_display" type="text" default="Always ask" enable="false" subsetting="true" />
+        <setting id="preferred_service" type="text" default="" visible="false" />
+        <setting label="Preferred Version" id="preferred_version" type="enum" default="0" values="Always ask|Standard|Extended" />
+        <setting type="sep" />
         <setting type="lsep" label="Watched" />
         <setting label="Mark Watched At (%)" id="watched_threshold" type="slider" default="85" range="50,5,100" option="int" />
     </category>
