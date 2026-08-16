@@ -111,26 +111,51 @@ def _episode_number(video: dict):
     return number
 
 
-def _set_episode_art(list_item, video: dict, meta: dict):
+def _set_episode_art(list_item, video: dict, meta: dict,
+                     season_poster: Optional[str] = None):
     episode_thumb = _upgrade_metahub_url(video.get("thumbnail"))
-    poster = _upgrade_metahub_url(meta.get("poster"))
-    background = _upgrade_metahub_url(meta.get("background"))
+    show_poster = _upgrade_metahub_url(meta.get("poster"))
+    poster = _upgrade_metahub_url(season_poster) or show_poster
+    background = _upgrade_metahub_url(meta.get("background")) or show_poster
     logo = meta.get("logo") or None
-    art = _build_art(episode_thumb, poster, episode_thumb or background or poster, logo)
-    # No icon, so the skin draws its own watched/resume marker
-    art.pop("icon", None)
-    if art:
-        list_item.setArt(art)
+
+    art = {
+        "thumb": episode_thumb or poster,
+        "landscape": episode_thumb or background,
+        "icon": episode_thumb or poster or "DefaultAddonNone.png",
+        # Poster too, so poster-style views still show the episode thumb.
+        "poster": episode_thumb or poster,
+        "season.poster": poster,
+        "tvshow.poster": show_poster,
+        "fanart": background,
+        "banner": background,
+    }
+    if logo:
+        art["clearlogo"] = logo
+        art["tvshow.clearlogo"] = logo
+    list_item.setArt({key: value for key, value in art.items() if value})
 
 
 def _set_season_art(list_item, meta: dict, season_thumbnail: Optional[str]):
-    season_thumb = _upgrade_metahub_url(season_thumbnail)
-    poster = _upgrade_metahub_url(meta.get("poster"))
-    background = _upgrade_metahub_url(meta.get("background")) or poster
+    show_poster = _upgrade_metahub_url(meta.get("poster"))
+    poster = _upgrade_metahub_url(season_thumbnail) or show_poster
+    background = _upgrade_metahub_url(meta.get("background")) or show_poster
     logo = meta.get("logo") or None
-    art = _build_art(season_thumb, poster, background, logo)
-    if art:
-        list_item.setArt(art)
+
+    art = {
+        "thumb": poster,
+        "poster": poster,
+        "season.poster": poster,
+        "tvshow.poster": show_poster,
+        "icon": poster or "DefaultAddonNone.png",
+        "fanart": background,
+        "landscape": background,
+        "banner": background,
+    }
+    if logo:
+        art["clearlogo"] = logo
+        art["tvshow.clearlogo"] = logo
+    list_item.setArt({key: value for key, value in art.items() if value})
 
 
 def _stream_tagline(video_info: dict):

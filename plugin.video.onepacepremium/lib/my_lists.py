@@ -8,7 +8,7 @@ from . import watched as _watched
 from .art import (_episode_number, _set_episode_art, _upgrade_metahub_url)
 from .provider_api import (SERIES_STUDIOS, _fetch_provider_meta,
                             _parse_air_date, _parse_release_year,
-                            _parse_runtime_seconds)
+                            _parse_runtime_seconds, _prefetch_metas)
 from .route_common import _add_directory_items
 
 from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, log
@@ -95,7 +95,7 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
         tags.setGenres(genres)
 
     list_item.setProperty("IsPlayable", "true")
-    _set_episode_art(list_item, video, meta)
+    _set_episode_art(list_item, video, meta, season_poster_map.get(selected_season))
 
     ep_ctx_label = "[B]Mark Unwatched[/B]" if is_watched else "[B]Mark Watched[/B]"
     ctx_items = [(
@@ -174,6 +174,7 @@ def list_in_progress(params):
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
+    _prefetch_metas(_CATALOG_TYPE, by_series)
     built = []
 
     for series_id, bookmarks in by_series.items():
@@ -219,6 +220,7 @@ def list_next_episodes(params):
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
+    _prefetch_metas(_CATALOG_TYPE, all_series)
     built = []
 
     for series_id in all_series:

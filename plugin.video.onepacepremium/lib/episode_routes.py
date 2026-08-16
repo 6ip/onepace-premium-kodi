@@ -38,7 +38,7 @@ def list_seasons(params):
         _notify_error("No seasons available")
         return
 
-    xbmcplugin.setContent(ADDON_HANDLE, "tvshows")
+    xbmcplugin.setContent(ADDON_HANDLE, "seasons")
 
     season_thumbnails = _season_thumbnails(videos)
 
@@ -226,7 +226,7 @@ def list_episodes(params):
             tags.setGenres(meta_genres)
 
         list_item.setProperty("IsPlayable", "true")
-        _set_episode_art(list_item, video, meta)
+        _set_episode_art(list_item, video, meta, season_poster)
         ep_ctx_label = "[B]Mark Unwatched[/B]" if stream_video_id in series_watched else "[B]Mark Watched[/B]"
         ctx_items = [(
             ep_ctx_label,

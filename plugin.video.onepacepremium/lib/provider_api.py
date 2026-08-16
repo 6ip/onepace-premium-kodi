@@ -1,9 +1,11 @@
 import re
+import time
+from concurrent import futures
 from typing import Optional, Tuple
 from urllib import parse
 
 from . import cache as _cache
-from .utils import fetch_data, get_catalog_provider_url
+from .utils import fetch_data, get_catalog_provider_url, log
 
 SERIES_CATALOG_EXCLUDED_NAMES = {"last videos", "calendar videos"}
 
@@ -62,12 +64,16 @@ def _fetch_catalog(url: str):
     return data
 
 
-def _fetch_provider_meta(catalog_type: str, video_id: str):
+def _meta_url(catalog_type: str, video_id: str):
     _, provider_base_url = _provider_context()
-    url = _compose_url(
+    return _compose_url(
         provider_base_url,
         f"meta/{_provider_path(catalog_type)}/{_provider_path(video_id)}.json",
     )
+
+
+def _fetch_provider_meta(catalog_type: str, video_id: str):
+    url = _meta_url(catalog_type, video_id)
     cached = _cache.get(url)
     if cached is not None:
         return cached
@@ -76,6 +82,21 @@ def _fetch_provider_meta(catalog_type: str, video_id: str):
     if meta is not None:
         _cache.set(url, meta, 21600)
     return meta
+
+
+def _prefetch_metas(catalog_type: str, video_ids):
+    """Warm the meta cache in parallel so the per-id calls below hit it."""
+    _provider_context()  # resolve once here, not from the threads
+    missing = [
+        vid for vid in dict.fromkeys(video_ids)
+        if vid and _cache.get(_meta_url(catalog_type, vid)) is None
+    ]
+    if len(missing) < 2:
+        return
+    started = time.time()
+    with futures.ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda vid: _fetch_provider_meta(catalog_type, vid), missing))
+    log(f"[meta] prefetched {len(missing)} series in {time.time() - started:.2f}s")
 
 
 def _catalog_url(catalog_type: str, catalog_id: str, extra: str):

@@ -7,7 +7,7 @@ from . import watched as _watched
 from .art import _set_art, _set_ids, _set_video_tags
 from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
                             _fetch_catalog, _fetch_provider_manifest,
-                            _fetch_provider_meta)
+                            _fetch_provider_meta, _prefetch_metas)
 from .route_common import _add_directory_items, _notify_error
 from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, ensure_configured, fetch_data
 
@@ -99,6 +99,12 @@ def list_browse(params):
 
     videos = response.get("metas", ())
     series_stats = _watched.get_all_series_stats()
+
+    _prefetch_metas(
+        catalog_type,
+        [v["id"] for v in videos if series_stats.get(v["id"], (0, None))[1] is None],
+    )
+
     items = []
 
     for video in videos:
