@@ -9,7 +9,7 @@ from .my_lists import list_in_progress, list_my_lists, list_next_episodes
 from .episode_routes import (check_resume, clear_progress, get_streams,
                               list_episodes, list_seasons, mark_watched)
 from .playback import play_video
-from .route_common import open_addon_settings
+from .route_common import open_addon_settings, play_trailer
 from .utils import ADDON_ID, log
 
 
@@ -22,6 +22,7 @@ def open_settings(_params):
 _ACTIONS = {
     "open_settings": open_settings,
     "open_addon_settings": open_addon_settings,
+    "play_trailer": play_trailer,
     "list_catalog_type": list_catalog_type,
     "list_catalog": list_catalog,
     "search_catalog": search_catalog,

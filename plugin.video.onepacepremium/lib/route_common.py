@@ -32,6 +32,19 @@ def end_directory(cache: bool = False, succeeded: bool = True):
     xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=cache, succeeded=succeeded)
 
 
+def play_trailer(params):
+    """Trailer button target — needs the YouTube add-on to actually play."""
+    ytid = params.get("ytid", "")
+    if ytid and xbmc.getCondVisibility("System.HasAddon(plugin.video.youtube)"):
+        item = xbmcgui.ListItem(
+            path=f"plugin://plugin.video.youtube/play/?video_id={ytid}"
+        )
+        xbmcplugin.setResolvedUrl(ADDON_HANDLE, True, item)
+        return
+    _notify_error("YouTube add-on is required to play trailers")
+    xbmcplugin.setResolvedUrl(ADDON_HANDLE, False, xbmcgui.ListItem())
+
+
 def open_addon_settings(_params):
     xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
     end_directory(succeeded=False)

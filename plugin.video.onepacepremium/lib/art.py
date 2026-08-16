@@ -1,6 +1,9 @@
 from typing import Optional
 
-from .provider_api import _parse_release_year
+import xbmc
+
+from .provider_api import SERIES_STUDIOS, _parse_air_date, _parse_release_year
+from .utils import build_url
 
 _TAGLINE_KEYS = (
     "videoInfo",
@@ -12,6 +15,11 @@ _TAGLINE_KEYS = (
     "trackerInfo",
     "languagesInfo",
 )
+
+
+def _upgrade_cast_photo(url: Optional[str]):
+    """TMDb's face crop is tiny; Kodi looks better with the taller one."""
+    return (url or "").replace("/w132_and_h132_face/", "/w276_and_h350_face/")
 
 
 def _upgrade_metahub_url(url: Optional[str]):
@@ -51,6 +59,72 @@ def _set_video_tags(tags, meta: dict, title: str):
         tags.setGenres(genres)
 
 
+def _cast_list(meta: dict):
+    """Actors with character and photo when the feed carries them."""
+    extras = (meta.get("app_extras") or {}).get("cast") or []
+    if extras:
+        return [
+            xbmc.Actor(e["name"], e.get("character") or "", i,
+                       _upgrade_cast_photo(e.get("photo")))
+            for i, e in enumerate(extras) if e.get("name")
+        ]
+    return [xbmc.Actor(n, order=i) for i, n in enumerate(meta.get("cast") or ()) if n]
+
+
+def _trailer_url(meta: dict):
+    """Our own action, so the button shows even without the YouTube add-on."""
+    source = next((t.get("source") for t in meta.get("trailers") or () if t.get("source")), None)
+    return build_url("play_trailer", ytid=source) if source else None
+
+
+def _set_episode_rating(tags, video: dict):
+    """Per-episode rating, if the feed ever carries one. Zero means unrated."""
+    for key in ("rating", "imdbRating"):
+        try:
+            rating = float(video.get(key))
+        except (TypeError, ValueError):
+            continue
+        if rating:
+            tags.setRating(rating)
+            return
+
+
+def _set_show_tags(tags, meta: dict, premiered: bool = True, trailer: bool = True,
+                   actors=None):
+    """Series-level tags that only the full meta carries."""
+    age_rating = meta.get("ageRating")
+    if age_rating:
+        tags.setMpaa(age_rating)
+
+    if premiered:
+        air_date = _parse_air_date(meta)
+        if air_date:
+            tags.setPremiered(air_date)
+
+    country = meta.get("country")
+    if country:
+        tags.setCountries([c.strip() for c in str(country).split(",") if c.strip()])
+
+    status = meta.get("status")
+    if status:
+        tags.setTvShowStatus(status)
+
+    writer = meta.get("writer")
+    if writer:
+        tags.setWriters(writer if isinstance(writer, list) else [writer])
+
+    actors = _cast_list(meta) if actors is None else actors
+    if actors:
+        tags.setCast(actors)
+
+    if trailer:
+        url = _trailer_url(meta)
+        if url:
+            tags.setTrailer(url)
+
+    tags.setStudios(SERIES_STUDIOS)
+
+
 def _build_art(
     primary: Optional[str], poster: Optional[str], background: Optional[str],
     logo: Optional[str] = None,
@@ -61,9 +135,9 @@ def _build_art(
         art["poster"] = primary
         art["icon"] = primary
         art["fanart"] = primary
-        art["landscape"] = primary
     if poster:
         art.setdefault("poster", poster)
+        art.setdefault("tvshow.poster", poster)
         art.setdefault("icon", poster)
         art.setdefault("thumb", poster)
     if background:
@@ -145,8 +219,8 @@ def _set_season_art(list_item, meta: dict, season_thumbnail: Optional[str]):
         "season.poster": poster,
         "tvshow.poster": show_poster,
         "icon": poster or "DefaultAddonNone.png",
-        "fanart": background,
         "landscape": background,
+        "fanart": background,
     }
     if logo:
         art["clearlogo"] = logo

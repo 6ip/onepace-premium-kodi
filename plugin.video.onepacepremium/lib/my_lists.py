@@ -5,8 +5,9 @@ import xbmcplugin
 
 from . import bookmarks as _bookmarks
 from . import watched as _watched
-from .art import (_episode_number, _set_episode_art, _upgrade_metahub_url)
-from .provider_api import (SERIES_STUDIOS, _fetch_provider_meta,
+from .art import (_cast_list, _episode_number, _set_episode_art,
+                   _set_episode_rating, _set_show_tags, _upgrade_metahub_url)
+from .provider_api import (_fetch_provider_meta,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds, _prefetch_metas)
 from .route_common import _add_directory_items, end_directory
@@ -37,7 +38,8 @@ def _folder_item(label, icon):
 
 
 def _build_episode_item(video, ep_id, series_id, meta, show_title,
-                         season_poster_map, bm=None, is_watched=False):
+                         season_poster_map, bm=None, is_watched=False,
+                         actors=None):
     """Build an IsPlayable episode ListItem."""
     episode_number = _episode_number(video)
     if episode_number is None:
@@ -80,19 +82,16 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
         tags.setPremiered(air_date)
         tags.setFirstAired(air_date)
 
-    age_rating = meta.get("ageRating")
-    if age_rating:
-        tags.setMpaa(age_rating)
-
     runtime = _parse_runtime_seconds(video)
     if runtime:
         tags.setDuration(runtime)
 
-    tags.setStudios(SERIES_STUDIOS)
-
     genres = meta.get("genres")
     if genres:
         tags.setGenres(genres)
+
+    _set_episode_rating(tags, video)
+    _set_show_tags(tags, meta, premiered=False, trailer=False, actors=actors)
 
     list_item.setProperty("IsPlayable", "true")
     _set_episode_art(list_item, video, meta, season_poster_map.get(selected_season))
@@ -184,6 +183,7 @@ def list_in_progress(params):
         if not meta:
             continue
         series_watched = _watched.get_watched(series_id)
+        series_actors = _cast_list(meta)
         for ep_id, bm in bookmarks.items():
             if ep_id in series_watched:
                 continue
@@ -191,7 +191,8 @@ def list_in_progress(params):
             if not video:
                 continue
             result = _build_episode_item(
-                video, ep_id, series_id, meta, show_title, season_poster_map, bm
+                video, ep_id, series_id, meta, show_title, season_poster_map, bm,
+                actors=series_actors,
             )
             if result:
                 built.append(result)
@@ -249,7 +250,8 @@ def list_next_episodes(params):
         ep_id = next_video.get("id")
         bm = _bookmarks.get(ep_id)
         result = _build_episode_item(
-            next_video, ep_id, series_id, meta, show_title, season_poster_map, bm
+            next_video, ep_id, series_id, meta, show_title, season_poster_map, bm,
+            actors=_cast_list(meta),
         )
         if result:
             built.append(result)

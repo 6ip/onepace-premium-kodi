@@ -7,11 +7,12 @@ import xbmcplugin
 from . import bookmarks as _bookmarks
 from . import cache as _cache
 from . import watched as _watched
-from .art import (_episode_number, _season_thumbnails, _set_episode_art,
-                   _set_ids, _set_season_art, _stream_tagline,
-                   _upgrade_metahub_url)
+from .art import (_cast_list, _episode_number, _season_thumbnails,
+                   _set_episode_art, _set_episode_rating, _set_ids,
+                   _set_season_art, _set_show_tags, _set_video_tags,
+                   _stream_tagline, _upgrade_metahub_url)
 from .parser import parse_stream_info
-from .provider_api import (SERIES_STUDIOS, _compose_url, _fetch_provider_meta,
+from .provider_api import (_compose_url, _fetch_provider_meta,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
 from .route_common import _add_directory_items, _notify_error, end_directory
@@ -89,15 +90,17 @@ def list_seasons(params):
     if show_title:
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
 
+    series_actors = _cast_list(meta)
     items = []
     for season in seasons:
         label = "Specials" if season == 0 else f"Season {season}"
         list_item = xbmcgui.ListItem(label=label, offscreen=True)
         tags = list_item.getVideoInfoTag()
-        tags.setTitle(label)
+        _set_video_tags(tags, meta, label)
         tags.setTvShowTitle(show_title)
-        if meta.get("description"):
-            tags.setPlot(meta["description"])
+        tags.setSeason(season)
+        _set_show_tags(tags, meta, premiered=False, trailer=False,
+                       actors=series_actors)
         # Prefer dedicated season poster, fall back to first-episode thumbnail
         season_art = season_poster_map.get(season) or season_thumbnails.get(season)
         _set_season_art(list_item, meta, season_art)
@@ -167,7 +170,6 @@ def list_episodes(params):
     meta_description = meta.get("description")
     meta_genres = meta.get("genres")
     meta_release_info = meta.get("releaseInfo")
-    meta_age_rating = meta.get("ageRating")
     series_watched = _watched.get_watched(video_id)
     season_poster_map = {
         s["season"]: s["poster"]
@@ -178,6 +180,7 @@ def list_episodes(params):
 
     if show_title:
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
+    series_actors = _cast_list(meta)
     items = []
     n_watched = n_resume = 0
     for video in season_videos:
@@ -193,7 +196,7 @@ def list_episodes(params):
         list_item = xbmcgui.ListItem(label=label, offscreen=True)
         tags = list_item.getVideoInfoTag()
         _set_ids(tags, video_id)
-        tags.setTitle(label)
+        tags.setTitle(title)
         tags.setTvShowTitle(show_title)
         tags.setSeason(selected_season)
         tags.setEpisode(int(episode_number))
@@ -231,17 +234,16 @@ def list_episodes(params):
             tags.setPremiered(air_date)
             tags.setFirstAired(air_date)
 
-        if meta_age_rating:
-            tags.setMpaa(meta_age_rating)
-
         runtime = _parse_runtime_seconds(video)
         if runtime:
             tags.setDuration(runtime)
 
-        tags.setStudios(SERIES_STUDIOS)
-
         if meta_genres:
             tags.setGenres(meta_genres)
+
+        _set_episode_rating(tags, video)
+
+        _set_show_tags(tags, meta, premiered=False, trailer=False, actors=series_actors)
 
         list_item.setProperty("IsPlayable", "true")
         _set_episode_art(list_item, video, meta, season_poster)
