@@ -22,7 +22,8 @@ def _notify_error(message: str):
 
 
 def _notify_info(message: str):
-    xbmcgui.Dialog().notification("One Pace Premium", message, xbmcgui.NOTIFICATION_INFO)
+    xbmcgui.Dialog().notification("One Pace Premium", message,
+                                  xbmcgui.NOTIFICATION_INFO, 4000, False)
 
 
 def end_directory(cache: bool = False, succeeded: bool = True):

@@ -113,12 +113,29 @@ def list_seasons(params):
     elif 0 in seasons:
         seasons = [season for season in seasons if season != 0] + [0]
 
+    show_title = meta.get("name") or ""
+    series_watched = _watched.get_watched(video_id)
+
+    with_unwatched = set()
+    if get_setting("hide_watched") == "true":
+        # Same rule the episode list uses, so a season on show is never empty.
+        for v in videos:
+            number = _episode_number(v)
+            if number is None:
+                continue
+            season = v.get("season")
+            eid = v.get("id") or f"{video_id}:{season}:{number}"
+            if eid not in series_watched:
+                with_unwatched.add(season)
+        # Checked before flattening, so a one-season show names itself here.
+        if not any(s in with_unwatched for s in seasons):
+            _notify_info(f"{show_title or 'Series'} fully watched")
+            end_directory()
+            return
+
     if len(seasons) == 1 and get_setting("flatten_single_season") == "true":
         return list_episodes({**params, "season": str(seasons[0])})
 
-    show_title = meta.get("name") or ""
-
-    series_watched = _watched.get_watched(video_id)
     all_ep_ids = countable_episode_ids(meta)
     if all_ep_ids:
         _watched.cache_total(video_id, len(all_ep_ids))
@@ -131,23 +148,8 @@ def list_seasons(params):
         if s is not None and eid:
             season_ep_ids.setdefault(s, []).append(eid)
 
-    if get_setting("hide_watched") == "true":
-        # Same rule the episode list uses, so a season on show is never empty.
-        with_unwatched = set()
-        for v in videos:
-            number = _episode_number(v)
-            if number is None:
-                continue
-            season = v.get("season")
-            eid = v.get("id") or f"{video_id}:{season}:{number}"
-            if eid not in series_watched:
-                with_unwatched.add(season)
-        remaining = [s for s in seasons if s in with_unwatched]
-        if not remaining:
-            _notify_info("All episodes watched")
-            end_directory()
-            return
-        seasons = remaining
+    if with_unwatched:
+        seasons = [s for s in seasons if s in with_unwatched]
 
     if show_title:
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
@@ -340,7 +342,8 @@ def list_episodes(params):
     if not items:
         # Hiding every episode is the setting working, not a failure.
         if n_hidden:
-            _notify_info("All episodes watched")
+            where = "Specials" if selected_season == 0 else f"Season {selected_season}"
+            _notify_info(f"{where} fully watched")
             end_directory()
         else:
             _notify_error("No episodes available")

@@ -10,7 +10,8 @@ import xbmcvfs
 from . import bookmarks as _bookmarks
 from . import elementum as _elementum
 from . import watched as _watched
-from .utils import ADDON_HANDLE, ADDON_ID, get_setting, log, session
+from .utils import (ADDON_HANDLE, ADDON_ID, build_url, get_setting, log,
+                    session)
 
 _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 
@@ -35,6 +36,14 @@ def _keep_resume_cleared(episode_id, monitor, attempts=6, delay=0.5):
             return
         _clear_kodi_episode_state(episode_id, ("bookmark",))
         log(f"[monitor] Kodi re-saved a resume point for {episode_id!r}, cleared again")
+
+
+def _showing_other_season(path, season):
+    """True if the list behind the player is a different season's episodes."""
+    from urllib import parse
+    query = dict(parse.parse_qsl(path.split("?", 1)[-1]))
+    return (query.get("action") == "list_episodes"
+            and query.get("season") != str(season))
 
 
 def _int_setting(key, fallback, low, high):
@@ -137,7 +146,8 @@ _MONITOR_EPISODE = [""]
 
 
 
-def _monitor_playback(series_id, episode_id, video_url="", autoplay=False):
+def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
+                      season=None):
     """Block until playback ends, then auto-mark the episode watched if appropriate.
 
     Called from play_video after setResolvedUrl so it runs inside the plugin
@@ -287,9 +297,25 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False):
             _update_kodi_episode_playcount(episode_id, 0)
         # Skipped when handing off, since the incoming episode's monitor owns
         # the list from here and would only redraw it twice.
-        if not play_next_url and ADDON_ID in xbmc.getInfoLabel("Container.FolderPath"):
-            xbmc.executebuiltin("Container.Refresh")
-            log(f"[monitor] refreshed list for {episode_id!r}")
+        path = ""
+        if not play_next_url:
+            # Kodi restores the list while the player tears down, so the path
+            # is not there yet the moment playback stops.
+            for _ in range(15):
+                path = xbmc.getInfoLabel("Container.FolderPath")
+                if ADDON_ID in path or kodi_monitor.waitForAbort(0.2):
+                    break
+        if ADDON_ID in path:
+            if season and _showing_other_season(path, season):
+                # Plain Update only. The replace flag crashes Kodi here, and
+                # ActivateWindow leaves Back with nowhere to go.
+                url = build_url("list_episodes", catalog_type="series",
+                                video_id=series_id, season=season)
+                xbmc.executebuiltin(f"Container.Update({url})")
+                log(f"[monitor] moved the list to season {season}")
+            else:
+                xbmc.executebuiltin("Container.Refresh")
+                log(f"[monitor] refreshed list for {episode_id!r}")
         if marked:
             _keep_resume_cleared(episode_id, kodi_monitor)
 
@@ -520,4 +546,4 @@ def play_video(params):
 
     if series_id and episode_id:
         _monitor_playback(series_id, episode_id, video_url,
-                          autoplay=bool(params.get("autoplay")))
+                          autoplay=bool(params.get("autoplay")), season=season)
