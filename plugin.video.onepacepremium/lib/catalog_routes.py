@@ -47,6 +47,7 @@ def _process_catalog_items(videos: list, catalog_type: str):
 
 def list_root():
     if not ensure_configured():
+        end_directory(succeeded=False)
         return
 
     import os as _os
@@ -74,6 +75,7 @@ def list_root():
 
 def list_browse(params):
     if not ensure_configured():
+        end_directory(succeeded=False)
         return
 
     manifest = _fetch_provider_manifest()
@@ -157,20 +159,24 @@ def list_browse(params):
 
 def list_catalog_type(params):
     if not ensure_configured():
+        end_directory(succeeded=False)
         return
 
     catalog_type = params["catalog_type"]
     if catalog_type not in SUPPORTED_CATALOG_TYPES:
         _notify_error("Unsupported catalog type")
+        end_directory(succeeded=False)
         return
 
     manifest = _fetch_provider_manifest()
     if not manifest:
+        end_directory(succeeded=False)
         return
 
     specs = _catalog_specs(manifest, catalog_type)
     if not specs:
         _notify_error("No catalogs available")
+        end_directory(succeeded=False)
         return
 
     specs.sort(key=lambda spec: (_catalog_priority(spec["name"]), spec["name"].lower()))
@@ -215,6 +221,7 @@ def list_catalog_type(params):
 
 def list_catalog(params):
     if not ensure_configured():
+        end_directory(succeeded=False)
         return
 
     catalog_type = params["catalog_type"]
@@ -223,11 +230,13 @@ def list_catalog(params):
 
     response = _fetch_catalog(_catalog_url(catalog_type, catalog_id, f"skip={skip}"))
     if not response:
+        end_directory(succeeded=False)
         return
 
     videos = response.get("metas", ())
     if not videos:
         _notify_error("No videos available")
+        end_directory(succeeded=False)
         return
 
     _process_catalog_items(videos, catalog_type)
@@ -253,10 +262,12 @@ def list_catalog(params):
 
 def search_catalog(params):
     if not ensure_configured():
+        end_directory(succeeded=False)
         return
 
     query = xbmcgui.Dialog().input("Search", type=xbmcgui.INPUT_ALPHANUM)
     if not query:
+        end_directory(succeeded=False)
         return
 
     catalog_type = params["catalog_type"]
@@ -265,11 +276,13 @@ def search_catalog(params):
         _catalog_url(catalog_type, catalog_id, f"search={parse.quote(query, safe='')}")
     )
     if not response:
+        end_directory(succeeded=False)
         return
 
     videos = response.get("metas", ())
     if not videos:
         _notify_error("No results found")
+        end_directory(succeeded=False)
         return
 
     _process_catalog_items(videos, catalog_type)

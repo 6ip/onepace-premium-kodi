@@ -21,6 +21,10 @@ def _notify_error(message: str):
     xbmcgui.Dialog().notification("One Pace Premium", message, xbmcgui.NOTIFICATION_ERROR)
 
 
+def _notify_info(message: str):
+    xbmcgui.Dialog().notification("One Pace Premium", message, xbmcgui.NOTIFICATION_INFO)
+
+
 def end_directory(cache: bool = False, succeeded: bool = True):
     """Finish a listing. cache=True lets Kodi reuse it instead of re-running us.
 

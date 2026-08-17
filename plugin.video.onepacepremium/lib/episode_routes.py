@@ -16,7 +16,8 @@ from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode
                             episode_play_url,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
-from .route_common import _add_directory_items, _notify_error, end_directory
+from .route_common import (_add_directory_items, _notify_error, _notify_info,
+                            end_directory)
 from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
                      fetch_data, get_base_url, get_config_prefix,
@@ -71,6 +72,7 @@ def _episode_label(title, season, episode, episode_id):
 
 def list_seasons(params):
     if not ensure_configured():
+        end_directory(succeeded=False)
         return
 
     catalog_type = params["catalog_type"]
@@ -78,11 +80,13 @@ def list_seasons(params):
 
     meta = _fetch_provider_meta(catalog_type, video_id)
     if not meta:
+        end_directory(succeeded=False)
         return
 
     videos = meta.get("videos", ())
     if not videos:
         _notify_error("No seasons available")
+        end_directory(succeeded=False)
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "seasons")
@@ -127,6 +131,23 @@ def list_seasons(params):
         if s is not None and eid:
             season_ep_ids.setdefault(s, []).append(eid)
 
+    if get_setting("hide_watched") == "true":
+        # Same rule the episode list uses, so a season on show is never empty.
+        with_unwatched = set()
+        for v in videos:
+            number = _episode_number(v)
+            if number is None:
+                continue
+            season = v.get("season")
+            eid = v.get("id") or f"{video_id}:{season}:{number}"
+            if eid not in series_watched:
+                with_unwatched.add(season)
+        remaining = [s for s in seasons if s in with_unwatched]
+        if not remaining:
+            _notify_info("All episodes watched")
+            end_directory()
+            return
+        seasons = remaining
 
     if show_title:
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
@@ -186,6 +207,7 @@ def list_seasons(params):
 
 def list_episodes(params):
     if not ensure_configured():
+        end_directory(succeeded=False)
         return
 
     catalog_type = params["catalog_type"]
@@ -194,11 +216,13 @@ def list_episodes(params):
 
     meta = _fetch_provider_meta(catalog_type, video_id)
     if not meta:
+        end_directory(succeeded=False)
         return
 
     videos = meta.get("videos", ())
     if not videos:
         _notify_error("No episodes available")
+        end_directory(succeeded=False)
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
@@ -224,7 +248,7 @@ def list_episodes(params):
     series_actors = _cast_list(meta)
     hide_watched = get_setting("hide_watched") == "true"
     items = []
-    n_watched = n_resume = 0
+    n_watched = n_resume = n_hidden = 0
     for video in season_videos:
         episode_number = _episode_number(video)
         if episode_number is None:
@@ -234,6 +258,7 @@ def list_episodes(params):
         stream_video_id = video.get("id") or f"{video_id}:{selected_season}:{episode_number}"
 
         if hide_watched and stream_video_id in series_watched:
+            n_hidden += 1
             continue
 
         title = video.get("name") or video.get("title") or f"Episode {episode_number}"
@@ -313,7 +338,13 @@ def list_episodes(params):
         )
 
     if not items:
-        _notify_error("No episodes available")
+        # Hiding every episode is the setting working, not a failure.
+        if n_hidden:
+            _notify_info("All episodes watched")
+            end_directory()
+        else:
+            _notify_error("No episodes available")
+            end_directory(succeeded=False)
         return
 
     log(f"[list] {video_id} s{selected_season}: {len(items)} rows, "
@@ -485,6 +516,7 @@ def check_resume(params):
 
 def get_streams(params):
     if not ensure_configured():
+        end_directory(succeeded=False)
         return
 
     if not get_secret_string():
@@ -519,12 +551,14 @@ def get_streams(params):
     if response is None:
         response = fetch_data(stream_url)
         if not response:
+            end_directory(succeeded=False)
             return
         _cache.set(stream_url, response, 3600)
 
     streams = response.get("streams", ())
     if not streams:
         _notify_error("No streams available")
+        end_directory(succeeded=False)
         return
 
     xbmcplugin.setContent(ADDON_HANDLE, "files")
