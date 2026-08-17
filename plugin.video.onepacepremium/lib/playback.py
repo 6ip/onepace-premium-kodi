@@ -63,12 +63,20 @@ def _next_episode(series_id, episode_id):
     videos.sort(key=lambda v: (v.get("season") or 0, _episode_number(v) or 0))
 
     current = next((i for i, v in enumerate(videos) if v["id"] == episode_id), None)
-    if current is None or current + 1 >= len(videos):
+    if current is None:
         return None
 
-    nxt = videos[current + 1]
-    if (nxt.get("season") != videos[current].get("season")
-            and get_setting("autoplay_next_season") == "false"):
+    # Hiding watched episodes from the lists should hide them from the card too.
+    skip = (_watched.get_watched(series_id)
+            if get_setting("hide_watched") == "true" else ())
+    stay_in_season = get_setting("autoplay_next_season") == "false"
+
+    for nxt in videos[current + 1:]:
+        if stay_in_season and nxt.get("season") != videos[current].get("season"):
+            return None
+        if nxt["id"] not in skip:
+            break
+    else:
         return None
 
     # Check it can actually play before offering it — otherwise the card appears,
@@ -261,7 +269,8 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False):
                 break
             if kodi_monitor.waitForAbort(0.1):
                 break
-        xbmc.executebuiltin(f"PlayMedia({play_next_url})")
+        # noresume: we position playback ourselves, so Kodi must not also ask.
+        xbmc.executebuiltin(f"PlayMedia({play_next_url},noresume)")
 
     # Everything below is for the episode we just left, so it runs behind the
     # switch rather than delaying it. _MONITOR_EPISODE lets this session finish
@@ -276,7 +285,9 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False):
             # Kodi calls anything stopped in the last few percent "watched"
             # (ignorepercentatend). Our threshold decides, so put it back.
             _update_kodi_episode_playcount(episode_id, 0)
-        if ADDON_ID in xbmc.getInfoLabel("Container.FolderPath"):
+        # Skipped when handing off, since the incoming episode's monitor owns
+        # the list from here and would only redraw it twice.
+        if not play_next_url and ADDON_ID in xbmc.getInfoLabel("Container.FolderPath"):
             xbmc.executebuiltin("Container.Refresh")
             log(f"[monitor] refreshed list for {episode_id!r}")
         if marked:
