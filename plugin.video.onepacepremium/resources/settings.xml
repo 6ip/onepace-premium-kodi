@@ -9,10 +9,6 @@
         <setting label="Configure / Reconfigure" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,configure_account)" />
     </category>
     <category label="Playback">
-        <setting type="lsep" label="Elementum (Torrent)" />
-        <setting label="Check Availability" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />
-        <setting label="Direct Playback (experimental)" id="elementum_direct" type="bool" default="false" />
-        <setting type="sep" />
         <setting type="lsep" label="Stream Selection" />
         <setting label="Preferred Service" id="choose_preferred_service" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_preferred_service)" />
         <setting label="Showing" id="preferred_service_display" type="text" default="Always ask" enable="false" subsetting="true" />
@@ -21,6 +17,15 @@
         <setting type="sep" />
         <setting type="lsep" label="Watched" />
         <setting label="Mark Watched At (%)" id="watched_threshold" type="slider" default="85" range="50,5,100" option="int" />
+        <setting type="sep" />
+        <setting type="lsep" label="Next Episode" />
+        <setting label="Play Next Episode" id="autoplay_next" type="bool" default="false" />
+        <setting label="Show Card Before End (secs)" id="autoplay_prompt_secs" type="slider" default="20" range="5,5,90" option="int" subsetting="true" enable="eq(-1,true)" />
+        <setting label="Continue To Next Season" id="autoplay_next_season" type="bool" default="true" subsetting="true" enable="eq(-2,true)" />
+        <setting type="sep" />
+        <setting type="lsep" label="Torrent" />
+        <setting label="Check Availability" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />
+        <setting label="Direct Playback (experimental)" id="elementum_direct" type="bool" default="false" />
     </category>
     <category label="Lists">
         <setting type="lsep" label="Episodes" />

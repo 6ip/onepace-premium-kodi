@@ -768,6 +768,25 @@ def _clear_kodi_episode_state(episode_id, tables=("bookmark", "streamdetails")):
         log(f"[watched] Kodi state clear error: {e}")
 
 
+def episode_has_stream(catalog_type, video_id):
+    """True if this episode has at least one stream we could actually play."""
+    stream_url = _compose_url(
+        get_base_url(),
+        f"{get_config_prefix()}stream/{catalog_type}/{video_id}.json?kodi=1",
+    )
+    response = _cache.get(stream_url)
+    if response is None:
+        response = fetch_data(stream_url)
+        if response:
+            _cache.set(stream_url, response, 3600)
+    if not response:
+        return False
+    return any(
+        "url" in stream or "infoHash" in stream
+        for stream in response.get("streams", ())
+    )
+
+
 def kodi_episode_has_bookmark(episode_id):
     """True if Kodi still holds a resume point for this episode."""
     try:

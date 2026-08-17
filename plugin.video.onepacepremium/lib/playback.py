@@ -19,6 +19,9 @@ _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 _START_CAP_DIRECT = 60
 _START_CAP_HANDOFF = 900
 
+# Polls to wait before trusting the player's clock after a file switch.
+_SETTLE_POLLS = 5
+
 
 def _keep_resume_cleared(episode_id, monitor, attempts=6, delay=0.5):
     """Kodi can save its resume point after we delete it — Elementum's teardown
@@ -32,6 +35,70 @@ def _keep_resume_cleared(episode_id, monitor, attempts=6, delay=0.5):
             return
         _clear_kodi_episode_state(episode_id, ("bookmark",))
         log(f"[monitor] Kodi re-saved a resume point for {episode_id!r}, cleared again")
+
+
+def _int_setting(key, fallback, low, high):
+    try:
+        value = int(get_setting(key))
+    except (TypeError, ValueError):
+        value = fallback
+    return min(high, max(low, value))
+
+
+def _next_episode(series_id, episode_id):
+    """The episode after this one, or None. Skips specials and notice cards."""
+    from .episode_routes import _NOTICE_ID_PREFIX, episode_has_stream
+    from .provider_api import _fetch_provider_meta, episode_play_url
+    from .art import _episode_number
+
+    meta = _fetch_provider_meta("series", series_id)
+    if not meta:
+        return None
+
+    videos = [
+        v for v in meta.get("videos", ())
+        if v.get("id") and v.get("season") != 0
+        and not str(v["id"]).startswith(_NOTICE_ID_PREFIX)
+    ]
+    videos.sort(key=lambda v: (v.get("season") or 0, _episode_number(v) or 0))
+
+    current = next((i for i, v in enumerate(videos) if v["id"] == episode_id), None)
+    if current is None or current + 1 >= len(videos):
+        return None
+
+    nxt = videos[current + 1]
+    if (nxt.get("season") != videos[current].get("season")
+            and get_setting("autoplay_next_season") == "false"):
+        return None
+
+    # Check it can actually play before offering it — otherwise the card appears,
+    # the player stops on click, and only then does it fail.
+    if not episode_has_stream("series", nxt["id"]):
+        log(f"[autoplay] {nxt['id']} has no playable stream, not offering it")
+        return None
+
+    from .art import _upgrade_metahub_url
+    season_poster = next(
+        (s["poster"] for s in meta.get("seasons", ())
+         if s.get("season") == nxt.get("season") and s.get("poster")), ""
+    )
+    title = nxt.get("name") or nxt.get("title") or nxt["id"]
+    code = f"S{nxt.get('season') or 0:02d}E{_episode_number(nxt) or 0:02d}"
+    return {
+        "series": meta.get("name") or "",
+        "episode": f"{title} ({code})",
+        "title": title,
+        "thumb": _upgrade_metahub_url(nxt.get("thumbnail")) or "",
+        "url": episode_play_url(nxt, meta, series_id, "series", season_poster, nxt["id"]),
+    }
+
+
+def _prompt_next_episode(up_next, player, monitor):
+    """Ask via the corner card. Nothing happens unless the viewer says so."""
+    from .next_episode_card import ask_next_episode
+    return ask_next_episode(
+        up_next["series"], up_next["episode"], up_next["thumb"], player, monitor
+    )
 
 
 def _watched_threshold():
@@ -116,9 +183,19 @@ def _monitor_playback(series_id, episode_id, video_url=""):
         except Exception:
             pass
 
+    # Prepared once so the prompt does not stall on a lookup near the end.
+    up_next = None
+    if series_id and episode_id and get_setting("autoplay_next") == "true":
+        up_next = _next_episode(series_id, episode_id)
+        log(f"[autoplay] up next: {up_next['title']!r}" if up_next else "[autoplay] no next episode")
+    prompt_at = _int_setting("autoplay_prompt_secs", 20, 5, 90)
+    play_next_url = None
+
     # Poll every 1 s; mark as soon as the threshold is reached during playback
     marked = False
+    polls = 0
     while player.isPlaying():
+        polls += 1
         if kodi_monitor.waitForAbort(1):
             return
         try:
@@ -134,6 +211,24 @@ def _monitor_playback(series_id, episode_id, video_url=""):
                 _bookmarks.clear(episode_id)
 
                 log(f"[monitor] marked watched at {pct*100:.0f}% for {episode_id!r}")
+
+        # getTime/getTotalTime can still report the previous file for a moment
+        # after Kodi switches, which would fire the card at the start.
+        # Never before halfway, or a 2-minute episode opens with the card up.
+        if (up_next and polls >= _SETTLE_POLLS and total_time > 0
+                and (total_time - last_time) <= min(prompt_at, total_time / 2)):
+            card = up_next
+            up_next = None  # ask once per playback
+            if _prompt_next_episode(card, player, kodi_monitor):
+                # Accepting counts as finishing this one, whatever the threshold.
+                play_next_url = card["url"]
+                if not marked and series_id and episode_id:
+                    marked = True
+                    _watched.set_episodes_watched(series_id, [episode_id], True)
+                    _bookmarks.clear(episode_id)
+                log(f"[autoplay] starting {card['title']!r}")
+                break
+            log("[autoplay] cancelled")
 
     # A newer session for the *same* episode owns its state, so stand aside. One
     # for a different episode (playing the next one) leaves ours to finish.
@@ -156,25 +251,36 @@ def _monitor_playback(series_id, episode_id, video_url=""):
 
     # Kodi saves its own resume point when playback stops short. Left behind, a
     # skin draws "resumable" instead of the watched tick.
+    if play_next_url:
+        # Stop first. PlayMedia leaves this file running until the next stream is
+        # ready, and a still-loaded file reports isPlaying() — so the incoming
+        # monitor would attach to this clock, fire its card and mark it watched.
+        player.stop()
+        for _ in range(20):
+            if not player.isPlaying():
+                break
+            if kodi_monitor.waitForAbort(0.1):
+                break
+        xbmc.executebuiltin(f"PlayMedia({play_next_url})")
+
+    # Everything below is for the episode we just left, so it runs behind the
+    # switch rather than delaying it. _MONITOR_EPISODE lets this session finish
+    # even though a newer one has taken over.
     if episode_id:
         from .episode_routes import (_clear_kodi_episode_state,
                                      _update_kodi_episode_playcount)
         if marked:
             _clear_kodi_episode_state(episode_id)
             _update_kodi_episode_playcount(episode_id, 1)
-            _keep_resume_cleared(episode_id, kodi_monitor)
         else:
             # Kodi calls anything stopped in the last few percent "watched"
             # (ignorepercentatend). Our threshold decides, so put it back.
             _update_kodi_episode_playcount(episode_id, 0)
-        # Kodi rebuilt the list before we got here, so it still shows the old
-        # state. Redraw now that the rows are correct.
         if ADDON_ID in xbmc.getInfoLabel("Container.FolderPath"):
             xbmc.executebuiltin("Container.Refresh")
             log(f"[monitor] refreshed list for {episode_id!r}")
-
-    # No Container.Refresh — Kodi re-runs the plugin when you return from the
-    # player anyway, and refreshing on top of that redraws the list twice.
+        if marked:
+            _keep_resume_cleared(episode_id, kodi_monitor)
 
 
 # Kodi reads the language from the filename, and variant files end in an extra
