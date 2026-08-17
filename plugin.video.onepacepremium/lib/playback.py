@@ -89,7 +89,8 @@ def _next_episode(series_id, episode_id):
         "episode": f"{title} ({code})",
         "title": title,
         "thumb": _upgrade_metahub_url(nxt.get("thumbnail")) or "",
-        "url": episode_play_url(nxt, meta, series_id, "series", season_poster, nxt["id"]),
+        "url": episode_play_url(nxt, meta, series_id, "series", season_poster,
+                                nxt["id"], autoplay=True),
     }
 
 
@@ -128,7 +129,7 @@ _MONITOR_EPISODE = [""]
 
 
 
-def _monitor_playback(series_id, episode_id, video_url=""):
+def _monitor_playback(series_id, episode_id, video_url="", autoplay=False):
     """Block until playback ends, then auto-mark the episode watched if appropriate.
 
     Called from play_video after setResolvedUrl so it runs inside the plugin
@@ -167,10 +168,9 @@ def _monitor_playback(series_id, episode_id, video_url=""):
     log(f"[monitor] tracking {episode_id!r} (pid={pid}, gen={my_gen}"
         f"{', handoff' if is_handoff else ''}, waited={waited}s)")
 
-    # If a bookmark exists, detect whether Kodi's native dialog resumed (seeked
-    # near the saved position) or the user picked "Play from beginning" (stayed
-    # near 0) — and clear the stale bookmark in the latter case.
-    bm = _bookmarks.get(episode_id) if episode_id else None
+    # Drop the bookmark if Kodi's resume dialog was answered with "from
+    # beginning". Autoplay never shows that dialog.
+    bm = None if autoplay else (_bookmarks.get(episode_id) if episode_id else None)
     if bm and bm.get("pos", 0) > 60:
         bookmark_pos = bm["pos"]
         for _ in range(6):
@@ -432,6 +432,14 @@ def play_video(params):
     list_item = xbmcgui.ListItem(path=video_url)
     tags = list_item.getVideoInfoTag()
 
+    # PlayMedia ignores resume points, so apply ours.
+    if params.get("autoplay") and episode_id:
+        bm = _bookmarks.get(episode_id) or {}
+        pos, total = bm.get("pos", 0), bm.get("total", 0)
+        if pos > 60 and total > 0:
+            list_item.setProperty("StartPercent", str(pos / total * 100))
+            log(f"[autoplay] resuming {episode_id!r} at {pos:.0f}s of {total:.0f}s")
+
     if episode_title:
         tags.setTitle(episode_title)
     if season and episode:
@@ -500,4 +508,5 @@ def play_video(params):
     xbmcplugin.setResolvedUrl(ADDON_HANDLE, True, list_item)
 
     if series_id and episode_id:
-        _monitor_playback(series_id, episode_id, video_url)
+        _monitor_playback(series_id, episode_id, video_url,
+                          autoplay=bool(params.get("autoplay")))

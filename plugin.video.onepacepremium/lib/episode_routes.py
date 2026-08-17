@@ -482,6 +482,9 @@ def check_resume(params):
         if episode_thumb:
             playback_params["thumb"] = episode_thumb
 
+        if params.get("autoplay"):
+            playback_params["autoplay"] = "1"
+
         playback_params["stream_name"] = stream_name
         playback_params["stream_desc"] = stream_desc
         if episode_plot:
