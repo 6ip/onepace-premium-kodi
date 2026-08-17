@@ -1,0 +1,66 @@
+[B]v2.3.1[/B]  [COLOR FF888899]18 August 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Next Episode[/B][/COLOR]
+  •  Picks up where you left off, instead of starting the episode over.
+  •  Moves the list with you when the next episode is in another season.
+  •  Skips episodes you have already seen, if you have Hide Watched on.
+
+[COLOR FF81A6C6][B]Lists[/B][/COLOR]
+  •  Hide Watched now hides finished seasons too. Counts stay the same.
+  •  Lists close cleanly when something goes wrong, instead of leaving Kodi stuck.
+
+[COLOR FF81A6C6][B]New[/B][/COLOR]
+  •  A What's New window, which you are looking at.
+  •  A Support the Project page, if you would like to help out.
+
+
+[B]v2.3.0[/B]  [COLOR FF888899]17 August 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Play Next Episode[/B][/COLOR]
+  •  A card appears near the end of an episode offering the next one.
+  •  Nothing happens unless you pick it.
+  •  Set how early it shows up, and whether it carries on into the next season.
+
+[COLOR FF81A6C6][B]Stream Selection[/B][/COLOR]
+  •  Pick a preferred service and version to skip the Select Stream prompt.
+  •  If nothing matches your choice, you still get the full list.
+
+[COLOR FF81A6C6][B]Lists[/B][/COLOR]
+  •  Show episodes as "1x01. Title" or just the title.
+  •  Hide watched episodes, hide specials, or skip the season list on one-season shows.
+  •  Use the episode thumbnail as the background, and pick the show name colour.
+
+[COLOR FF81A6C6][B]Settings[/B][/COLOR]
+  •  Split into One Pace Premium, Playback, Lists, Subtitles and Tools.
+  •  New: Mark Watched At, so you decide when an episode counts as watched.
+  •  New: Debug Logging, for when something needs looking at.
+
+
+[B]v2.2.10[/B]  [COLOR FF888899]16 August 2026[/COLOR]
+
+  •  Series details, cast and trailers on every list.
+  •  Menus are cached, so moving around is much quicker.
+  •  Faster start-up, by loading heavy bits only when they are needed.
+  •  Episode numbers and breadcrumbs in the episode list.
+  •  Codec badges refresh properly instead of showing the last stream's details.
+  •  Watched and resume states are tidied up correctly after playback.
+  •  Fixed episode and season artwork.
+
+
+[B]v2.2.8[/B]  [COLOR FF888899]15 August 2026[/COLOR]
+
+  •  External subtitles can be turned off.
+  •  Subtitles are filtered to the languages you pick.
+  •  Added Clear Subtitle Cache.
+
+
+[B]v2.2.5[/B]  [COLOR FF888899]10 August 2026[/COLOR]
+
+  •  Episode runtime and studios added.
+  •  Age rating is always shown.
+
+
+[B]v2.2.2[/B]  [COLOR FF888899]2 August 2026[/COLOR]
+
+  •  Torrent (P2P) support.
+  •  Multi-service setup and air dates.

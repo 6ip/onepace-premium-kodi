@@ -58,6 +58,11 @@
         <setting label="Clear Bookmarks" id="clear_bookmarks" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_bookmarks)" />
         <setting label="Clear Watched History" id="clear_watched" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_watched)" />
         <setting type="sep" />
+        <setting type="lsep" label="About" />
+        <setting label="What's New" id="show_changelog" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_changelog)" />
+        <setting label="Support the Project" id="show_donate" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_donate)" />
+        <setting id="last_seen_version" type="text" default="" visible="false" />
+        <setting type="sep" />
         <setting type="lsep" label="Debugging" />
         <setting label="Debug Logging" id="debug_logging" type="bool" default="false" />
     </category>

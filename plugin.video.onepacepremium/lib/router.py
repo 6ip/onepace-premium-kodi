@@ -13,6 +13,16 @@ from .route_common import open_addon_settings, play_trailer
 from .utils import ADDON_ID, log
 
 
+def show_changelog(_params):
+    from .changelog import show_changelog as _show
+    _show()
+
+
+def show_donate(_params):
+    from .donate import show_donate as _show
+    _show()
+
+
 def open_settings(_params):
     xbmc.executebuiltin(
         f"RunScript(special://home/addons/{ADDON_ID}/lib/custom_settings_window.py)"
@@ -21,6 +31,8 @@ def open_settings(_params):
 
 _ACTIONS = {
     "open_settings": open_settings,
+    "show_changelog": show_changelog,
+    "show_donate": show_donate,
     "open_addon_settings": open_addon_settings,
     "play_trailer": play_trailer,
     "list_catalog_type": list_catalog_type,

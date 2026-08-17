@@ -72,6 +72,10 @@ def list_root():
     _add_directory_items(items)
     end_directory(cache=True)
 
+    # After the menu is drawn, so a new version never delays the first run.
+    from .changelog import maybe_show_on_update
+    maybe_show_on_update()
+
 
 def list_browse(params):
     if not ensure_configured():
