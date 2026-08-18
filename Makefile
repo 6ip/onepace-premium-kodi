@@ -15,9 +15,9 @@ all: clean
 	@python3 fetch_vendored.py
 	@echo "📦 Generating repository index..."
 	@python3 generate_repository.py
-	@sed -e 's|ADDON_URL|$(ADDON)/$(ADDON)-$(V_ADDON).zip|g' \
+	@cp $(DIST)/$(REPO)/$(REPO)-$(V_REPO).zip $(DIST)/$(REPO)-$(V_REPO).zip
+	@sed -e 's|REPO_URL|$(REPO)-$(V_REPO).zip|g' \
 		 -e 's|V_ADDON|$(V_ADDON)|g' \
-		 -e 's|REPO_URL|$(REPO)/$(REPO)-$(V_REPO).zip|g' \
 		 -e 's|V_REPO|$(V_REPO)|g' \
 		 index.html.template > $(DIST)/index.html
 	@rm -rf $(BUILD)

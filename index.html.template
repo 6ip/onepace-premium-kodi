@@ -127,6 +127,14 @@
             border-radius: 10px;
         }
 
+        .includes {
+            margin: 20px 0 0;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }
+
+        .includes strong { color: var(--primary-light); font-weight: 600; }
+
         .footer {
             margin-top: 48px;
             font-size: 0.8rem;
@@ -137,11 +145,6 @@
     </style>
 </head>
 <body>
-    <div style="display: none !important; opacity: 0; position: absolute; z-index: -100;">
-        <a href="ADDON_URL">ADDON_URL</a>
-        <a href="REPO_URL">REPO_URL</a>
-    </div>
-
     <div class="container">
         <div class="logo-wrapper">
             <div class="logo-glow"></div>
@@ -152,22 +155,16 @@
         <p class="tagline">Kodi Repository & Add-on</p>
 
         <div class="grid">
-            <a href="ADDON_URL" class="card">
-                <div class="card-info">
-                    <span class="card-name">One Pace Premium Add-on</span>
-                    <span class="card-desc">Video Plugin for Kodi</span>
-                </div>
-                <div class="badge">vV_ADDON</div>
-            </a>
-
             <a href="REPO_URL" class="card">
                 <div class="card-info">
                     <span class="card-name">One Pace Premium Repository</span>
-                    <span class="card-desc">Auto-updates</span>
+                    <span class="card-desc">Install this one &mdash; updates arrive automatically</span>
                 </div>
                 <div class="badge">vV_REPO</div>
             </a>
         </div>
+
+        <p class="includes">Includes the One Pace Premium add-on <strong>vV_ADDON</strong></p>
 
         <div class="footer">Designed for Kodi</div>
     </div>

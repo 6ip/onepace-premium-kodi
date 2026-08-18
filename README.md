@@ -2,22 +2,25 @@
 
 Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`repository.onepacepremium`). Watch the complete One Pace catalog with your debrid service directly inside Kodi.
 
-## 📋 Prerequisites
+## 🚀 Installation (Recommended)
 
-**For torrent/P2P streams** (optional — debrid streams work without this):
+Using the repository ensures you receive automatic updates.
 
-**[Elementum](https://howtomediacenter.com/en/install-elementum-kodi/)**: An exceptional add-on that offers high-quality streams via torrents.
+1. **Add Source**: Go to **Settings** ➔ **File manager** ➔ **Add source**.
+2. **Enter URL**: Enter the URL below and name it `One Pace Premium`.
 
-1. Go to **https://elementum.surge.sh/** and download the **Universal** version under *Elementum Downloads*
-2. In Kodi: **Add-ons** ➔ **Install from zip file** ➔ select the downloaded zip
-3. Elementum is now installed and ready for torrent playback
+   ```
+   https://6ip.github.io/onepace-premium-kodi
+   ```
+3. **Install Repository**: Go to **Add-ons** ➔ **Install from zip file** ➔ select `One Pace Premium` ➔ install `repository.onepacepremium-X.Y.Z.zip`.
+4. **Install Add-on**: Go to **Install from repository** ➔ **One Pace Premium Repository** ➔ **Video add-ons** ➔ **One Pace Premium** ➔ **Install**.
 
-> Debrid streams work without Elementum.
+> If step 4 fails right after installing the repository, restart Kodi and try again.
 
 ## 🖼️ Step-by-Step Visual Guide
 
 <details>
-<summary>Click to view the full visual walkthrough (17 screenshots)</summary>
+<summary>Prefer screenshots? The full walkthrough, from adding the source to your first stream</summary>
 
 **1.** Click the **Gear Icon** in the top-left corner of the Kodi home screen.
 
@@ -110,21 +113,6 @@ We've now installed One Pace Premium on Kodi, but we still need to authorize a d
 
 </details>
 
-## 🚀 Installation (Recommended)
-
-Using the repository ensures you receive automatic updates.
-
-1. **Add Source**: Go to **Settings** ➔ **File manager** ➔ **Add source**.
-2. **Enter URL**: Enter the URL below and name it `One Pace Premium`.
-
-   ```
-   https://6ip.github.io/onepace-premium-kodi
-   ```
-3. **Install Repository**: Go to **Add-ons** ➔ **Install from zip file** ➔ select `One Pace Premium` ➔ install `repository.onepacepremium-X.Y.Z.zip`.
-4. **Install Add-on**: Go to **Install from repository** ➔ **One Pace Premium Repository** ➔ **Video add-ons** ➔ **One Pace Premium** ➔ **Install**.
-
-> If step 4 fails right after installing the repository, restart Kodi and try again.
-
 ## ⚙️ Configuration
 
 Once installed, link the add-on to your account:
@@ -138,30 +126,36 @@ Once installed, link the add-on to your account:
 
 > Alternatively, open the configuration page manually, click **Setup Kodi** from the install menu, and enter the code shown in Kodi.
 
-## 📦 Manual Installation
+## 🧲 Torrent Support (Optional)
 
-*You will not receive automatic updates with this method.*
+Debrid streams work out of the box. Install Elementum only if you also want torrent/P2P sources.
 
-1. Download the latest plugin zip from the [One Pace Premium Kodi Repository](https://6ip.github.io/onepace-premium-kodi/).
-2. Go to **Add-ons** ➔ **Install from zip file** ➔ select the downloaded zip.
-3. Follow the **Configuration** steps above.
+**[Elementum](https://howtomediacenter.com/en/install-elementum-kodi/)**: An exceptional add-on that offers high-quality streams via torrents.
+
+1. Go to **https://elementum.surge.sh/** and download the **Universal** version under *Elementum Downloads*
+2. In Kodi: **Add-ons** ➔ **Install from zip file** ➔ select the downloaded zip
+3. Elementum is now installed and ready for torrent playback
 
 ---
 
 ## 🛠️ Development & Building
 
 ```sh
-make          # Full build: add-on + repository
-make package  # Add-on zip only
+make        # Build the add-on, the repository and the landing page
+make clean  # Remove build/ and dist/
 ```
+
+Requires `python3` and `zip`. The GitHub Actions workflow runs `make` on every
+push to `main` and deploys `dist/` to GitHub Pages.
 
 ### Build Outputs (`dist/`)
 ```
 dist/
 ├── addons.xml + addons.xml.md5
+├── repository.onepacepremium-X.Y.Z.zip   # what the page links to
 ├── plugin.video.onepacepremium/
 │   ├── addon.xml
-│   └── plugin.video.onepacepremium-X.Y.Z.zip
+│   └── plugin.video.onepacepremium-X.Y.Z.zip   # what Kodi updates from
 ├── repository.onepacepremium/
 │   ├── addon.xml
 │   └── repository.onepacepremium-X.Y.Z.zip
