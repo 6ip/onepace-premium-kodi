@@ -145,6 +145,10 @@
     </style>
 </head>
 <body>
+    <div style="display: none !important; opacity: 0; position: absolute; z-index: -100;">
+        <a href="REPO_URL">REPO_URL</a>
+    </div>
+
     <div class="container">
         <div class="logo-wrapper">
             <div class="logo-glow"></div>
