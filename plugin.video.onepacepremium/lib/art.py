@@ -196,7 +196,9 @@ def _set_episode_art(list_item, video: dict, meta: dict,
     art = {
         "thumb": episode_thumb or poster,
         "landscape": episode_thumb or background,
-        "icon": episode_thumb or poster or "DefaultAddonNone.png",
+        # The show icon, like Umbrella. Skins draw icon beside the label, so an
+        # episode thumb here reads as "[thumbnail] Title".
+        "icon": show_poster or "DefaultAddonNone.png",
         # Poster too, so poster-style views still show the episode thumb.
         "poster": episode_thumb or poster,
         "season.poster": poster,

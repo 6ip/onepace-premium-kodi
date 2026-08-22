@@ -510,7 +510,6 @@ def play_video(params):
         art["tvshow.clearlogo"] = logo
     if episode_thumb:
         art["thumb"] = episode_thumb
-        art["icon"] = episode_thumb
         art["landscape"] = episode_thumb
     if season_poster:
         art["poster"] = season_poster
