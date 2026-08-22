@@ -509,12 +509,15 @@ def play_video(params):
         art["clearlogo"] = logo
         art["tvshow.clearlogo"] = logo
     if episode_thumb:
-        art["thumb"] = episode_thumb
+        # landscape only. Kodi lays the playing item's art over the row that
+        # launched it, and thumb/icon are what skins draw beside the label.
         art["landscape"] = episode_thumb
     if season_poster:
         art["poster"] = season_poster
         art["tvshow.poster"] = season_poster
         art["season.poster"] = season_poster
+        art["thumb"] = season_poster
+        art["icon"] = season_poster
     if art:
         list_item.setArt(art)
 

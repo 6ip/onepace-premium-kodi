@@ -9,7 +9,7 @@ from urllib import parse
 
 import xbmcaddon
 
-from .utils import ADDON, log
+from .utils import get_setting, log
 
 ELEMENTUM_ID = "plugin.video.elementum"
 PLUGIN_PREFIX = f"plugin://{ELEMENTUM_ID}/play"
@@ -20,7 +20,7 @@ _BUFFER_TIMEOUT = 900  # the daemon holds the request open while buffering
 
 def direct_enabled():
     # Defaults off: getSetting returns "" before the settings dialog is opened.
-    return ADDON.getSetting("elementum_direct") == "true"
+    return get_setting("elementum_direct") == "true"
 
 
 def _connection():

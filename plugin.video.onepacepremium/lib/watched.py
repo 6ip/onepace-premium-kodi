@@ -18,6 +18,12 @@ def _path():
     return profile + "watched.json"
 
 
+def invalidate():
+    """Forget the in-memory copy so the next read comes off disk."""
+    global _CACHED
+    _CACHED = None
+
+
 def _load(fresh=False):
     global _CACHED
     if _CACHED is not None and not fresh:

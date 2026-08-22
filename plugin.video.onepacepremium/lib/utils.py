@@ -8,10 +8,34 @@ import xbmcaddon
 import xbmcgui
 import xbmcvfs
 
-ADDON_HANDLE = int(sys.argv[1])
+
+class _Handle:
+    """Kodi hands us a new plugin handle every call, but with
+    reuselanguageinvoker the module is only imported once. Resolving on each
+    use keeps sys.argv[1] from going stale.
+    """
+
+    @staticmethod
+    def _resolve():
+        try:
+            return int(sys.argv[1])
+        except (IndexError, ValueError):
+            return -1
+
+    def __index__(self):
+        return self._resolve()
+
+    def __int__(self):
+        return self._resolve()
+
+    def __repr__(self):
+        return str(self._resolve())
+
+
+ADDON_HANDLE = _Handle()
 ADDON = xbmcaddon.Addon()
-ADDON_PATH = sys.argv[0]
 ADDON_ID = ADDON.getAddonInfo("id")
+ADDON_PATH = f"plugin://{ADDON_ID}/"
 ADDON_DIR = xbmcvfs.translatePath(ADDON.getAddonInfo("path"))
 ALERT_ICON = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media", "alert.png")
 
@@ -106,6 +130,22 @@ def convert_info_hash_to_magnet(
 
 def get_setting(key):
     return ADDON.getSetting(key)
+
+
+# Climbs past 1 only when Kodi reuses the interpreter.
+_INVOCATIONS = [0]
+
+
+def reset_for_invocation():
+    """Drop anything that must not outlive one plugin call."""
+    global ADDON, _DEBUG
+    ADDON = xbmcaddon.Addon()
+    _DEBUG = None
+    _INVOCATIONS[0] += 1
+    log(f"[boot] invocation {_INVOCATIONS[0]} in pid {os.getpid()}")
+    from . import bookmarks as _b, watched as _w
+    _b.invalidate()
+    _w.invalidate()
 
 
 def get_base_url():

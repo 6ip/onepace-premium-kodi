@@ -10,7 +10,7 @@ from .episode_routes import (check_resume, clear_progress, get_streams,
                               list_episodes, list_seasons, mark_watched)
 from .playback import play_video
 from .route_common import open_addon_settings, play_trailer
-from .utils import ADDON_ID, log
+from .utils import ADDON_ID, log, reset_for_invocation
 
 
 def show_changelog(_params):
@@ -65,6 +65,7 @@ _ACTIONS = {
 
 
 def addon_router():
+    reset_for_invocation()
     param_string = sys.argv[2][1:]
 
     if param_string:
