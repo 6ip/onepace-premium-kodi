@@ -859,8 +859,10 @@ def mark_watched(params):
         after = _watched.get_watched(series_id)
         action = "marked" if episode_id in after else "unmarked"
         log(f"[watched] episode {action}: {episode_id!r} (total watched: {len(after)})")
-        if action == "marked":
-            _bookmarks.clear(episode_id)
+        # Both ways: marking means "seen it", unmarking means "start over".
+        # Leaving the resume point behind makes an unmarked episode come back
+        # part-watched, which is neither.
+        _bookmarks.clear(episode_id)
         _clear_kodi_episode_state(episode_id)
         _update_kodi_episode_playcount(episode_id, 1 if action == "marked" else 0)
     else:
@@ -888,9 +890,8 @@ def mark_watched(params):
             marking_watched = not all_watched_before
             action = "unmarked all" if all_watched_before else "marked all"
             log(f"[watched] {action} — {len(episode_ids)} episodes, total watched now: {len(after)}")
-            if marking_watched:
-                for eid in episode_ids:
-                    _bookmarks.clear(eid)
+            for eid in episode_ids:
+                _bookmarks.clear(eid)
             _bulk_kodi_update(episode_ids, marking_watched)
         else:
             log(f"[watched] mark_watched WARNING: no episode IDs found for scope={scope!r}")

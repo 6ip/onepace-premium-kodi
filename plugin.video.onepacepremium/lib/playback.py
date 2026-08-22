@@ -291,9 +291,11 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
         if marked:
             _clear_kodi_episode_state(episode_id)
             _update_kodi_episode_playcount(episode_id, 1)
-        else:
+        elif episode_id not in _watched.get_watched(series_id):
             # Kodi calls anything stopped in the last few percent "watched"
-            # (ignorepercentatend). Our threshold decides, so put it back.
+            # (ignorepercentatend). Our threshold decides, so put it back —
+            # but not for an episode we already count as watched, or replaying
+            # one would silently un-tick it in Kodi's database.
             _update_kodi_episode_playcount(episode_id, 0)
         # Skipped when handing off, since the incoming episode's monitor owns
         # the list from here and would only redraw it twice.
