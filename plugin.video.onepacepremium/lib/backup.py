@@ -13,9 +13,9 @@ from .utils import ADDON_ID, log
 # Your configuration key unlocks the debrid account behind it.
 SENSITIVE = {"secret_string", "base_url", "stremio_api_prefix"}
 
-# Rebuilt on the target machine, so carrying them over means nothing.
-SKIP = {"last_seen_version", "preferred_service_display",
-        "highlight_color_display", "sub_langs_display"}
+# The What's New window should still greet you on a new machine. The *_display
+# labels are only written by the pickers, so they must travel with their values.
+SKIP = {"last_seen_version"}
 
 # key, label, on by default
 PARTS = [
