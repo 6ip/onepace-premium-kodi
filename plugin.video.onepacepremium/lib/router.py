@@ -18,6 +18,16 @@ def show_changelog(_params):
     _show()
 
 
+def export_settings(_params):
+    from .backup import export_settings as _run
+    _run()
+
+
+def import_settings(_params):
+    from .backup import import_settings as _run
+    _run()
+
+
 def show_donate(_params):
     from .donate import show_donate as _show
     _show()
@@ -33,6 +43,8 @@ _ACTIONS = {
     "open_settings": open_settings,
     "show_changelog": show_changelog,
     "show_donate": show_donate,
+    "export_settings": export_settings,
+    "import_settings": import_settings,
     "open_addon_settings": open_addon_settings,
     "play_trailer": play_trailer,
     "list_catalog_type": list_catalog_type,
