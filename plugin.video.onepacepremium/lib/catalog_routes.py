@@ -10,7 +10,7 @@ from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
                             _fetch_provider_meta, _prefetch_metas,
                             countable_episode_ids)
 from .route_common import _add_directory_items, _notify_error, end_directory
-from .utils import ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url, ensure_configured, fetch_data
+from .utils import ADDON_ID, ADDON_HANDLE, build_url, ensure_configured, fetch_data
 
 CATALOG_PAGE_SIZE = 25
 SUPPORTED_CATALOG_TYPES = {"movie", "series", "anime"}
@@ -50,7 +50,6 @@ def list_root():
         end_directory(succeeded=False)
         return
 
-    import os as _os
     _skin_media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
     _fanart     = f"special://home/addons/{ADDON_ID}/resources/fanart.png"
 

@@ -13,7 +13,7 @@ from .provider_api import (_fetch_provider_meta,
                             episode_play_url)
 from .route_common import _add_directory_items, end_directory
 
-from .utils import (ADDON_DIR, ADDON_ID, ADDON_HANDLE, build_url,
+from .utils import (ADDON_DIR, ADDON_HANDLE, build_url,
                     get_setting, log)
 
 _CATALOG_TYPE = "series"
