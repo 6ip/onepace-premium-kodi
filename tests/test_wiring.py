@@ -1,0 +1,96 @@
+"""Settings, router and imports: the plumbing that breaks quietly."""
+import ast
+import re
+import xml.etree.ElementTree as ET
+import harness
+
+harness.setup()
+LIB = harness.ADDON / "lib"
+SETTINGS = ET.parse(harness.ADDON / "resources" / "settings.xml").getroot()
+ROUTER = (LIB / "router.py").read_text(encoding="utf-8")
+
+print("=== every settings action resolves to a real route ===")
+known = set(re.findall(r'"(\w+)":\s*\w+,', ROUTER))
+bad = []
+for s in SETTINGS.iter("setting"):
+    m = re.search(r"action=(\w+)", s.get("action") or "")
+    if m and m.group(1) not in known:
+        bad.append((s.get("id"), m.group(1)))
+used = sorted({m.group(1) for s in SETTINGS.iter("setting")
+               for m in [re.search(r"action=(\w+)", s.get("action") or "")] if m})
+print(f"  plugin actions used: {used}")
+assert not bad, bad
+
+print()
+print("=== every RunScript target exists ===")
+missing = []
+for s in SETTINGS.iter("setting"):
+    for script in re.findall(r"addons/plugin\.video\.onepacepremium/([\w/]+\.py)", s.get("action") or ""):
+        if not (harness.ADDON / script).exists():
+            missing.append(script)
+print(f"  missing scripts: {sorted(set(missing)) or 'none'}")
+assert not missing
+
+print()
+print("=== no duplicate or dangling setting ids ===")
+ids = [s.get("id") for s in SETTINGS.iter("setting") if s.get("id")]
+dupes = [i for i in set(ids) if ids.count(i) > 1]
+print(f"  {len(ids)} settings, duplicates: {dupes or 'none'}")
+assert not dupes
+
+print()
+print("=== every non-action setting is read somewhere ===")
+source = "\n".join(p.read_text(encoding="utf-8") for p in LIB.glob("*.py"))
+unread = [s.get("id") for s in SETTINGS.iter("setting")
+          if s.get("id") and s.get("type") not in ("action",)
+          and f'"{s.get("id")}"' not in source]
+print(f"  never read: {unread or 'none'}")
+assert not unread, "a setting nothing reads is a lie to the user"
+
+print()
+print("=== relative enable/visible offsets still point where they should ===")
+for cat in SETTINGS.findall("category"):
+    items = cat.findall("setting")
+    for i, s in enumerate(items):
+        for attr in ("enable", "visible"):
+            for off in re.findall(r"eq\(-(\d+),", s.get(attr) or ""):
+                target = items[i - int(off)]
+                assert target.get("id"), f"{s.get('id')} {attr} points at a separator"
+                print(f"  {s.get('id'):<24} {attr} -> {target.get('id')}")
+
+print()
+print("=== no unused imports ===")
+unused = []
+for p in sorted(LIB.glob("*.py")):
+    src = p.read_text(encoding="utf-8")
+    names = set()
+    for n in ast.walk(ast.parse(src)):
+        if isinstance(n, ast.Import):
+            names |= {(a.asname or a.name).split(".")[0] for a in n.names}
+        elif isinstance(n, ast.ImportFrom):
+            names |= {a.asname or a.name for a in n.names}
+    unused += [f"{p.name}: {x}" for x in names if src.count(x) < 2]
+print(f"  {unused or 'none'}")
+assert not unused
+
+print()
+print("=== heavy imports stay lazy ===")
+for module, heavy in [("utils.py", "requests"), ("playback.py", "requests"),
+                      ("provider_api.py", "concurrent")]:
+    src = (LIB / module).read_text(encoding="utf-8")
+    top = [n for n in ast.parse(src).body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    names = {a.name.split(".")[0] for n in top if isinstance(n, ast.Import) for a in n.names}
+    names |= {(n.module or "").split(".")[0] for n in top if isinstance(n, ast.ImportFrom)}
+    print(f"  {module:<18} {heavy} at module level: {heavy in names}")
+    assert heavy not in names, f"{module} would pay for {heavy} on every invocation"
+
+print()
+print("=== nothing left half-finished ===")
+marks = [f"{p.name}:{i}" for p in LIB.glob("*.py")
+         for i, l in enumerate(p.read_text(encoding="utf-8").split("\n"), 1)
+         if re.search(r"\bTODO\b|\bFIXME\b|^\s*print\(", l)]
+print(f"  TODO / FIXME / stray print: {marks or 'none'}")
+assert not marks
+
+print()
+print("all assertions passed")
