@@ -142,7 +142,15 @@ Debrid streams work out of the box. Install Elementum only if you also want torr
 
 ```sh
 make        # Build the add-on, the repository and the landing page
+make test   # Run the test suites
 make clean  # Remove build/ and dist/
+```
+
+Tests need no dependencies and can be run directly:
+
+```sh
+python tests/run.py          # everything
+python tests/run.py backup   # only suites matching "backup"
 ```
 
 Requires `python3` and `zip`. The GitHub Actions workflow runs `make` on every

@@ -39,7 +39,10 @@ build-zip:
 	@cd $(BUILD) && zip -r9q ../$(DIST)/$(ID)/$(ID)-$(VER).zip $(ID)
 	@echo "  ✅ Built $(ID)"
 
+test:
+	@python3 tests/run.py
+
 clean:
 	@rm -rf $(BUILD) $(DIST)
 
-.PHONY: all clean build-zip
+.PHONY: all clean build-zip test
