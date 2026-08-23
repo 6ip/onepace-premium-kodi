@@ -1,3 +1,19 @@
+[B]v2.3.2[/B]  [COLOR FF888899]23 August 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Backup[/B][/COLOR]
+  •  Save your settings, watched history and resume points to a file, under Tools.
+  •  Restore them later, or on a second device. You choose what goes in and what comes back.
+  •  Your configuration key stays out of the file unless you tick it.
+
+[COLOR FF81A6C6][B]Speed[/B][/COLOR]
+  •  Lists open quicker once the add-on has been opened at least once.
+
+[COLOR FF81A6C6][B]Fixes[/B][/COLOR]
+  •  Episode thumbnails no longer appear next to the title in some skins.
+  •  Unmarking an episode now clears its resume point as well.
+  •  Replaying a finished episode no longer marks it unwatched.
+
+
 [B]v2.3.1[/B]  [COLOR FF888899]18 August 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Next Episode[/B][/COLOR]
