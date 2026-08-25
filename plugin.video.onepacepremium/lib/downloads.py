@@ -31,12 +31,25 @@ def _profile():
 
 DEFAULT_FOLDER = f"special://profile/addon_data/{ADDON_ID}/downloads/"
 
+# A folder of our own inside whatever the viewer picked, so pointing this at
+# an existing media drive does not scatter show folders through it.
+CONTAINER = "One Pace Premium"
+
 
 def folder():
-    """Where episodes are kept. Blank setting falls back inside our profile."""
+    """Where episodes are kept, always with forward slashes.
+
+    Kodi takes either separator on Windows, but translatePath hands back
+    backslashes and the rest of the path is built with slashes — comparing
+    and removing those folders needs one shape, not two.
+    """
     chosen = get_setting("download_folder")
-    path = xbmcvfs.translatePath(chosen) if chosen else _profile() + "downloads/"
-    return path if path.endswith(("/", "\\")) else path + "/"
+    if not chosen or chosen == DEFAULT_FOLDER:
+        # Already a folder of ours, so it needs no folder of ours inside it.
+        base = _profile().rstrip("/\\") + "/downloads"
+    else:
+        base = xbmcvfs.translatePath(chosen).rstrip("/\\") + "/" + CONTAINER
+    return base.replace("\\", "/") + "/"
 
 
 def is_downloadable(url):
@@ -98,6 +111,10 @@ def _target(params):
     # Season 0 is where Kodi keeps specials, so 0x01 reads correctly there.
     name = f"{season}x{episode:02d} - {title}{_suffix(variant_of(params))}{ext}"
     return f"{folder()}{series}/Season {season:02d}/", name
+
+
+def _normalised(path):
+    return path.replace("\\", "/")
 
 
 def _index_path():
@@ -271,6 +288,53 @@ def download(params, meta=None):
     refresh_container()
 
 
+def _prune(path):
+    """Drop the season and series folders once nothing is left in them.
+
+    rmdir without force refuses a folder that still holds anything, so this
+    can only ever remove the shells we made. The download root itself stays.
+    """
+    root = folder().rstrip("/")
+    directory = os.path.dirname(_normalised(path)).rstrip("/")
+    # Series and season, and nothing above them, however the paths compare.
+    for _ in range(2):
+        if not directory or directory == root or not directory.startswith(root + "/"):
+            return
+        if not xbmcvfs.rmdir(directory):
+            return
+        log(f"[downloads] removed the empty {directory!r}")
+        directory = os.path.dirname(directory).rstrip("/")
+
+
+# Whatever opens a folder on this desktop. Nothing on a TV box, which is why
+# Kodi's own browser stays as the fallback.
+_FILE_MANAGERS = (
+    ("System.Platform.Windows", 'explorer.exe "{win}"'),
+    ("System.Platform.OSX", 'open "{path}"'),
+    ("System.Platform.Linux", 'xdg-open "{path}"'),
+)
+
+
+def browse(params):
+    """Open the folder in the desktop's file manager, or Kodi's if there is none."""
+    path = params.get("path", "")
+    directory = os.path.dirname(_normalised(path)) if path else ""
+    if not directory or not xbmcvfs.exists(directory + "/"):
+        _notify_error("That folder is not there any more")
+        return
+
+    for condition, template in _FILE_MANAGERS:
+        if xbmc.getCondVisibility(condition):
+            command = template.format(path=directory,
+                                      win=directory.replace("/", chr(92)))
+            log(f"[downloads] opening {directory!r} with the file manager")
+            xbmc.executebuiltin(f"System.Exec({command})")
+            return
+
+    log(f"[downloads] no file manager here, showing {directory!r} in Kodi")
+    xbmc.executebuiltin(f"ActivateWindow(Videos,{directory},return)")
+
+
 def _remove(paths):
     """Delete files and forget them. Returns how many actually went."""
     data = read_index()
@@ -278,6 +342,7 @@ def _remove(paths):
     for path in paths:
         if not xbmcvfs.exists(path) or xbmcvfs.delete(path):
             data["files"].pop(path, None)
+            _prune(path)
             removed += 1
         else:
             log(f"[downloads] could not delete {path!r}")
@@ -371,6 +436,7 @@ def move_downloads(_params=None):
             failed += 1
             continue
         data["files"][destination] = data["files"].pop(path)
+        _prune(path)
         moved += 1
     progress.close()
 
@@ -396,8 +462,18 @@ def _sweep(data):
 
 
 def _empty(message):
+    """Dressed like the root menu, since that is what an empty section is.
+
+    Setting a content type here would have the skin draw an episode row with
+    no episode in it, which is where the missing artwork came from.
+    """
+    media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
+    icon = f"{media}/info.png"
     xbmcplugin.setContent(ADDON_HANDLE, "")
     item = xbmcgui.ListItem(label="Nothing downloaded yet", offscreen=True)
+    item.setArt({"icon": icon, "thumb": icon, "poster": icon, "banner": icon,
+                 "landscape": icon,
+                 "fanart": f"special://home/addons/{ADDON_ID}/resources/fanart.png"})
     item.getVideoInfoTag().setPlot(message)
     _add_directory_items([(build_url("list_downloads"), item, False)])
     end_directory()
@@ -687,6 +763,8 @@ def list_downloads(params=None):
             if bookmark:
                 menu.append(("[B]Clear Progress[/B]", "RunPlugin(%s)" % build_url(
                     "clear_progress", episode_id=episode_id)))
+        menu.append(("[B]Browse Folder[/B]",
+                     "RunPlugin(%s)" % build_url("browse_download", path=path)))
         menu.append(("[B]Delete[/B]",
                      "RunPlugin(%s)" % build_url("delete_download", path=path)))
         item.addContextMenuItems(menu)

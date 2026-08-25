@@ -137,30 +137,84 @@ print("  renames, falls back to copy, and re-keys the index  OK")
 
 import kodistub
 
-store["download_folder"] = "E:/Media/"
+store["download_folder"] = "E:/Media"
+HOME = downloads.folder()
+print(f"  a custom folder: {HOME}")
+assert HOME == "E:/Media/One Pace Premium/", HOME
+
+# The default is already a folder of ours, so it gets no folder inside it.
+store["download_folder"] = ""
+print(f"  the default   : ...{downloads.folder()[-30:]}")
+assert not downloads.folder().endswith(downloads.CONTAINER + "/"),     "nesting our folder inside our own folder is just noise"
+for setting in ("", "D:" + chr(92) + "Downloads", "E:/Media/", "E:/Media"):
+    store["download_folder"] = setting
+    got = downloads.folder()
+    assert chr(92) not in got, (setting, got)
+    assert "//" not in got.replace("://", ""), (setting, got)
+    assert got.endswith("/"), (setting, got)
+    if setting:
+        assert got.endswith(downloads.CONTAINER + "/"), (setting, got)
+store["download_folder"] = "E:/Media"
+
 files = {
     "D:/old/One Pace/Season 01/1x01 - Romance Dawn.mkv":
         {"series_name": "One Pace", "season": "1", "episode": "1",
          "episode_title": "Romance Dawn", "episode_id": "RO_1", "variant": "standard"},
-    "E:/Media/One Pace/Season 01/1x02 - Swordsman.mkv":
+    HOME + "One Pace/Season 01/1x02 - Swordsman.mkv":
         {"series_name": "One Pace", "season": "1", "episode": "2",
          "episode_title": "Swordsman", "episode_id": "RO_2", "variant": "standard"},
 }
 downloads.read_index = lambda: {"files": dict(files), "series": {}}
 saved = {}
 downloads._write_index = lambda data: saved.update(data)
-downloads.xbmcvfs.exists = lambda p: not p.startswith("E:/Media/One Pace/Season 01/1x01")
+# Only the sources are on disk; nothing waits at the destinations.
+downloads.xbmcvfs.exists = lambda p: p in files or p.endswith("/")
 kodistub.Dialog.yesno = lambda self, *a, **k: True
 kodistub.recorder.reset()
 downloads.move_downloads()
 for k in sorted(saved["files"]):
     print(f"  {k}")
-assert all(k.startswith("E:/Media/") for k in saved["files"]), saved["files"]
+assert all(k.startswith(HOME) for k in saved["files"]), saved["files"]
 assert len(saved["files"]) == 2, "a row was lost in the move"
 assert kodistub.recorder.notifications[-1] == ("Moved 1 file", "INFO"),     "the file already in place should not be moved again"
 downloads.xbmcvfs.exists = lambda p: True
 store["download_folder"] = ""
 print("  only what was outside the folder moves, and the index follows  OK")
+
+print()
+print("=== the folders we made go when the last file leaves ===")
+store["download_folder"] = "E:/Media"
+HOME = downloads.folder()
+kodistub.recorder.reset()
+downloads._prune(HOME + "One Pace/Season 01/1x01 - A.mkv")
+print(f"  removed: {kodistub.recorder.rmdirs}")
+assert kodistub.recorder.rmdirs == [HOME + "One Pace/Season 01", HOME.rstrip("/") + "/One Pace"],     kodistub.recorder.rmdirs
+kodistub.recorder.reset()
+downloads._prune("D:/somewhere/else/file.mkv")
+assert kodistub.recorder.rmdirs == [], "a path outside the root must be left alone"
+kodistub.recorder.reset()
+downloads._prune(HOME + "loose.mkv")
+assert kodistub.recorder.rmdirs == [], "the download root itself must never go"
+
+# translatePath hands back backslashes, the rest of the path is built with
+# slashes; rmdir must be given one shape or Windows keeps the folder.
+store["download_folder"] = "D:" + chr(92) + "Downloads"
+built = "".join(downloads._target({"series_name": "One Pace", "episode_title": "A",
+                                   "season": "0", "episode": "1", "filename": "x.mkv"}))
+print(f"  built: {built}")
+assert chr(92) not in built, "a mixed-separator path is not the one on disk"
+kodistub.recorder.reset()
+downloads._prune(built)
+assert kodistub.recorder.rmdirs == ["D:/Downloads/One Pace Premium/One Pace/Season 00",
+                                    "D:/Downloads/One Pace Premium/One Pace"],     kodistub.recorder.rmdirs
+print(f"  and prunes: {kodistub.recorder.rmdirs[0]}")
+pr = SRC[SRC.index("def _prune("):SRC.index("def _remove(")]
+assert "for _ in range(2)" in pr, "an unbounded walk can spin on a drive root"
+assert 'startswith(root + "/")' in pr, "it could climb above the download folder"
+assert "_prune(path)" in SRC[SRC.index("def _remove("):SRC.index("def delete(")], "delete leaves shells"
+assert "_prune(path)" in SRC[SRC.index("def move_downloads("):], "moving leaves the old shells"
+store["download_folder"] = ""
+print("  season then series, never the root, never outside it  OK")
 
 print()
 print("=== the default folder is visible before you ever change it ===")
@@ -203,6 +257,24 @@ assert "not xbmcvfs.exists(p)" in lst, "deleting a file by hand would leave a de
 assert "_write_index(data)" in lst, "the sweep would not be saved"
 assert "_sweep(read_index())" in SRC, "the list never sweeps"
 print("  files removed by hand are swept on the next visit  OK")
+
+print()
+print("=== an empty section is dressed like the root menu ===")
+downloads.read_index = lambda: {"files": {}, "series": {}}
+downloads._write_index = lambda data: None
+kodistub.recorder.reset()
+downloads.list_downloads(None)
+_, blank, is_folder = kodistub.recorder.directories[0]
+print(f"  {blank.label!r}, content={kodistub.recorder.content!r}")
+print(f"  art: {sorted(v.rsplit('/', 1)[-1] for v in blank.art.values())}")
+assert kodistub.recorder.content == "", "a content type draws an episode row with no episode"
+assert not is_folder, "it must not be enterable"
+for slot in ("icon", "thumb", "poster", "banner", "landscape"):
+    assert blank.art.get(slot, "").endswith("/info.png"), (slot, blank.art)
+assert blank.art.get("fanart", "").endswith("/fanart.png"), blank.art
+icon_file = harness.ADDON / "resources" / "skins" / "Default" / "media" / "info.png"
+assert icon_file.exists(), "the icon the empty state points at is missing"
+print("  same background and icon slots the root menu uses  OK")
 
 print()
 print("=== the walk is series, then season, then episode ===")
@@ -317,6 +389,37 @@ labels = [c[0] for c in first.context]
 print(f"  episode:  {labels}")
 assert labels[0] == "[B]Mark Watched[/B]", labels
 assert labels[-1] == "[B]Delete[/B]", labels
+assert "[B]Browse Folder[/B]" in labels, "no way to see the file itself"
+browse = next(c for c in first.context if "Browse" in c[0])[1]
+assert "action=browse_download" in browse, browse
+
+# Kodi has no builtin for the desktop's file manager, so each platform gets
+# its own command and anything else falls back to Kodi's own browser.
+import xbmc as _xbmc
+_was = _xbmc.getCondVisibility
+downloads.xbmcvfs.exists = lambda p: True
+for platform, expected in (
+        ("System.Platform.Windows", "System.Exec(explorer.exe"),
+        ("System.Platform.OSX", "System.Exec(open"),
+        ("System.Platform.Linux", "System.Exec(xdg-open"),
+        (None, "ActivateWindow(Videos,")):
+    _xbmc.getCondVisibility = lambda c, want=platform: c == want
+    kodistub.recorder.reset()
+    downloads.browse({"path": "D:/Downloads/One Pace Premium/One Pace/Season 01/1x01 - A.mkv"})
+    ran = kodistub.recorder.builtins[0]
+    print(f"  {platform or 'a TV box with none':<26} -> {ran[:62]}")
+    assert ran.startswith(expected), ran
+    assert "1x01 - A.mkv" not in ran, "that opens the file, not the folder it is in"
+_xbmc.getCondVisibility = lambda c: c == "System.Platform.Windows"
+kodistub.recorder.reset()
+downloads.browse({"path": "D:/Downloads/One Pace/Season 01/1x01 - A.mkv"})
+assert chr(92) in kodistub.recorder.builtins[0], "explorer wants backslashes"
+kodistub.recorder.reset()
+downloads.xbmcvfs.exists = lambda p: False
+downloads.browse({"path": "D:/gone/1x01 - A.mkv"})
+assert kodistub.recorder.builtins == [], "it would open a folder that is not there"
+downloads.xbmcvfs.exists = lambda p: True
+_xbmc.getCondVisibility = _was
 
 kodistub.recorder.reset()
 downloads.list_downloads({"series": "One Pace"})

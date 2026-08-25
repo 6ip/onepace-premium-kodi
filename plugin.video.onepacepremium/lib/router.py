@@ -34,6 +34,7 @@ _ACTIONS = {
     "download_episode":    "episode_routes:download_episode",
     "delete_download":     "downloads:delete",
     "move_downloads":      "downloads:move_downloads",
+    "browse_download":     "downloads:browse",
 }
 
 

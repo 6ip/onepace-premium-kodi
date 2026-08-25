@@ -25,6 +25,7 @@ class Recorder:
         self.content = None
         self.infolabels = {}       # Container.* and friends
         self.progress = []         # DialogProgressBG calls
+        self.rmdirs = []           # folders we asked Kodi to remove
 
 
 recorder = Recorder()
@@ -235,6 +236,7 @@ def install(addon_root, fixtures, settings=None):
     module("xbmcvfs", translatePath=lambda p: p, exists=lambda p: False,
            File=object, mkdirs=lambda p: None, delete=lambda p: None,
            rename=lambda a, b: True, copy=lambda a, b: True,
+           rmdir=lambda p, force=False: recorder.rmdirs.append(p) or True,
            listdir=lambda p: ([], []))
 
     if ADDON_ROOT not in sys.path:
