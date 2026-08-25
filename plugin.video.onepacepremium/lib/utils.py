@@ -138,15 +138,15 @@ def is_widget():
 
 
 def refresh_container():
-    """Redraw the list we just changed.
+    """Redraw whatever is showing what we just changed.
 
-    A widget's container belongs to the skin, so Container.Refresh would hit
-    the skin rather than us. The library ping is the usual way round it: the
-    scan finds nothing under that path, but widgets reload on the way past.
+    Shelves always need the nudge, since a change made in our own list still
+    leaves them stale. The scan finds nothing under that path, but widgets
+    reload on the way past. Container.Refresh only reaches a container we own,
+    so it is worth adding when we are standing in one.
     """
-    if is_widget():
-        xbmc.executebuiltin("UpdateLibrary(video,special://skin/foo)")
-    else:
+    xbmc.executebuiltin("UpdateLibrary(video,special://skin/foo)")
+    if not is_widget():
         xbmc.executebuiltin("Container.Refresh")
 
 

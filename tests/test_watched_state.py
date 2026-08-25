@@ -70,14 +70,14 @@ from lib.utils import refresh_container
 from kodistub import recorder
 
 for plugin_name, expected in (
-        ("plugin.video.onepacepremium", ["Container.Refresh"]),
+        ("plugin.video.onepacepremium", ["UpdateLibrary(video,special://skin/foo)", "Container.Refresh"]),
         ("", ["UpdateLibrary(video,special://skin/foo)"]),
         ("skin.arctic.fuse.3", ["UpdateLibrary(video,special://skin/foo)"])):
     recorder.reset()
     recorder.infolabels["Container.PluginName"] = plugin_name
     refresh_container()
     where = "our list" if plugin_name == "plugin.video.onepacepremium" else "a widget"
-    print(f"  {where:9}  ->  {recorder.builtins or ['nothing']}")
+    print(f"  {where:9}  ->  {' + '.join(b.split('(')[0] for b in recorder.builtins)}")
     assert recorder.builtins == expected, recorder.builtins
 
 for name in ("mark_watched", "clear_progress"):
