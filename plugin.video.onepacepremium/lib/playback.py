@@ -11,7 +11,7 @@ from . import bookmarks as _bookmarks
 from . import elementum as _elementum
 from . import watched as _watched
 from .utils import (ADDON_HANDLE, ADDON_ID, build_url, get_setting, is_widget,
-                    log, session)
+                    log, ping_widgets, session)
 
 _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 
@@ -307,6 +307,9 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
                 path = xbmc.getInfoLabel("Container.FolderPath")
                 if ADDON_ID in path or kodi_monitor.waitForAbort(0.2):
                     break
+        if not play_next_url:
+            # The resume point moved, so every shelf showing it is now stale.
+            ping_widgets()
         # A widget's FolderPath is our plugin too, so it has to be asked who
         # owns the container before anything redraws it.
         if ADDON_ID in path and not is_widget():

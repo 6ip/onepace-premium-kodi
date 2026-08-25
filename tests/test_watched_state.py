@@ -86,6 +86,14 @@ for name in ("mark_watched", "clear_progress"):
     assert 'executebuiltin("Container.Refresh")' not in fn, f"{name} still refreshes blind"
 print("  mark_watched and clear_progress both go through it  OK")
 
+# Stopping an episode moves the resume point, so shelves are stale too.
+mon = PLAY[PLAY.index("def _monitor_playback"):]
+assert "ping_widgets()" in mon, "shelves stay stale after playback"
+assert mon.index("ping_widgets()") < mon.index('executebuiltin("Container.Refresh")'),     "the shelves are nudged before our own container redraws"
+handoff = "if not play_next_url:" + chr(10) + "            # The resume point moved"
+assert handoff in mon, "autoplay would ping between every episode"
+print("  stopping an episode nudges the shelves too, but a handoff does not")
+
 # A widget's FolderPath is our plugin URL, so that test alone lets the
 # post-playback redraw fire straight at the skin's container.
 guard = next(l.strip() for l in PLAY.split(chr(10)) if "ADDON_ID in path and" in l)

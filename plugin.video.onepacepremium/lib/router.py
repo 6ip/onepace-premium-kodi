@@ -4,19 +4,12 @@ from urllib import parse
 
 import xbmc
 
-from .utils import ADDON_ID, log, reset_for_invocation
-
-
-def open_settings(_params):
-    xbmc.executebuiltin(
-        f"RunScript(special://home/addons/{ADDON_ID}/lib/custom_settings_window.py)"
-    )
+from .utils import log, reset_for_invocation
 
 
 # Each action names the module and function it lives in. Nothing is imported
 # until one is asked for, so a listing never pays for playback or backup.
 _ACTIONS = {
-    "open_settings":       None,
     "show_changelog":      "changelog:show_changelog",
     "show_donate":         "donate:show_donate",
     "export_settings":     "backup:export_settings",
@@ -53,9 +46,6 @@ def addon_router():
     if param_string:
         params = dict(parse.parse_qsl(param_string))
         action = params.get("action")
-        if action == "open_settings":
-            open_settings(params)
-            return
         target = _ACTIONS.get(action)
         if target:
             _resolve(target)(params)

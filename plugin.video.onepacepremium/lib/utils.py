@@ -137,15 +137,23 @@ def is_widget():
     return ADDON_ID not in xbmc.getInfoLabel("Container.PluginName")
 
 
+def ping_widgets():
+    """Nudge every shelf on the home screen.
+
+    The scan finds nothing under that path and stops, but widgets reload on
+    the way past. It is the only thing that reaches a container we do not own.
+    """
+    xbmc.executebuiltin("UpdateLibrary(video,special://skin/foo)")
+
+
 def refresh_container():
     """Redraw whatever is showing what we just changed.
 
-    Shelves always need the nudge, since a change made in our own list still
-    leaves them stale. The scan finds nothing under that path, but widgets
-    reload on the way past. Container.Refresh only reaches a container we own,
-    so it is worth adding when we are standing in one.
+    Shelves need the nudge either way, since a change made in our own list
+    still leaves them stale. Container.Refresh only reaches a container we
+    own, so it is worth adding when we are standing in one.
     """
-    xbmc.executebuiltin("UpdateLibrary(video,special://skin/foo)")
+    ping_widgets()
     if not is_widget():
         xbmc.executebuiltin("Container.Refresh")
 
