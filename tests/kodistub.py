@@ -24,6 +24,7 @@ class Recorder:
         self.resolved = []         # setResolvedUrl listitems
         self.content = None
         self.infolabels = {}       # Container.* and friends
+        self.progress = []         # DialogProgressBG calls
 
 
 recorder = Recorder()
@@ -198,7 +199,20 @@ def install(addon_root, fixtures, settings=None):
            getLanguage=lambda *a, **k: "eng", ISO_639_2=1,
            Monitor=Monitor, Player=Player, Actor=Actor, sleep=lambda ms: None)
     module("xbmcaddon", Addon=Addon)
+    class DialogProgressBG:
+        """Records the headings it was given, and never blocks."""
+
+        def create(self, heading="", message=""):
+            recorder.progress.append(("create", heading, message))
+
+        def update(self, percent=0, heading="", message=""):
+            recorder.progress.append(("update", percent, message))
+
+        def close(self):
+            recorder.progress.append(("close",))
+
     module("xbmcgui", ListItem=ListItem, Dialog=Dialog, Window=Window,
+           DialogProgressBG=DialogProgressBG,
            WindowXMLDialog=WindowXMLDialog,
            NOTIFICATION_INFO=NOTIFICATION_INFO,
            NOTIFICATION_ERROR=NOTIFICATION_ERROR,
@@ -220,7 +234,8 @@ def install(addon_root, fixtures, settings=None):
            addSortMethod=lambda *a: None, SORT_METHOD_EPISODE=0)
     module("xbmcvfs", translatePath=lambda p: p, exists=lambda p: False,
            File=object, mkdirs=lambda p: None, delete=lambda p: None,
-           rename=lambda a, b: True, listdir=lambda p: ([], []))
+           rename=lambda a, b: True, copy=lambda a, b: True,
+           listdir=lambda p: ([], []))
 
     if ADDON_ROOT not in sys.path:
         sys.path.insert(0, ADDON_ROOT)

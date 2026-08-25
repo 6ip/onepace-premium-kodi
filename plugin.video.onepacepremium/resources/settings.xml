@@ -4,11 +4,9 @@
         <setting label="What's New" id="show_changelog" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_changelog)" />
         <setting label="Support the Project" id="show_donate" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_donate)" />
         <setting type="sep" />
-        <setting type="lsep" label="Server" />
+        <setting type="lsep" label="Connection" />
         <setting label="Server URL" id="base_url" type="text" default="https://onepace-premium.e6ip.com" />
         <setting label="Stremio API Prefix" id="stremio_api_prefix" type="text" default="" visible="false" />
-        <setting type="sep" />
-        <setting type="lsep" label="Account" />
         <setting label="Configuration" id="secret_string" type="text" default="" />
         <setting label="Configure / Reconfigure" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,configure_account)" />
     </category>
@@ -55,9 +53,12 @@
     <category label="Tools">
         <setting type="lsep" label="Downloads" />
         <setting label="Enable Downloads" id="downloads_enabled" type="bool" default="true" />
-        <setting label="Download Folder" id="download_folder" type="folder" default="" enable="eq(-1,true)" />
-        <setting label="Mark Downloaded Episodes" id="download_marker" type="bool" default="true" enable="eq(-2,true)" />
-        <setting label="Play the Downloaded Copy" id="prefer_downloads" type="bool" default="true" enable="eq(-3,true)" />
+        <setting label="Download Folder" id="choose_download_folder" type="action" enable="eq(-1,true)" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_download_folder)" />
+        <setting label="Showing" id="download_folder_display" type="text" default="Default" enable="false" subsetting="true" />
+        <setting id="download_folder" type="text" default="special://profile/addon_data/plugin.video.onepacepremium/downloads/" visible="false" />
+        <setting label="Move Existing Downloads" id="move_downloads" type="action" enable="eq(-4,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=move_downloads)" />
+        <setting label="Mark Downloaded Episodes" id="download_marker" type="bool" default="true" enable="eq(-5,true)" />
+        <setting label="Play the Downloaded Copy" id="prefer_downloads" type="bool" default="true" enable="eq(-6,true)" />
         <setting type="sep" />
         <setting type="lsep" label="Backup" />
         <setting label="Export Backup" id="export_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=export_settings)" />

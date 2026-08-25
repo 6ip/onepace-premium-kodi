@@ -11,6 +11,11 @@ import xbmcvfs
 
 ADDON_ID = "plugin.video.onepacepremium"
 
+# This file is launched with RunScript, so it is __main__ and cannot import
+# anything from the package. Built the same way downloads.py builds it, and
+# the test suite fails if the two ever disagree.
+DEFAULT_DOWNLOAD_FOLDER = f"special://profile/addon_data/{ADDON_ID}/downloads/"
+
 # ISO 639-2/B codes used by the subtitles feed.
 LANG_NAMES = {
     "ara": "Arabic",     "cze": "Czech",      "dut": "Dutch",
@@ -372,6 +377,35 @@ def choose_highlight_color():
                                       xbmcgui.NOTIFICATION_INFO, 5000, False)
 
 
+def choose_download_folder():
+    """Default or somewhere of your own — and a way back to default."""
+    addon = xbmcaddon.Addon(ADDON_ID)
+    current = addon.getSetting("download_folder")
+    is_default = not current or current == DEFAULT_DOWNLOAD_FOLDER
+    chosen = xbmcgui.Dialog().select(
+        "Download Folder",
+        ["Default  (inside the add-on's own folder)", "Custom..."],
+        preselect=0 if is_default else 1,
+    )
+    if chosen < 0:
+        return
+
+    if chosen == 0:
+        path, shown = DEFAULT_DOWNLOAD_FOLDER, "Default"
+    else:
+        start = current if current and current != DEFAULT_DOWNLOAD_FOLDER else ""
+        path = xbmcgui.Dialog().browseSingle(3, "Where should downloads go?", "files",
+                                             defaultt=start)
+        if not path:
+            return
+        shown = path
+
+    if _save_settings(addon, {"download_folder": path,
+                              "download_folder_display": shown}):
+        xbmcgui.Dialog().notification("Download Folder", shown,
+                                      xbmcgui.NOTIFICATION_INFO, 5000, False)
+
+
 def choose_sub_langs():
     """Pick which subtitle languages to show. Empty selection means all."""
     addon = xbmcaddon.Addon(ADDON_ID)
@@ -412,6 +446,8 @@ if __name__ == "__main__":
         show_status()
     elif action == "configure_account":
         configure_account()
+    elif action == "choose_download_folder":
+        choose_download_folder()
     elif action == "choose_sub_langs":
         choose_sub_langs()
     elif action == "choose_highlight_color":

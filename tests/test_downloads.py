@@ -126,6 +126,77 @@ assert 'playback_params["variant"] = _binge_part' in STREAMS, "the cut never rea
 print("  Fillerver is filed as Extended, like the provider says  OK")
 
 print()
+print("=== moving downloads follows the folder setting ===")
+mv = SRC[SRC.index("def move_downloads("):SRC.index("def _sweep(")]
+assert "_relocate(path, destination)" in mv, "nothing is actually moved"
+assert "xbmcvfs.copy" in SRC[SRC.index("def _relocate("):SRC.index("def move_downloads(")],     "a rename across drives fails, so a copy has to back it up"
+assert 'data["files"][destination] = data["files"].pop(path)' in mv, "the index would point at the old path"
+assert mv.index("if not planned:") < mv.index("Dialog().yesno"), "it would ask with nothing to do"
+assert mv.index("xbmcvfs.exists(destination)") < mv.index("_relocate"), "it would overwrite a file already there"
+print("  renames, falls back to copy, and re-keys the index  OK")
+
+import kodistub
+
+store["download_folder"] = "E:/Media/"
+files = {
+    "D:/old/One Pace/Season 01/1x01 - Romance Dawn.mkv":
+        {"series_name": "One Pace", "season": "1", "episode": "1",
+         "episode_title": "Romance Dawn", "episode_id": "RO_1", "variant": "standard"},
+    "E:/Media/One Pace/Season 01/1x02 - Swordsman.mkv":
+        {"series_name": "One Pace", "season": "1", "episode": "2",
+         "episode_title": "Swordsman", "episode_id": "RO_2", "variant": "standard"},
+}
+downloads.read_index = lambda: {"files": dict(files), "series": {}}
+saved = {}
+downloads._write_index = lambda data: saved.update(data)
+downloads.xbmcvfs.exists = lambda p: not p.startswith("E:/Media/One Pace/Season 01/1x01")
+kodistub.Dialog.yesno = lambda self, *a, **k: True
+kodistub.recorder.reset()
+downloads.move_downloads()
+for k in sorted(saved["files"]):
+    print(f"  {k}")
+assert all(k.startswith("E:/Media/") for k in saved["files"]), saved["files"]
+assert len(saved["files"]) == 2, "a row was lost in the move"
+assert kodistub.recorder.notifications[-1] == ("Moved 1 file", "INFO"),     "the file already in place should not be moved again"
+downloads.xbmcvfs.exists = lambda p: True
+store["download_folder"] = ""
+print("  only what was outside the folder moves, and the index follows  OK")
+
+print()
+print("=== the default folder is visible before you ever change it ===")
+import xml.etree.ElementTree as _ET
+_root = _ET.parse(harness.ADDON / "resources" / "settings.xml").getroot()
+_folder = next(x for x in _root.iter("setting") if x.get("id") == "download_folder")
+_shown = next(x for x in _root.iter("setting") if x.get("id") == "download_folder_display")
+print(f"  stored default : {_folder.get('default')}")
+print(f"  showing default: {_shown.get('default')}")
+assert _folder.get("default", "") == downloads.DEFAULT_FOLDER, "code and settings disagree"
+assert _folder.get("visible") == "false", "the raw path should not be an editable row"
+assert _shown.get("default") == "Default", "the row would start blank"
+_chooser = next(x for x in _root.iter("setting") if x.get("id") == "choose_download_folder")
+assert "choose_download_folder" in _chooser.get("action", ""), _chooser.get("action")
+
+tools_src = (harness.ADDON / "lib" / "tools.py").read_text(encoding="utf-8")
+chooser = tools_src[tools_src.index("def choose_download_folder("):
+                    tools_src.index("def choose_sub_langs(")]
+assert '"Custom..."' in chooser and "Default" in chooser, "there is no way back to default"
+assert "from ." not in chooser, "RunScript makes this __main__, so relative imports blow up"
+
+# Three copies of one path: the module, the standalone script, and settings.xml.
+import re as _re
+_tools_default = _re.search(r'DEFAULT_DOWNLOAD_FOLDER = f?"([^"]+)"', tools_src).group(1)
+_tools_default = _tools_default.replace("{ADDON_ID}", "plugin.video.onepacepremium")
+print(f"  tools.py      : {_tools_default}")
+assert _tools_default == downloads.DEFAULT_FOLDER, "the script and the module disagree"
+assert "browseSingle" in chooser, "Custom would have nothing to browse with"
+assert '"download_folder_display"' in chooser, "the Showing row would go stale"
+print("  Default or Custom, and the stored path is never typed by hand  OK")
+_front = next(c for c in _root.iter("category") if c.get("label") == "One Pace Premium")
+_groups = [x.get("label") for x in _front if x.get("type") == "lsep"]
+print(f"  front page groups: {_groups}")
+assert _groups == ["About", "Connection"], _groups
+
+print()
 print("=== the index never outlives the files ===")
 lst = SRC[SRC.index("def _sweep("):SRC.index("def _empty(")]
 assert "not xbmcvfs.exists(p)" in lst, "deleting a file by hand would leave a dead row"

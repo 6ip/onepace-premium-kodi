@@ -10,7 +10,7 @@ import xbmcplugin
 import xbmcvfs
 
 from .route_common import _add_directory_items, _notify_error, _notify_info, end_directory
-from .utils import (ADDON_HANDLE, build_url, get_setting, log,
+from .utils import (ADDON_HANDLE, ADDON_ID, build_url, get_setting, log,
                     refresh_container, session)
 
 # Only ever asked for the profile path, which never changes between calls.
@@ -27,6 +27,9 @@ _DOWNLOADABLE = ("http://", "https://")
 def _profile():
     p = xbmcvfs.translatePath(_ADDON.getAddonInfo("profile"))
     return p if p.endswith(("/", "\\")) else p + "/"
+
+
+DEFAULT_FOLDER = f"special://profile/addon_data/{ADDON_ID}/downloads/"
 
 
 def folder():
@@ -317,6 +320,67 @@ def delete(params):
         return
     log(f"[downloads] deleted {removed} file(s)")
     _notify_info(f"Deleted {removed} file{'s' if removed != 1 else ''}")
+    refresh_container()
+
+
+def _relocate(src, dst):
+    """Rename where we can, copy where the drive changes."""
+    if xbmcvfs.rename(src, dst):
+        return True
+    if xbmcvfs.copy(src, dst):
+        xbmcvfs.delete(src)
+        return True
+    return False
+
+
+def move_downloads(_params=None):
+    """Bring everything already downloaded under the current folder.
+
+    Changing the folder only redirects new downloads — the old files keep
+    working where they are. This is for when you actually want them together.
+    """
+    data = read_index()
+    planned = []
+    for path, meta in data["files"].items():
+        directory, name = _target(dict(meta, filename=path))
+        if directory + name != path and xbmcvfs.exists(path):
+            planned.append((path, directory, name))
+
+    if not planned:
+        _notify_info("Everything is already in the download folder")
+        return
+    if not xbmcgui.Dialog().yesno(
+            "Move Downloads",
+            f"Move {len(planned)} file{'s' if len(planned) != 1 else ''} into"
+            + chr(10) + folder() + chr(10) + chr(10)
+            + "Large files on another drive will take a while.",
+            nolabel="Cancel", yeslabel="Move"):
+        return
+
+    progress = xbmcgui.DialogProgressBG()
+    progress.create("Moving downloads")
+    moved, failed = 0, 0
+    for index, (path, directory, name) in enumerate(planned, 1):
+        progress.update(int(index * 100 / len(planned)), "Moving downloads", name)
+        if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
+            failed += 1
+            continue
+        destination = directory + name
+        if xbmcvfs.exists(destination) or not _relocate(path, destination):
+            log(f"[downloads] could not move {path!r}")
+            failed += 1
+            continue
+        data["files"][destination] = data["files"].pop(path)
+        moved += 1
+    progress.close()
+
+    if moved:
+        _write_index(data)
+    log(f"[downloads] moved {moved}, failed {failed}")
+    if failed:
+        _notify_error(f"Moved {moved}, could not move {failed}")
+    else:
+        _notify_info(f"Moved {moved} file{'s' if moved != 1 else ''}")
     refresh_container()
 
 
