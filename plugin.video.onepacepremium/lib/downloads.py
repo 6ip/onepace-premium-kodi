@@ -173,6 +173,9 @@ def _remember(path, params, meta=None):
         "video_size": params.get("video_size") or 0,
         "duration": params.get("duration") or 0,
         "variant": variant_of(params),
+        # The provider composes resolution, chapters, runtime, bitrate and
+        # source hash into this. Rebuilding it offline is not possible.
+        "stream_desc": params.get("stream_desc", ""),
         "series_name": params.get("series_name", ""),
         "episode_title": params.get("episode_title", ""),
         "season": params.get("season", ""),
@@ -272,15 +275,27 @@ def download(params, meta=None):
         _notify_error("Download ended early, nothing kept")
         return
 
-    # Only now is the old copy expendable.
+    # Swap through a side name. Deleting the old file first would mean a
+    # rename that fails leaves neither copy.
+    backup = destination + ".old"
+    replacing = xbmcvfs.exists(destination)
+    if replacing and not xbmcvfs.rename(destination, backup):
+        xbmcvfs.delete(partial)
+        _notify_error("Could not replace the file already there")
+        return
+    if not xbmcvfs.rename(partial, destination):
+        xbmcvfs.delete(partial)
+        if replacing:
+            xbmcvfs.rename(backup, destination)
+        _notify_error("Could not put the file in place")
+        return
+    if replacing:
+        xbmcvfs.delete(backup)
+
+    # Now the new file is in place, a cut under a different name can go.
     if already and already != destination:
         xbmcvfs.delete(already)
         _remove_rows([already])
-    xbmcvfs.delete(destination)
-    if not xbmcvfs.rename(partial, destination):
-        xbmcvfs.delete(partial)
-        _notify_error("Could not put the file in place")
-        return
 
     _remember(destination, params, meta)
     log(f"[downloads] saved {destination!r} ({written} bytes)")
@@ -496,7 +511,23 @@ def play_url(path, meta):
     return build_url("play_video", **_play_fields(path, meta))
 
 
+def _size_label(meta):
+    """Decimal MB, which is what the provider prints beside its own streams."""
+    size = meta.get("video_size") or 0
+    return f"{size / 1_000_000:.2f} MB" if size else ""
+
+
+def describe(meta):
+    """What this copy is, for the row in the picker and the player's OSD."""
+    parts = ["Downloaded", variant_label(meta.get("variant"))]
+    size = _size_label(meta)
+    if size:
+        parts.append(size)
+    return "  |  ".join(parts)
+
+
 def _play_fields(path, meta):
+    video = meta.get("video") or {}
     fields = {"video_url": path, "series_id": meta.get("series_id", ""),
               "episode_id": meta.get("episode_id", ""),
               "season": meta.get("season", ""), "episode": meta.get("episode", ""),
@@ -504,7 +535,15 @@ def _play_fields(path, meta):
               "episode_title": meta.get("episode_title", ""),
               "thumb": meta.get("thumb", ""),
               "season_poster": meta.get("season_poster", ""),
-              "logo": meta.get("logo", "")}
+              "logo": meta.get("logo", ""),
+              # Without these the player has no plot to show and the info
+              # panel falls back to "Not available".
+              "episode_plot": video.get("overview", ""),
+              # Our own header, then whatever the provider said about the file
+              # when we fetched it. The original name says [RD], which stopped
+              # being true the moment it landed on disk.
+              "stream_name": describe(meta),
+              "stream_desc": meta.get("stream_desc", "")}
     return {k: v for k, v in fields.items() if v}
 
 
@@ -572,12 +611,7 @@ def local_options(episode_id):
     """
     options = []
     for path, meta in copies_of(episode_id):
-        label = f"{_MARK_PLAIN} Downloaded  |  {variant_label(meta.get('variant'))}"
-        size = meta.get("video_size") or 0
-        if size:
-            # Decimal MB, which is what the provider prints beside its streams.
-            label += f"  |  {size / 1_000_000:.2f} MB"
-        options.append((label, _play_fields(path, meta)))
+        options.append((f"{_MARK_PLAIN} {describe(meta)}", _play_fields(path, meta)))
     return options
 
 

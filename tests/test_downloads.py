@@ -87,8 +87,15 @@ print()
 print("=== a half-written file is never kept ===")
 dl = SRC[SRC.index("def download("):SRC.index("def _remove(")]
 assert 'xbmcvfs.File(partial, "w")' in dl, "a failed replacement would truncate the good copy"
-assert dl.count("xbmcvfs.delete(partial)") == 3, "errors, short reads and a failed swap"
+assert dl.count("xbmcvfs.delete(partial)") == 4, "errors, short reads, a blocked swap and a failed swap"
 assert dl.index("xbmcvfs.rename(partial, destination)") < dl.index("_remember(destination"), "partial indexed"
+
+# Deleting the file already there before the swap would mean a rename that
+# fails leaves neither the old copy nor the new one.
+assert dl.index("xbmcvfs.rename(destination, backup)") < dl.index("xbmcvfs.rename(partial, destination)"),     "the old copy is destroyed before the new one is safely in place"
+assert "xbmcvfs.rename(backup, destination)" in dl, "a failed swap would not put the old copy back"
+assert dl.index("xbmcvfs.rename(partial, destination)") < dl.index("xbmcvfs.delete(backup)"),     "the backup goes before the swap is known to have worked"
+assert dl.index("xbmcvfs.delete(backup)") < dl.index("xbmcvfs.delete(already)"),     "a differently named old cut goes before the new file is in place"
 assert "raise_for_status()" in dl, "a 404 body would be written to disk"
 assert "abortRequested()" in dl, "closing Kodi would not stop the transfer"
 print("  the real file only appears once the transfer finished  OK")
@@ -566,6 +573,37 @@ print("  both cuts sit together, standard above  OK")
 
 play = SRC[SRC.index("def play_url("):SRC.index("def downloaded_ids(")]
 assert '"video_url": path' in play, "the file would play outside the add-on"
+
+# play_video builds its plot from these; with neither it never calls setPlot
+# and the info panel reads "Not available".
+fields = downloads._play_fields("C:/dl/x.mkv", {
+    "series_id": "pp", "episode_id": "AR_5", "season": "6", "episode": "5",
+    "variant": "extended", "series_name": "One Pace", "episode_title": "Arlong Park",
+    "video_size": 783660152, "video": {"overview": "Nami goes home."}})
+print(f"  stream_name : {fields['stream_name']}")
+print(f"  episode_plot: {fields['episode_plot']}")
+assert fields["episode_plot"] == "Nami goes home.", fields
+assert fields["stream_name"] == "Downloaded  |  Extended  |  783.66 MB", fields
+
+# Resolution, chapters, runtime, bitrate and the source hash are composed by
+# the provider and cannot be rebuilt offline, so they are kept at download.
+DESC = ("Romance Dawn 01 | 1080p" + chr(10) + "Ch. [1] | Dur: 17:57" + chr(10)
+        + "Size: 397.70 MB" + chr(10) + "[One Pace] [E5F09F49]")
+kept = downloads._play_fields("C:/dl/x.mkv", {
+    "episode_id": "RO_1", "variant": "standard", "video_size": 397698454,
+    "stream_desc": DESC, "video": {"overview": "Luffy sets out."}})
+print("  the player shows:")
+print("    [B]" + kept["stream_name"] + "[/B]")
+for _line in kept["stream_desc"].split(chr(10)):
+    print("    " + _line)
+print("    " + kept["episode_plot"])
+assert kept["stream_desc"] == DESC, kept
+assert '"stream_desc": params.get("stream_desc"' in SRC, "the description is never stored"
+assert "stream_desc" not in downloads._play_fields("C:/dl/x.mkv", {"episode_id": "X"}),     "an older download with none stored would send a blank line"
+plot_src = STREAMS if False else (harness.ADDON / "lib" / "playback.py").read_text(encoding="utf-8")
+assert 'params.get("episode_plot"' in plot_src, "playback stopped reading the plot"
+bare = downloads._play_fields("C:/dl/x.mkv", {"episode_id": "X"})
+assert "episode_plot" not in bare, "an empty plot would blank the panel instead"
 assert "sub_id" not in play.split('"""')[2], "an offline fetch would stall playback"
 print("  playing a download runs through play_video, so watched state follows  OK")
 
