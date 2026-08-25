@@ -23,6 +23,7 @@ class Recorder:
         self.builtins = []         # executebuiltin strings
         self.resolved = []         # setResolvedUrl listitems
         self.content = None
+        self.infolabels = {}       # Container.* and friends
 
 
 recorder = Recorder()
@@ -192,7 +193,8 @@ def install(addon_root, fixtures, settings=None):
 
     module("xbmc", log=lambda *a, **k: None, LOGINFO=0, LOGWARNING=1, LOGERROR=2,
            translatePath=lambda p: p, executebuiltin=_builtin,
-           getInfoLabel=lambda k: "", getCondVisibility=lambda k: False,
+           getInfoLabel=lambda k: recorder.infolabels.get(k, ""),
+           getCondVisibility=lambda k: False,
            getLanguage=lambda *a, **k: "eng", ISO_639_2=1,
            Monitor=Monitor, Player=Player, Actor=Actor, sleep=lambda ms: None)
     module("xbmcaddon", Addon=Addon)

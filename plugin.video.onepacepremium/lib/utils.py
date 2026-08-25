@@ -132,6 +132,23 @@ def get_setting(key):
     return ADDON.getSetting(key)
 
 
+def is_widget():
+    """True when a skin is drawing our list on its own screen."""
+    return ADDON_ID not in xbmc.getInfoLabel("Container.PluginName")
+
+
+def refresh_container():
+    """Redraw the list we just changed, unless a skin owns it.
+
+    Every way of nudging a widget ends with the home screen reloading all of
+    them at once, and that is what takes Kodi 21 down here. A shelf that stays
+    stale until the skin redraws it beats a shelf that crashes.
+    """
+    if is_widget():
+        return
+    xbmc.executebuiltin("Container.Refresh")
+
+
 # Climbs past 1 only when Kodi reuses the interpreter.
 _INVOCATIONS = [0]
 

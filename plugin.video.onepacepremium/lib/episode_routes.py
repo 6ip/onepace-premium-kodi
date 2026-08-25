@@ -22,7 +22,8 @@ from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
                      fetch_data, get_base_url, get_config_prefix,
                      get_secret_string,
-                     get_setting, is_elementum_installed_and_enabled, log)
+                     get_setting, is_elementum_installed_and_enabled, log,
+                     refresh_container)
 
 # Notice cards that sit in an episode slot but aren't episodes.
 _NOTICE_ID_PREFIX = "pp_COMPLETE"
@@ -896,7 +897,7 @@ def mark_watched(params):
         else:
             log(f"[watched] mark_watched WARNING: no episode IDs found for scope={scope!r}")
 
-    xbmc.executebuiltin("Container.Refresh")
+    refresh_container()
 
 
 def clear_progress(params):
@@ -904,4 +905,4 @@ def clear_progress(params):
     _bookmarks.clear(episode_id)
     _clear_kodi_episode_state(episode_id, ("bookmark", "streamdetails", "files"))
     log(f"[progress] reset Kodi state for {episode_id!r}")
-    xbmc.executebuiltin("Container.Refresh")
+    refresh_container()

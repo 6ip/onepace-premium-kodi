@@ -10,8 +10,8 @@ import xbmcvfs
 from . import bookmarks as _bookmarks
 from . import elementum as _elementum
 from . import watched as _watched
-from .utils import (ADDON_HANDLE, ADDON_ID, build_url, get_setting, log,
-                    session)
+from .utils import (ADDON_HANDLE, ADDON_ID, build_url, get_setting, is_widget,
+                    log, session)
 
 _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
 
@@ -307,7 +307,9 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
                 path = xbmc.getInfoLabel("Container.FolderPath")
                 if ADDON_ID in path or kodi_monitor.waitForAbort(0.2):
                     break
-        if ADDON_ID in path:
+        # A widget's FolderPath is our plugin too, so it has to be asked who
+        # owns the container before anything redraws it.
+        if ADDON_ID in path and not is_widget():
             if season and _showing_other_season(path, season):
                 # Plain Update only. The replace flag crashes Kodi here, and
                 # ActivateWindow leaves Back with nowhere to go.
@@ -404,7 +406,7 @@ def _subtitle_paths(subs, sub_id, fetch=True):
         except Exception as exc:
             log(f"[subs] caching stopped: {exc}")
         finally:
-            pool.shutdown(wait=False)
+            pool.shutdown(wait=False, cancel_futures=True)
 
     paths, cached = [], 0
     for index, track in enumerate(subs):

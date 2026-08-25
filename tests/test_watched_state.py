@@ -22,7 +22,7 @@ print("  season / series: same both ways")
 print()
 print("=== the two context actions mean different things ===")
 cp = SRC[SRC.index("def clear_progress"):]
-cp = cp[:cp.index("Container.Refresh")]
+cp = cp[:cp.index("refresh_container()")]
 print("  Mark Unwatched -> no tick, no resume")
 print("  Clear Progress -> keeps the tick, drops the resume")
 assert "_watched." not in cp, "Clear Progress must not touch watched state"
@@ -63,6 +63,41 @@ assert 'list_item.setProperty("StartPercent"' in PLAY, "nothing would position p
 bm = next(l.strip() for l in PLAY.split("\n") if l.strip().startswith("bm ="))
 print(f"  {bm}")
 assert "autoplay" in bm, "the from-beginning check would misfire on autoplay"
+
+print()
+print("=== refreshing from a widget must not touch the skin's container ===")
+from lib.utils import refresh_container
+from kodistub import recorder
+
+for plugin_name, expected in (
+        ("plugin.video.onepacepremium", ["Container.Refresh"]),
+        ("", []),
+        ("skin.arctic.fuse.3", [])):
+    recorder.reset()
+    recorder.infolabels["Container.PluginName"] = plugin_name
+    refresh_container()
+    where = "our list" if plugin_name == "plugin.video.onepacepremium" else "a widget"
+    print(f"  {where:9}  ->  {recorder.builtins or ['nothing']}")
+    assert recorder.builtins == expected, recorder.builtins
+
+for name in ("mark_watched", "clear_progress"):
+    fn = SRC[SRC.index(f"def {name}("):]
+    fn = fn[:fn.index("refresh_container()")]
+    assert 'executebuiltin("Container.Refresh")' not in fn, f"{name} still refreshes blind"
+print("  mark_watched and clear_progress both go through it  OK")
+
+# A widget's FolderPath is our plugin URL, so that test alone lets the
+# post-playback redraw fire straight at the skin's container.
+guard = next(l.strip() for l in PLAY.split(chr(10)) if "ADDON_ID in path and" in l)
+print(f"  {guard}")
+assert "not is_widget()" in guard, "post-playback still redraws widgets"
+
+
+print()
+print("=== queued subtitle fetches do not outlive the call ===")
+subs = PLAY[PLAY.index("pool = futures.ThreadPoolExecutor"):]
+assert "cancel_futures=True" in subs[:subs.index(chr(10) * 3)], "left running"
+print("  cancelled, not left running")
 
 print()
 print("all assertions passed")
