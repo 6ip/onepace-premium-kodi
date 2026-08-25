@@ -10,7 +10,7 @@ SETTINGS = ET.parse(harness.ADDON / "resources" / "settings.xml").getroot()
 ROUTER = (LIB / "router.py").read_text(encoding="utf-8")
 
 print("=== every settings action resolves to a real route ===")
-known = set(re.findall(r'"(\w+)":\s*\w+,', ROUTER))
+known = set(re.findall(r"\"(\w+)\":\s*(?:None|\")", ROUTER))
 bad = []
 for s in SETTINGS.iter("setting"):
     m = re.search(r"action=(\w+)", s.get("action") or "")
@@ -20,6 +20,34 @@ used = sorted({m.group(1) for s in SETTINGS.iter("setting")
                for m in [re.search(r"action=(\w+)", s.get("action") or "")] if m})
 print(f"  plugin actions used: {used}")
 assert not bad, bad
+
+# The dispatch imports by name, so a typo cannot fail until someone clicks.
+targets = re.findall(r"\"(\w+):(\w+)\"", ROUTER)
+gone = [f'{m}:{fn}' for m, fn in targets
+        if f'def {fn}(' not in (LIB / f'{m}.py').read_text(encoding='utf-8')]
+assert not gone, gone
+print(f"  {len(targets)} lazy targets, all present")
+
+# Resolving by name defers the TypeError to click time, so check arity here.
+import inspect
+from lib import router as _r
+wrong = []
+for _action, _t in _r._ACTIONS.items():
+    if not _t:
+        continue
+    _p = inspect.signature(_r._resolve(_t)).parameters.values()
+    _n = len([x for x in _p if x.kind in (x.POSITIONAL_ONLY, x.POSITIONAL_OR_KEYWORD)])
+    if _n != 1:
+        wrong.append(f'{_action} -> {_t} takes {_n}, dispatched with 1')
+# The root menu is dispatched by hand, so compare that call to its signature.
+_call = re.search(r'_resolve\("catalog_routes:list_root"\)\(([^)]*)\)', ROUTER)
+_passed = 1 if _call and _call.group(1).strip() else 0
+_root = inspect.signature(_r._resolve('catalog_routes:list_root')).parameters.values()
+_takes = len([x for x in _root if x.kind in (x.POSITIONAL_ONLY, x.POSITIONAL_OR_KEYWORD)])
+if _passed != _takes:
+    wrong.append(f'list_root takes {_takes} args, router passes {_passed}')
+assert not wrong, wrong
+print("  every target accepts what the router passes it")
 
 print()
 print("=== every RunScript target exists ===")

@@ -1,36 +1,10 @@
 import sys
+from importlib import import_module
 from urllib import parse
 
 import xbmc
 
-from .catalog_routes import (list_browse, list_catalog, list_catalog_type,
-                              list_root, search_catalog)
-from .my_lists import list_in_progress, list_my_lists, list_next_episodes
-from .episode_routes import (check_resume, clear_progress, get_streams,
-                              list_episodes, list_seasons, mark_watched)
-from .playback import play_video
-from .route_common import open_addon_settings, play_trailer
 from .utils import ADDON_ID, log, reset_for_invocation
-
-
-def show_changelog(_params):
-    from .changelog import show_changelog as _show
-    _show()
-
-
-def export_settings(_params):
-    from .backup import export_settings as _run
-    _run()
-
-
-def import_settings(_params):
-    from .backup import import_settings as _run
-    _run()
-
-
-def show_donate(_params):
-    from .donate import show_donate as _show
-    _show()
 
 
 def open_settings(_params):
@@ -39,29 +13,37 @@ def open_settings(_params):
     )
 
 
+# Each action names the module and function it lives in. Nothing is imported
+# until one is asked for, so a listing never pays for playback or backup.
 _ACTIONS = {
-    "open_settings": open_settings,
-    "show_changelog": show_changelog,
-    "show_donate": show_donate,
-    "export_settings": export_settings,
-    "import_settings": import_settings,
-    "open_addon_settings": open_addon_settings,
-    "play_trailer": play_trailer,
-    "list_catalog_type": list_catalog_type,
-    "list_catalog": list_catalog,
-    "search_catalog": search_catalog,
-    "list_seasons": list_seasons,
-    "list_episodes": list_episodes,
-    "check_resume": check_resume,
-    "get_streams": get_streams,
-    "play_video": play_video,
-    "mark_watched": mark_watched,
-    "clear_progress": clear_progress,
-    "list_browse": list_browse,
-    "list_my_lists": list_my_lists,
-    "list_in_progress": list_in_progress,
-    "list_next_episodes": list_next_episodes,
+    "open_settings":       None,
+    "show_changelog":      "changelog:show_changelog",
+    "show_donate":         "donate:show_donate",
+    "export_settings":     "backup:export_settings",
+    "import_settings":     "backup:import_settings",
+    "open_addon_settings": "route_common:open_addon_settings",
+    "play_trailer":        "route_common:play_trailer",
+    "list_catalog_type":   "catalog_routes:list_catalog_type",
+    "list_catalog":        "catalog_routes:list_catalog",
+    "search_catalog":      "catalog_routes:search_catalog",
+    "list_browse":         "catalog_routes:list_browse",
+    "list_seasons":        "episode_routes:list_seasons",
+    "list_episodes":       "episode_routes:list_episodes",
+    "check_resume":        "episode_routes:check_resume",
+    "get_streams":         "episode_routes:get_streams",
+    "mark_watched":        "episode_routes:mark_watched",
+    "clear_progress":      "episode_routes:clear_progress",
+    "play_video":          "playback:play_video",
+    "list_my_lists":       "my_lists:list_my_lists",
+    "list_in_progress":    "my_lists:list_in_progress",
+    "list_next_episodes":  "my_lists:list_next_episodes",
 }
+
+
+def _resolve(target):
+    """Import the one module this action lives in."""
+    module, _, name = target.partition(":")
+    return getattr(import_module(f".{module}", __package__), name)
 
 
 def addon_router():
@@ -71,10 +53,13 @@ def addon_router():
     if param_string:
         params = dict(parse.parse_qsl(param_string))
         action = params.get("action")
-        action_handler = _ACTIONS.get(action)
-        if action_handler:
-            action_handler(params)
+        if action == "open_settings":
+            open_settings(params)
+            return
+        target = _ACTIONS.get(action)
+        if target:
+            _resolve(target)(params)
             return
 
     log("Opening root menu", xbmc.LOGINFO)
-    list_root()
+    _resolve("catalog_routes:list_root")()
