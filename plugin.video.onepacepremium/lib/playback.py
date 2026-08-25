@@ -255,6 +255,9 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
             f"skipping {episode_id!r}")
         return
 
+    # Replaying something already finished must not put it back in progress.
+    was_watched = bool(episode_id) and episode_id in _watched.get_watched(series_id)
+
     # If threshold wasn't hit during playback, decide now based on end-of-stream signals
     if not marked:
         pct = (last_time / total_time) if total_time > 0 else 0.0
@@ -263,6 +266,9 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
             _watched.set_episodes_watched(series_id, [episode_id], True)
             _bookmarks.clear(episode_id)
             log(f"[monitor] marked watched at end (natural={player.ended_naturally} pct={pct*100:.0f}%) for {episode_id!r}")
+        elif was_watched:
+            _bookmarks.clear(episode_id)
+            log(f"[monitor] left {episode_id!r} watched, no resume point kept")
         elif last_time > 60 and total_time > 0:
             _bookmarks.set_bookmark(episode_id, last_time, total_time, series_id)
             log(f"[monitor] saved bookmark {episode_id!r} at {last_time:.1f}s / {total_time:.1f}s")
@@ -288,14 +294,15 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
     if episode_id:
         from .episode_routes import (_clear_kodi_episode_state,
                                      _update_kodi_episode_playcount)
-        if marked:
+        if marked or was_watched:
+            # Kodi keeps its own resume point when playback stops short. Left
+            # behind on a watched episode, the skin draws a progress bar over
+            # something our list says is finished.
             _clear_kodi_episode_state(episode_id)
             _update_kodi_episode_playcount(episode_id, 1)
-        elif episode_id not in _watched.get_watched(series_id):
+        else:
             # Kodi calls anything stopped in the last few percent "watched"
-            # (ignorepercentatend). Our threshold decides, so put it back —
-            # but not for an episode we already count as watched, or replaying
-            # one would silently un-tick it in Kodi's database.
+            # (ignorepercentatend). Our threshold decides, so put it back.
             _update_kodi_episode_playcount(episode_id, 0)
         # Skipped when handing off, since the incoming episode's monitor owns
         # the list from here and would only redraw it twice.
@@ -323,7 +330,7 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
             else:
                 xbmc.executebuiltin("Container.Refresh")
                 log(f"[monitor] refreshed list for {episode_id!r}")
-        if marked:
+        if marked or was_watched:
             _keep_resume_cleared(episode_id, kodi_monitor)
 
 
@@ -524,7 +531,6 @@ def play_video(params):
         art["tvshow.poster"] = season_poster
         art["season.poster"] = season_poster
         art["thumb"] = season_poster
-        art["icon"] = season_poster
     if art:
         list_item.setArt(art)
 

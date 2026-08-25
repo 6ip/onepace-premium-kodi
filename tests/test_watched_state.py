@@ -28,12 +28,18 @@ print("  Clear Progress -> keeps the tick, drops the resume")
 assert "_watched." not in cp, "Clear Progress must not touch watched state"
 
 print()
-print("=== replaying a watched episode must not un-tick it ===")
-end = PLAY[PLAY.index("        if marked:\n            _clear_kodi_episode_state"):]
-end = end[:end.index("_update_kodi_episode_playcount(episode_id, 0)") + 44]
-guard = next(l.strip() for l in end.split("\n") if l.strip().startswith("elif"))
-print(f"  {guard}")
-assert "get_watched" in guard and "not in" in guard
+print("=== replaying a watched episode leaves it watched, with no resume ===")
+end = PLAY[PLAY.index("        if marked or was_watched:"):]
+end = end[:end.index("_update_kodi_episode_playcount(episode_id, 0)")]
+assert "_clear_kodi_episode_state(episode_id)" in end, "Kodi keeps drawing a resume bar"
+assert "_update_kodi_episode_playcount(episode_id, 1)" in end, "replaying would un-tick it"
+print("  Kodi resume point cleared, playcount kept at 1")
+
+# Our own store must not gain a resume point for something already finished.
+mid = PLAY[PLAY.index("was_watched = "):PLAY.index("elif last_time > 60")]
+assert "elif was_watched:" in mid, "a watched episode would collect a bookmark no menu can reach"
+assert "_bookmarks.clear(episode_id)" in mid, "a watched episode would collect a bookmark no menu can reach"
+print("  no orphan bookmark saved either")
 
 
 def decide(threshold_hit, already_watched):
@@ -51,10 +57,15 @@ assert decide(False, False) == "playCount=0"
 
 print()
 print("=== a watched episode never shows a resume bar ===")
-lst = SRC[SRC.index("        if stream_video_id in series_watched:"):]
+lst = SRC[SRC.index("        bm = _bookmarks.get(stream_video_id)"):]
 lst = lst[:lst.index("n_resume += 1") + 14]
-assert "_bookmarks.get" in lst.split("else:")[1], "the lookup must sit in the else branch"
-print("  the bookmark lookup sits in the else branch  OK")
+assert "setResumePoint" in lst.split("else:")[1], "a watched episode would draw a bar"
+assert "setResumePoint" not in lst.split("else:")[0], "the tick branch must not resume"
+print("  setResumePoint only runs on the unwatched branch  OK")
+
+# A stale bookmark from an older version has to stay reachable to clear it.
+assert lst.index("_bookmarks.get") < lst.index("in series_watched"), "Clear Progress hidden"
+print("  a stale bookmark is still looked up, so Clear Progress appears  OK")
 
 print()
 print("=== autoplay carries the resume point itself ===")

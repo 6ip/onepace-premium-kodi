@@ -275,12 +275,13 @@ def list_episodes(params):
         tags.setEpisode(int(episode_number))
 
         tags.setMediaType("episode")
-        bm = None
+        # Watched wins: no resume bar. The bookmark is still looked up so a
+        # stale one left by an older version can be cleared from the menu.
+        bm = _bookmarks.get(stream_video_id)
         if stream_video_id in series_watched:
             tags.setPlaycount(1)
             n_watched += 1
         else:
-            bm = _bookmarks.get(stream_video_id)
             if bm:
                 pos, total = bm.get("pos", 0), bm.get("total", 0)
                 if total > 0:
