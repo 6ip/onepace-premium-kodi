@@ -133,12 +133,10 @@ def _build_art(
     if primary:
         art["thumb"] = primary
         art["poster"] = primary
-        art["icon"] = primary
         art["fanart"] = primary
     if poster:
         art.setdefault("poster", poster)
         art.setdefault("tvshow.poster", poster)
-        art.setdefault("icon", poster)
         art.setdefault("thumb", poster)
     if background:
         art.setdefault("fanart", background)
@@ -146,8 +144,9 @@ def _build_art(
     if logo:
         art["clearlogo"] = logo
         art["tvshow.clearlogo"] = logo
-    # Prevent DefaultFolder.png from showing when no image is available
-    art.setdefault("icon", "DefaultAddonNone.png")
+    # The icon slot sits beside the label, so it stays a placeholder. Without
+    # one Kodi falls back to DefaultFolder.png.
+    art["icon"] = "DefaultAddonNone.png"
     return art
 
 
@@ -193,14 +192,17 @@ def _set_episode_art(list_item, video: dict, meta: dict,
     if episode_thumb and get_setting("thumb_fanart") == "true":
         background = episode_thumb
 
+    # Each slot keeps its own shape. An episode thumb is 16:9 and a poster is
+    # 2:3, so crossing them leaves a skin stretching one into the other. Empty
+    # values are dropped below, which lets the skin fall back on its own.
     art = {
-        "thumb": episode_thumb or poster,
+        "thumb": episode_thumb,
         "landscape": episode_thumb or background,
-        # Skins draw the icon beside the label, so an episode thumb there
-        # reads as "[thumbnail] Title".
-        "icon": show_poster or "DefaultAddonNone.png",
-        # Poster too, so poster-style views still show the episode thumb.
-        "poster": episode_thumb or poster,
+        # Nothing real in the icon slot: skins draw it beside the label, where
+        # any artwork reads as "[image] Title". The placeholder only keeps
+        # Kodi from substituting DefaultFolder.png.
+        "icon": "DefaultAddonNone.png",
+        "poster": poster,
         "season.poster": poster,
         "tvshow.poster": show_poster,
         "fanart": background,
@@ -222,7 +224,7 @@ def _set_season_art(list_item, meta: dict, season_thumbnail: Optional[str]):
         "poster": poster,
         "season.poster": poster,
         "tvshow.poster": show_poster,
-        "icon": poster or "DefaultAddonNone.png",
+        "icon": "DefaultAddonNone.png",
         "landscape": background,
         "fanart": background,
     }

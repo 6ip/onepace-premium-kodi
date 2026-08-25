@@ -12,22 +12,24 @@ META = {"poster": "https://img.example/show.jpg",
         "background": "https://img.example/bg.jpg"}
 SEASON = "https://img.example/season-11.jpg"
 
-print("=== the episode thumbnail must not reach the icon slot ===")
+print("=== no artwork reaches the icon slot ===")
 li = kodistub.ListItem()
 _set_episode_art(li, VIDEO, META, SEASON)
 for k in ("icon", "thumb", "landscape", "poster", "fanart"):
     v = li.art.get(k, "-")
     print(f"  {k:<10} {v.rsplit('/', 1)[-1]:<20}{'  <-- episode still' if v == THUMB else ''}")
-assert li.art["icon"] != THUMB, "skins draw icon beside the label"
-assert li.art["icon"] == META["poster"], "the show poster, like Umbrella"
+assert li.art["icon"] == "DefaultAddonNone.png", "skins draw the icon beside the label"
 assert li.art["thumb"] == THUMB and li.art["landscape"] == THUMB
+assert li.art["poster"] == SEASON, "an episode still in the poster slot gets stretched"
 
 print()
 print("=== fallbacks ===")
 li2 = kodistub.ListItem()
 _set_episode_art(li2, {"season": 11, "episode": 2}, META, SEASON)
-print(f"  no episode still -> icon={li2.art['icon'].rsplit('/', 1)[-1]}, "
-      f"thumb={li2.art['thumb'].rsplit('/', 1)[-1]}")
+icon2 = li2.art["icon"]
+print(f"  no episode still -> icon={icon2}, thumb={li2.art.get(chr(116)+chr(104)+chr(117)+chr(109)+chr(98), chr(45))}")
+assert "thumb" not in li2.art, "a poster in the thumb slot gets stretched"
+assert li2.art["poster"] == SEASON, "the season poster still fills the poster slot"
 li3 = kodistub.ListItem()
 _set_episode_art(li3, {}, {}, None)
 print(f"  nothing at all   -> icon={li3.art.get('icon')}")
@@ -54,7 +56,7 @@ vals = dict(re.findall(r'art\["([a-z.]+)"\] = (\w+)', blk))
 for k in ("thumb", "icon", "landscape"):
     print(f"  {k:<10} = {vals.get(k, '-')}")
 assert vals.get("thumb") != "episode_thumb", "thumb would merge onto the row"
-assert vals.get("icon") != "episode_thumb", "icon would merge onto the row"
+assert "icon" not in vals, "the icon slot merges onto the row that launched it"
 assert vals.get("landscape") == "episode_thumb", "the OSD should still get the still"
 
 print()
