@@ -120,16 +120,19 @@ FAKE = {
     "/d/One Pace/Season 01/1x01 - Romance Dawn.mkv":
         {"series_name": "One Pace", "season": "1", "episode": "1",
          "episode_title": "Romance Dawn", "season_poster": "s1.jpg", "thumb": "ep.jpg",
+         "episode_id": "RO_1", "series_id": "pp_onepacee",
          "video": {"id": "RO_1", "overview": "Luffy sets out.", "runtime": "24",
                    "released": "2026-06-28T00:00:00.000Z", "imdbRating": "8.9",
                    "thumbnail": "ep.jpg", "season": 1, "episode": 1},
          "duration": 1077, "video_size": 397698454},
     "/d/One Pace/Season 01/1x02 - The Great Swordsman.mkv":
         {"series_name": "One Pace", "season": "1", "episode": "2",
-         "episode_title": "The Great Swordsman", "season_poster": "s1.jpg"},
+         "episode_title": "The Great Swordsman", "season_poster": "s1.jpg",
+         "episode_id": "RO_2", "series_id": "pp_onepacee"},
     "/d/One Pace/Season 00/0x01 - A Special.mkv":
         {"series_name": "One Pace", "season": "0", "episode": "1",
-         "episode_title": "A Special", "season_poster": "s0.jpg"},
+         "episode_title": "A Special", "season_poster": "s0.jpg",
+         "episode_id": "SP_1", "series_id": "pp_onepacee"},
     "/d/Muhn Pace/Season 03/3x01 - Elsewhere.mkv":
         {"series_name": "Muhn Pace", "season": "3", "episode": "1",
          "episode_title": "Elsewhere", "season_poster": "m3.jpg"},
@@ -169,7 +172,8 @@ print("  inside Season 1:")
 for url, label, folder in rows:
     print(f"    {label:<24} {'folder' if folder else 'file'}")
     assert not folder, "an episode must not be a folder"
-    assert url.startswith("/d/"), url
+    assert "action=play_video" in url, "playing off disk skips our watched tracking"
+    assert "sub_id" not in url, "fetching the subtitle list would stall offline"
 assert [r[1] for r in rows] == ["1x01. Romance Dawn", "1x02. The Great Swordsman"], rows
 
 specials = walk(series="One Pace", season="0")
@@ -220,7 +224,8 @@ print()
 print("=== every row can be played and removed ===")
 labels = [c[0] for c in first.context]
 print(f"  episode:  {labels}")
-assert labels == ["[B]Play[/B]", "[B]Delete[/B]"], labels
+assert labels[0] == "[B]Mark Watched[/B]", labels
+assert labels[-1] == "[B]Delete[/B]", labels
 
 kodistub.recorder.reset()
 downloads.list_downloads({"series": "One Pace"})
@@ -248,6 +253,88 @@ for scope, expect in (
     print(f"  {str(scope)[:44]:<46} -> {len(taken)} file(s)")
     assert len(taken) == expect, (scope, taken)
 print("  one episode, one season, or a whole series  OK")
+
+print()
+print("=== a downloaded episode is the same episode everywhere ===")
+kodistub.recorder.reset()
+downloads.list_downloads({"series": "One Pace", "season": "1"})
+_, row, _ = kodistub.recorder.directories[0]
+assert row.properties.get("Downloaded") == "true", row.properties
+menu = [c[0] for c in row.context]
+assert any("Mark" in m for m in menu), menu
+print(f"  downloads row: Downloaded property + {menu}")
+
+listing = STREAMS[STREAMS.index("        label = _download_mark("):]
+listing = listing[:listing.index("_set_episode_art")]
+assert "on_disk" in listing, "the episode list never checks what is on disk"
+assert 'setProperty("Downloaded", "true")' in listing, "skins get nothing to key off"
+lists_src = (harness.ADDON / "lib" / "my_lists.py").read_text(encoding="utf-8")
+assert "_download_mark(display_label" in lists_src, "In Progress and Next Episodes are unmarked"
+print("  episode list, In Progress and Next Episodes all use the same mark  OK")
+
+print()
+print("=== the mark is one green arrow in front of the title ===")
+store["download_marker"] = "true"
+store["downloads_enabled"] = "true"
+marked = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"})
+print("  " + marked.encode("unicode_escape").decode())
+assert marked.startswith("[COLOR FF2ECC71][B]"), "a list renders the bold fine"
+assert marked.endswith("1x01. Romance Dawn"), "a list view clips the tail, not the head"
+assert downloads.mark("x", "RO_9", {"RO_1"}) == "x", "an undownloaded row must stay plain"
+store["download_marker"] = "false"
+assert downloads.mark("x", "RO_1", {"RO_1"}) == "x", "the marker setting does nothing"
+store["download_marker"] = "true"
+
+print()
+print("=== turning downloads off hides the whole feature ===")
+store["downloads_enabled"] = "false"
+assert downloads.downloaded_ids() == set(), "rows would still be marked"
+assert downloads.mark("x", "RO_1", {"RO_1"}) == "x", "the mark would still show"
+assert downloads.path_for("RO_1") == "", "the local copy would still be preferred"
+root = (harness.ADDON / "lib" / "catalog_routes.py").read_text(encoding="utf-8")
+assert "if _downloads_enabled():" in root, "the menu entry would stay"
+menu = STREAMS[STREAMS.index("        if downloads_on:"):]
+assert "Download" in menu[:200], "the Download item would stay on the episode row"
+store["downloads_enabled"] = "true"
+print("  menu entry, Download item, marks and preference all gone  OK")
+
+print()
+print("=== an episode on disk plays from disk, without asking a provider ===")
+resume = STREAMS[STREAMS.index("def check_resume(params):"):]
+resume = resume[:resume.index("_play_video(chosen)")]
+assert "local_playback" in resume, "it would fetch streams for a file we already hold"
+assert resume.index("local_playback") < resume.index("_choose_stream"), "asked first"
+assert 'get_setting("prefer_downloads")' in SRC, "the preference cannot be turned off"
+print("  local copy is checked before any stream request  OK")
+
+print()
+print("=== with the preference off, the copy is offered rather than ignored ===")
+pickr = STREAMS[STREAMS.index("    choices = _preferred_streams(binge_groups)"):]
+pickr = pickr[:pickr.index("    if downloadable_only:")]
+assert "local_option" in pickr, "the download would be invisible in the picker"
+assert "valid_streams.insert(0, fields)" in pickr, "it would not be first"
+assert "[i + 1 for i in choices]" in pickr, "the other picks would shift onto the wrong stream"
+assert "if not downloadable_only:" in pickr, "downloading would offer the file to itself"
+
+downloads.read_index = lambda: {"files": {"/d/a.mkv": {
+    "episode_id": "RO_1", "video_size": 397698454, "series_id": "pp",
+    "season": "1", "episode": "1"}}, "series": {}}
+label, fields = downloads.local_option("RO_1")
+print("  " + label.encode("unicode_escape").decode())
+assert label.startswith("[COLOR FF2ECC71][↓]"), "the dialog would show the [/B]"
+assert "397.70 MB" in label, "MiB was shown where the provider says MB"
+assert "[/B]" not in label, "the select dialog shows the closing tag"
+assert fields["video_url"] == "/d/a.mkv", fields
+assert downloads.local_option("NOPE") is None, "an undownloaded episode must offer nothing"
+store["downloads_enabled"] = "false"
+assert downloads.local_option("RO_1") is None, "the feature is off, so the pick must go"
+store["downloads_enabled"] = "true"
+print("  shown with its size, and gone when downloads are disabled  OK")
+
+play = SRC[SRC.index("def play_url("):SRC.index("def downloaded_ids(")]
+assert '"video_url": path' in play, "the file would play outside the add-on"
+assert "sub_id" not in play.split('"""')[2], "an offline fetch would stall playback"
+print("  playing a download runs through play_video, so watched state follows  OK")
 
 print()
 print("=== Kodi keeps Play above our Delete ===")

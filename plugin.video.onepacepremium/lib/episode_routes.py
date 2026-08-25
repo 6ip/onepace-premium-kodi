@@ -250,6 +250,8 @@ def list_episodes(params):
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
     series_actors = _cast_list(meta)
     hide_watched = get_setting("hide_watched") == "true"
+    from .downloads import downloaded_ids, enabled, mark as _download_mark
+    on_disk, downloads_on = downloaded_ids(), enabled()
     items = []
     n_watched = n_resume = n_hidden = 0
     for video in season_videos:
@@ -265,7 +267,9 @@ def list_episodes(params):
             continue
 
         title = video.get("name") or video.get("title") or f"Episode {episode_number}"
-        label = _episode_label(title, selected_season, episode_number, stream_video_id)
+        label = _download_mark(
+            _episode_label(title, selected_season, episode_number, stream_video_id),
+            stream_video_id, on_disk)
         list_item = xbmcgui.ListItem(label=label, offscreen=True)
         tags = list_item.getVideoInfoTag()
         _set_ids(tags, video_id)
@@ -320,6 +324,8 @@ def list_episodes(params):
         _set_show_tags(tags, meta, premiered=False, trailer=False, actors=series_actors)
 
         list_item.setProperty("IsPlayable", "true")
+        if stream_video_id in on_disk:
+            list_item.setProperty("Downloaded", "true")
         _set_episode_art(list_item, video, meta, season_poster)
         ep_ctx_label = "[B]Mark Unwatched[/B]" if stream_video_id in series_watched else "[B]Mark Watched[/B]"
         ctx_items = [(
@@ -331,10 +337,11 @@ def list_episodes(params):
                 "[B]Clear Progress[/B]",
                 f"RunPlugin({build_url('clear_progress', episode_id=stream_video_id)})",
             ))
-        ctx_items.append((
+        if downloads_on:
+            ctx_items.append((
             "[B]Download[/B]",
-            f"RunPlugin({build_url('download_episode', **episode_params(video, meta, video_id, catalog_type, season_poster, stream_video_id))})",
-        ))
+                f"RunPlugin({build_url('download_episode', **episode_params(video, meta, video_id, catalog_type, season_poster, stream_video_id))})",
+            ))
         list_item.addContextMenuItems(ctx_items, replaceItems=True)
         items.append(
             (
@@ -516,6 +523,18 @@ def _choose_stream(params, downloadable_only=False):
         return None
 
     choices = _preferred_streams(binge_groups)
+
+    # The copy on disk goes first, so it is never hidden behind a preference
+    # that narrowed the list down to one remote stream.
+    if not downloadable_only:
+        from .downloads import local_option
+        local = local_option(params.get("video_id", ""))
+        if local:
+            label, fields = local
+            valid_streams.insert(0, fields)
+            dialog_labels.insert(0, label)
+            choices = [0] + [i + 1 for i in choices]
+
     if downloadable_only:
         from .downloads import is_downloadable
         choices = [i for i in choices
@@ -539,7 +558,14 @@ def _choose_stream(params, downloadable_only=False):
 
 
 def check_resume(params):
-    chosen = _choose_stream(params)
+    from .downloads import local_playback
+
+    # Already on disk, so there is nothing to ask a provider for.
+    chosen = local_playback(params.get("video_id", ""))
+    if chosen:
+        log(f"[downloads] playing the copy on disk for {params.get('video_id')!r}")
+    else:
+        chosen = _choose_stream(params)
     if chosen is None:
         xbmcplugin.setResolvedUrl(ADDON_HANDLE, False, xbmcgui.ListItem())
         return

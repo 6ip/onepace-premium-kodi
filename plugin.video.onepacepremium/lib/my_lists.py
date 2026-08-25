@@ -49,8 +49,10 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
 
     selected_season = video.get("season")
     title = video.get("name") or video.get("title") or f"Episode {episode_number}"
-    colour = get_setting("highlight_color") or "fff502f4"
+    colour = get_setting("highlight_color") or "ff00d4ff"
     display_label = f"[[COLOR {colour}]{show_title}[/COLOR]] {title}" if show_title else title
+    from .downloads import downloaded_ids, mark as _download_mark
+    display_label = _download_mark(display_label, ep_id, downloaded_ids())
     list_item = xbmcgui.ListItem(label=display_label, offscreen=True)
     tags = list_item.getVideoInfoTag()
     tags.setTitle(title)

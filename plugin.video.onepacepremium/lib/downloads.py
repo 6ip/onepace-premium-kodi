@@ -309,6 +309,97 @@ def _counts(item, metas):
                         "UnWatchedEpisodes": str(len(metas))})
 
 
+def play_url(path, meta):
+    """Play a downloaded file through the add-on, not straight off disk.
+
+    Going through play_video is what keeps a downloaded episode and a streamed
+    one the same thing: one watched store, one set of resume points, and the
+    next-episode card at the end of both. sub_id is deliberately left out —
+    fetching the subtitle list would stall when the point is to be offline.
+    """
+    return build_url("play_video", **_play_fields(path, meta))
+
+
+def _play_fields(path, meta):
+    fields = {"video_url": path, "series_id": meta.get("series_id", ""),
+              "episode_id": meta.get("episode_id", ""),
+              "season": meta.get("season", ""), "episode": meta.get("episode", ""),
+              "series_name": meta.get("series_name", ""),
+              "episode_title": meta.get("episode_title", ""),
+              "thumb": meta.get("thumb", ""),
+              "season_poster": meta.get("season_poster", ""),
+              "logo": meta.get("logo", "")}
+    return {k: v for k, v in fields.items() if v}
+
+
+# In front of the title, not after it: a list view truncates the tail, and a
+# flag in a fixed spot is what the eye scans down a column. A list renders the
+# bold inside the colour; the select dialog leaves its closing tag showing, so
+# that one goes without.
+_ARROW = "[↓]"
+_MARK = f"[COLOR FF2ECC71][B]{_ARROW}[/B][/COLOR]"
+_MARK_PLAIN = f"[COLOR FF2ECC71]{_ARROW}[/COLOR]"
+
+
+def enabled():
+    return get_setting("downloads_enabled") != "false"
+
+
+def mark(label, episode_id, on_disk):
+    """Flag a title that is already on disk."""
+    if not episode_id or episode_id not in on_disk:
+        return label
+    if not enabled() or get_setting("download_marker") == "false":
+        return label
+    return f"{_MARK} {label}"
+
+
+def path_for(episode_id):
+    """Where this episode lives on disk, if we hold it."""
+    if not episode_id or not enabled():
+        return ""
+    for path, meta in read_index()["files"].items():
+        if meta.get("episode_id") == episode_id and xbmcvfs.exists(path):
+            return path
+    return ""
+
+
+def local_playback(episode_id):
+    """play_video params for the copy on disk, when we should prefer it."""
+    if get_setting("prefer_downloads") == "false":
+        return None
+    path = path_for(episode_id)
+    if not path:
+        return None
+    return _play_fields(path, read_index()["files"].get(path, {}))
+
+
+def local_option(episode_id):
+    """The copy on disk, offered as a pick alongside the streams.
+
+    Used when the preference is off: rather than pretending the file is not
+    there, put it at the top of the list and let the choice be made.
+    """
+    path = path_for(episode_id)
+    if not path:
+        return None
+    meta = read_index()["files"].get(path, {})
+    label = f"{_MARK_PLAIN} Downloaded"
+    size = meta.get("video_size") or 0
+    if size:
+        # Decimal MB, which is what the provider prints beside its own streams.
+        label += f"  |  {size / 1_000_000:.2f} MB"
+    return label, _play_fields(path, meta)
+
+
+def downloaded_ids():
+    """Episode ids we hold on disk, for marking them in the ordinary lists."""
+    if not enabled():
+        return set()
+    return {m.get("episode_id") for m in read_index()["files"].values()
+            if m.get("episode_id")}
+
+
 def _season_of(meta):
     season = meta.get("season")
     return int(season) if str(season).lstrip("-").isdigit() else 0
@@ -407,7 +498,12 @@ def list_downloads(params=None):
             return
         season = next(iter(seasons))
 
+    from . import bookmarks as _bookmarks
+    from . import watched as _watched
     from .episode_routes import _episode_label
+
+    watched = _watched.get_watched(
+        next((m.get("series_id") for m in mine.values() if m.get("series_id")), ""))
 
     chosen = {p: m for p, m in mine.items() if _season_of(m) == int(season)}
     xbmcplugin.setContent(ADDON_HANDLE, "episodes")
@@ -452,12 +548,33 @@ def list_downloads(params=None):
         _set_episode_art(item, video or {"thumbnail": meta.get("thumb")}, show,
                          meta.get("season_poster"))
 
+        # The same watched tick and resume bar the episode list draws.
+        episode_id = meta.get("episode_id", "")
+        bookmark = _bookmarks.get(episode_id) if episode_id else None
+        if episode_id and episode_id in watched:
+            tags.setPlaycount(1)
+        elif bookmark:
+            pos, whole = bookmark.get("pos", 0), bookmark.get("total", 0)
+            if whole > 0:
+                pct = min(99, max(1, int(pos / whole * 100)))
+                item.setProperty("WatchedProgress", str(pct))
+                item.setProperty("PercentPlayed", str(pct))
+                tags.setResumePoint(pos, whole)
+
         item.setProperty("IsPlayable", "true")
-        # Kodi's own Play is not offered for a bare file path, so add ours.
-        item.addContextMenuItems([
-            ("[B]Play[/B]", f"PlayMedia({path})"),
-            ("[B]Delete[/B]", f"RunPlugin({build_url('delete_download', path=path)})"),
-        ])
-        items.append((path, item, False))
+        item.setProperty("Downloaded", "true")
+        menu = []
+        if episode_id:
+            mark = "[B]Mark Unwatched[/B]" if episode_id in watched else "[B]Mark Watched[/B]"
+            menu.append((mark, "RunPlugin(%s)" % build_url(
+                "mark_watched", scope="episode",
+                series_id=meta.get("series_id", ""), episode_id=episode_id)))
+            if bookmark:
+                menu.append(("[B]Clear Progress[/B]", "RunPlugin(%s)" % build_url(
+                    "clear_progress", episode_id=episode_id)))
+        menu.append(("[B]Delete[/B]",
+                     "RunPlugin(%s)" % build_url("delete_download", path=path)))
+        item.addContextMenuItems(menu)
+        items.append((play_url(path, meta), item, False))
     _add_directory_items(items)
     end_directory()

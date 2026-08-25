@@ -1,5 +1,9 @@
 <settings>
     <category label="One Pace Premium">
+        <setting type="lsep" label="About" />
+        <setting label="What's New" id="show_changelog" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_changelog)" />
+        <setting label="Support the Project" id="show_donate" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_donate)" />
+        <setting type="sep" />
         <setting type="lsep" label="Server" />
         <setting label="Server URL" id="base_url" type="text" default="https://onepace-premium.e6ip.com" />
         <setting label="Stremio API Prefix" id="stremio_api_prefix" type="text" default="" visible="false" />
@@ -39,8 +43,8 @@
         <setting type="sep" />
         <setting type="lsep" label="Appearance" />
         <setting label="Show Name Colour" id="choose_highlight_color" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_highlight_color)" />
-        <setting label="Showing" id="highlight_color_display" type="text" default="Pink" enable="false" subsetting="true" />
-        <setting id="highlight_color" type="text" default="fff502f4" visible="false" />
+        <setting label="Showing" id="highlight_color_display" type="text" default="Cyan" enable="false" subsetting="true" />
+        <setting id="highlight_color" type="text" default="ff00d4ff" visible="false" />
     </category>
     <category label="Subtitles">
         <setting label="Enable External Subtitles" id="subs_enabled" type="bool" default="true" />
@@ -49,8 +53,15 @@
         <setting id="sub_langs" type="text" default="" visible="false" />
     </category>
     <category label="Tools">
-        <setting type="lsep" label="Browsing" />
-        <setting label="Menu Caching" id="menu_cache" type="bool" default="true" />
+        <setting type="lsep" label="Downloads" />
+        <setting label="Enable Downloads" id="downloads_enabled" type="bool" default="true" />
+        <setting label="Download Folder" id="download_folder" type="folder" default="" enable="eq(-1,true)" />
+        <setting label="Mark Downloaded Episodes" id="download_marker" type="bool" default="true" enable="eq(-2,true)" />
+        <setting label="Play the Downloaded Copy" id="prefer_downloads" type="bool" default="true" enable="eq(-3,true)" />
+        <setting type="sep" />
+        <setting type="lsep" label="Backup" />
+        <setting label="Export Backup" id="export_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=export_settings)" />
+        <setting label="Restore Backup" id="import_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=import_settings)" />
         <setting type="sep" />
         <setting type="lsep" label="Cache" />
         <setting label="Clear API Cache" id="clear_cache" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_cache)" />
@@ -58,19 +69,9 @@
         <setting label="Clear Bookmarks" id="clear_bookmarks" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_bookmarks)" />
         <setting label="Clear Watched History" id="clear_watched" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_watched)" />
         <setting type="sep" />
-        <setting type="lsep" label="Downloads" />
-        <setting label="Download Folder" id="download_folder" type="folder" default="" />
-        <setting type="sep" />
-        <setting type="lsep" label="Backup" />
-        <setting label="Export Backup" id="export_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=export_settings)" />
-        <setting label="Restore Backup" id="import_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=import_settings)" />
-        <setting type="sep" />
-        <setting type="lsep" label="About" />
-        <setting label="What's New" id="show_changelog" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_changelog)" />
-        <setting label="Support the Project" id="show_donate" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_donate)" />
-        <setting id="last_seen_version" type="text" default="" visible="false" />
-        <setting type="sep" />
-        <setting type="lsep" label="Debugging" />
+        <setting type="lsep" label="Advanced" />
+        <setting label="Menu Caching" id="menu_cache" type="bool" default="true" />
         <setting label="Debug Logging" id="debug_logging" type="bool" default="false" />
+        <setting id="last_seen_version" type="text" default="" visible="false" />
     </category>
 </settings>

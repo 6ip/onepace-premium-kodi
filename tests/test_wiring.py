@@ -50,6 +50,16 @@ assert not wrong, wrong
 print("  every target accepts what the router passes it")
 
 print()
+print("  Tools order:", [x.get("label") for x in SETTINGS.iter("setting")
+                          if x.get("type") == "lsep"][-4:])
+assert [x.get("label") for x in SETTINGS.iter("setting")
+        if x.get("type") == "lsep"][-4:] == ["Downloads", "Backup", "Cache", "Advanced"]
+assert "[COLOR" not in ET.tostring(SETTINGS, encoding="unicode"), "labels carry markup"
+default = next(x for x in SETTINGS.iter("setting") if x.get("id") == "highlight_color")
+print(f"  show name colour default: {default.get('default')}")
+assert default.get("default") == "ff00d4ff", "the pink default is still there"
+
+print()
 print("=== every RunScript target exists ===")
 missing = []
 for s in SETTINGS.iter("setting"):
