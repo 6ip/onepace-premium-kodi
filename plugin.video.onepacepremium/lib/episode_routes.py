@@ -509,6 +509,7 @@ def _choose_stream(params, downloadable_only=False):
         playback_params["filename"] = video_info["filename"]
         playback_params["video_size"] = video_info["size"]
         playback_params["duration"] = video_info["duration"]
+        playback_params["variant"] = _binge_part(behavior_hints.get("bingeGroup"), 2)
 
         label = stream_name
         if stream_tagline:
@@ -527,13 +528,14 @@ def _choose_stream(params, downloadable_only=False):
     # The copy on disk goes first, so it is never hidden behind a preference
     # that narrowed the list down to one remote stream.
     if not downloadable_only:
-        from .downloads import local_option
-        local = local_option(params.get("video_id", ""))
-        if local:
-            label, fields = local
-            valid_streams.insert(0, fields)
-            dialog_labels.insert(0, label)
-            choices = [0] + [i + 1 for i in choices]
+        from .downloads import local_options
+        held = local_options(params.get("video_id", ""))
+        for offset, (label, fields) in enumerate(held):
+            valid_streams.insert(offset, fields)
+            dialog_labels.insert(offset, label)
+        if held:
+            shift = len(held)
+            choices = list(range(shift)) + [i + shift for i in choices]
 
     if downloadable_only:
         from .downloads import is_downloadable

@@ -46,6 +46,34 @@ def safe_name(text, fallback="Unknown"):
     return cleaned[:120] or fallback
 
 
+def variant_of(params):
+    """Which cut this is, from the provider's own bingeGroup.
+
+    The display name is free text — the same cut is called "Extended" on one
+    show and "Fillerver" on another — while the third part of the bingeGroup
+    is a fixed vocabulary the version preference is already built on.
+    """
+    return str(params.get("variant") or "").strip().lower()
+
+
+def variant_label(variant):
+    """"Standard", "Extended", or whatever else the provider starts sending."""
+    return (variant or "standard").replace("_", " ").title()
+
+
+def _variant_order(variant):
+    """Standard sorts first; anything else follows it alphabetically."""
+    variant = (variant or "standard").lower()
+    return "" if variant == "standard" else variant
+
+
+def _suffix(variant):
+    """Standard keeps the plain name, so older downloads are left alone."""
+    if not variant or variant == "standard":
+        return ""
+    return f" ({variant_label(variant)})"
+
+
 def _target(params):
     """Series folder, season folder and filename, in our own list's style."""
     series = safe_name(params.get("series_name"), "One Pace")
@@ -65,7 +93,7 @@ def _target(params):
     if len(ext) > 5 or not ext:
         ext = ".mkv"
     # Season 0 is where Kodi keeps specials, so 0x01 reads correctly there.
-    name = f"{season}x{episode:02d} - {title}{ext}"
+    name = f"{season}x{episode:02d} - {title}{_suffix(variant_of(params))}{ext}"
     return f"{folder()}{series}/Season {season:02d}/", name
 
 
@@ -124,6 +152,7 @@ def _remember(path, params, meta=None):
         # videoSize is what tells us later that the episode was re-released.
         "video_size": params.get("video_size") or 0,
         "duration": params.get("duration") or 0,
+        "variant": variant_of(params),
         "series_name": params.get("series_name", ""),
         "episode_title": params.get("episode_title", ""),
         "season": params.get("season", ""),
@@ -138,11 +167,18 @@ def _remember(path, params, meta=None):
 
 
 def _existing(params, destination):
-    """The file we already hold for this episode, whatever it was named."""
+    """The file we hold for this episode *and* this cut.
+
+    Standard and Extended are different episodes as far as a viewer is
+    concerned, so fetching one must never quietly replace the other.
+    """
     episode_id = params.get("episode_id") or params.get("video_id")
     if episode_id:
+        variant = variant_of(params)
         for path, meta in read_index()["files"].items():
-            if meta.get("episode_id") == episode_id and xbmcvfs.exists(path):
+            if (meta.get("episode_id") == episode_id
+                    and (meta.get("variant") or "") == variant
+                    and xbmcvfs.exists(path)):
                 return path
     return destination if xbmcvfs.exists(destination) else ""
 
@@ -354,42 +390,55 @@ def mark(label, episode_id, on_disk):
     return f"{_MARK} {label}"
 
 
-def path_for(episode_id):
-    """Where this episode lives on disk, if we hold it."""
+# The version picker stores an index, the same one Preferred Version uses.
+_PREFERRED_VARIANT = {"1": "standard", "2": "extended"}
+
+
+def copies_of(episode_id):
+    """Every cut of this episode we hold, standard first."""
     if not episode_id or not enabled():
-        return ""
-    for path, meta in read_index()["files"].items():
-        if meta.get("episode_id") == episode_id and xbmcvfs.exists(path):
-            return path
-    return ""
+        return []
+    held = [(path, meta) for path, meta in read_index()["files"].items()
+            if meta.get("episode_id") == episode_id and xbmcvfs.exists(path)]
+    return sorted(held, key=lambda kv: _variant_order(kv[1].get("variant")))
+
+
+def path_for(episode_id):
+    """Where this episode lives on disk, if we hold it at all."""
+    held = copies_of(episode_id)
+    return held[0][0] if held else ""
 
 
 def local_playback(episode_id):
     """play_video params for the copy on disk, when we should prefer it."""
     if get_setting("prefer_downloads") == "false":
         return None
-    path = path_for(episode_id)
-    if not path:
+    held = copies_of(episode_id)
+    if not held:
         return None
-    return _play_fields(path, read_index()["files"].get(path, {}))
+    # Holding both cuts, honour the same preference the stream picker uses.
+    wanted = _PREFERRED_VARIANT.get(get_setting("preferred_version"))
+    if wanted and len(held) > 1:
+        held = [kv for kv in held if (kv[1].get("variant") or "standard") == wanted] or held
+    path, meta = held[0]
+    return _play_fields(path, meta)
 
 
-def local_option(episode_id):
-    """The copy on disk, offered as a pick alongside the streams.
+def local_options(episode_id):
+    """Each cut on disk, offered alongside the streams.
 
-    Used when the preference is off: rather than pretending the file is not
-    there, put it at the top of the list and let the choice be made.
+    Used when the preference is off: rather than pretending the files are not
+    there, put them at the top of the list and let the choice be made.
     """
-    path = path_for(episode_id)
-    if not path:
-        return None
-    meta = read_index()["files"].get(path, {})
-    label = f"{_MARK_PLAIN} Downloaded"
-    size = meta.get("video_size") or 0
-    if size:
-        # Decimal MB, which is what the provider prints beside its own streams.
-        label += f"  |  {size / 1_000_000:.2f} MB"
-    return label, _play_fields(path, meta)
+    options = []
+    for path, meta in copies_of(episode_id):
+        label = f"{_MARK_PLAIN} Downloaded  |  {variant_label(meta.get('variant'))}"
+        size = meta.get("video_size") or 0
+        if size:
+            # Decimal MB, which is what the provider prints beside its streams.
+            label += f"  |  {size / 1_000_000:.2f} MB"
+        options.append((label, _play_fields(path, meta)))
+    return options
 
 
 def downloaded_ids():
@@ -512,13 +561,15 @@ def list_downloads(params=None):
     items = []
     for path, meta in sorted(chosen.items(),
                              key=lambda kv: (_season_of(kv[1]),
-                                             int(kv[1].get("episode") or 0))):
+                                             int(kv[1].get("episode") or 0),
+                                             _variant_order(kv[1].get("variant")))):
         number = int(meta.get("episode") or 0)
         title = meta.get("episode_title") or os.path.basename(path)
-        item = xbmcgui.ListItem(
-            label=_episode_label(title, int(season), number, meta.get("episode_id", "")),
-            offscreen=True,
-        )
+        label = _episode_label(title, int(season), number, meta.get("episode_id", ""))
+        # Two cuts of one episode sit next to each other, so say which is which.
+        if meta.get("variant") and meta["variant"] != "standard":
+            label += f"  ({variant_label(meta['variant'])})"
+        item = xbmcgui.ListItem(label=label, offscreen=True)
         video = meta.get("video") or {}
         tags = item.getVideoInfoTag()
         tags.setMediaType("episode")

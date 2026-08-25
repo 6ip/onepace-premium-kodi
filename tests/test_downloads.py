@@ -94,16 +94,36 @@ assert "abortRequested()" in dl, "closing Kodi would not stop the transfer"
 print("  the real file only appears once the transfer finished  OK")
 
 print()
-print("=== the same episode never lands twice ===")
+print("=== the same cut never lands twice, but a different cut may ===")
 sames = SRC[SRC.index("def _existing("):SRC.index("def _remove_rows(")]
 assert 'meta.get("episode_id") == episode_id' in sames, "a different extension would slip past"
+assert 'meta.get("variant") or ""' in sames, "Extended would overwrite Standard"
 swap = SRC[SRC.index("if already and already != destination:"):]
 assert "xbmcvfs.delete(already)" in swap[:200], "the old file would sit beside the new one"
-for kind, ext in (("1080p mkv", ".mkv"), ("720p mp4", ".mp4")):
-    p2 = {"series_name": "One Pace", "episode_title": "Romance Dawn", "season": "1",
-          "episode": "1", "filename": "x" + ext, "video_url": "https://x/play/RO_1"}
-    print(f"  {kind:<10} -> {downloads._target(p2)[1]}")
-print("  matched on episode id, so replacing swaps rather than duplicates  OK")
+
+base = {"series_name": "One Pace", "episode_title": "Arlong Park", "season": "6",
+        "episode": "5", "filename": "x.mkv", "video_url": "https://x/play/AR_5"}
+names = {}
+for variant in ("standard", "extended", "", "director"):
+    names[variant] = downloads._target(dict(base, variant=variant))[1]
+    print(f"  {variant or '(none)':<10} -> {names[variant]}")
+assert names["standard"] == names[""], "a missing bingeGroup must not rename old files"
+assert names["standard"] != names["extended"], "both cuts would share one filename"
+assert names["director"] == "6x05 - Arlong Park (Director).mkv", names["director"]
+print("  the cut comes from bingeGroup, and standard keeps the plain name  OK")
+
+print()
+print("=== the display name is not what decides the cut ===")
+from lib.episode_routes import _binge_part
+for group, name_says, want in (
+        ("onepace|rd|extended", "Extended", "extended"),
+        ("muhnpace|rd|extended", "Fillerver", "extended"),
+        ("muhnpace|rd|standard", "-", "standard")):
+    got = _binge_part(group, 2)
+    print(f"  {group:<22} name says {name_says:<10} -> {got}")
+    assert got == want, group
+assert 'playback_params["variant"] = _binge_part' in STREAMS, "the cut never reaches download"
+print("  Fillerver is filed as Extended, like the provider says  OK")
 
 print()
 print("=== the index never outlives the files ===")
@@ -311,25 +331,64 @@ print()
 print("=== with the preference off, the copy is offered rather than ignored ===")
 pickr = STREAMS[STREAMS.index("    choices = _preferred_streams(binge_groups)"):]
 pickr = pickr[:pickr.index("    if downloadable_only:")]
-assert "local_option" in pickr, "the download would be invisible in the picker"
-assert "valid_streams.insert(0, fields)" in pickr, "it would not be first"
-assert "[i + 1 for i in choices]" in pickr, "the other picks would shift onto the wrong stream"
+assert "local_options" in pickr, "the download would be invisible in the picker"
+assert "valid_streams.insert(offset, fields)" in pickr, "the cuts would not come first"
+assert "[i + shift for i in choices]" in pickr, "the other picks would shift onto the wrong stream"
 assert "if not downloadable_only:" in pickr, "downloading would offer the file to itself"
 
-downloads.read_index = lambda: {"files": {"/d/a.mkv": {
-    "episode_id": "RO_1", "video_size": 397698454, "series_id": "pp",
-    "season": "1", "episode": "1"}}, "series": {}}
-label, fields = downloads.local_option("RO_1")
-print("  " + label.encode("unicode_escape").decode())
-assert label.startswith("[COLOR FF2ECC71][↓]"), "the dialog would show the [/B]"
-assert "397.70 MB" in label, "MiB was shown where the provider says MB"
-assert "[/B]" not in label, "the select dialog shows the closing tag"
-assert fields["video_url"] == "/d/a.mkv", fields
-assert downloads.local_option("NOPE") is None, "an undownloaded episode must offer nothing"
+downloads.read_index = lambda: {"files": {
+    "/d/6x05 - Arlong Park.mkv": {"episode_id": "AR_5", "video_size": 763871543,
+                                  "variant": "standard", "series_id": "pp"},
+    "/d/6x05 - Arlong Park (Extended).mkv": {"episode_id": "AR_5", "video_size": 783660152,
+                                             "variant": "extended", "series_id": "pp"},
+}, "series": {}}
+held = downloads.local_options("AR_5")
+for label, fields in held:
+    print("  " + label.encode("unicode_escape").decode())
+assert len(held) == 2, "holding both cuts must offer both"
+assert "Standard" in held[0][0] and "763.87 MB" in held[0][0], held[0][0]
+assert "Extended" in held[1][0] and "783.66 MB" in held[1][0], held[1][0]
+assert held[0][0].startswith("[COLOR FF2ECC71][↓]"), "the dialog would show the [/B]"
+assert "[/B]" not in held[0][0], "the select dialog shows the closing tag"
+assert downloads.local_options("NOPE") == [], "an undownloaded episode must offer nothing"
 store["downloads_enabled"] = "false"
-assert downloads.local_option("RO_1") is None, "the feature is off, so the pick must go"
+assert downloads.local_options("AR_5") == [], "the feature is off, so the picks must go"
 store["downloads_enabled"] = "true"
-print("  shown with its size, and gone when downloads are disabled  OK")
+print("  both cuts offered with their sizes, and gone when downloads are off  OK")
+
+print()
+print("=== holding both cuts, the version preference decides which plays ===")
+store["prefer_downloads"] = "true"
+for setting, want in (("2", "extended"), ("1", "standard"), ("", "standard")):
+    store["preferred_version"] = setting
+    chosen = downloads.local_playback("AR_5")
+    got = "extended" if "Extended" in chosen["video_url"] else "standard"
+    print(f"  preferred_version={setting or '(unset)'}  ->  {got}")
+    assert got == want, (setting, chosen)
+store["preferred_version"] = ""
+print("  the same setting the stream picker already uses  OK")
+
+print()
+print("=== standard leads, whatever order the index happens to be in ===")
+downloads.read_index = lambda: {"files": {
+    "/d/x/6x05 - Arlong Park (Extended).mkv": {
+        "series_name": "One Pace", "season": "6", "episode": "5", "series_id": "pp",
+        "episode_title": "Arlong Park", "episode_id": "AR_5", "variant": "extended"},
+    "/d/x/6x05 - Arlong Park.mkv": {
+        "series_name": "One Pace", "season": "6", "episode": "5", "series_id": "pp",
+        "episode_title": "Arlong Park", "episode_id": "AR_5", "variant": "standard"},
+    "/d/x/6x06 - Next.mkv": {
+        "series_name": "One Pace", "season": "6", "episode": "6", "series_id": "pp",
+        "episode_title": "Next", "episode_id": "AR_6", "variant": "standard"},
+}, "series": {"One Pace": {"name": "One Pace"}}}
+kodistub.recorder.reset()
+downloads.list_downloads({"series": "One Pace", "season": "6"})
+rows = [i.label for _, i, _ in kodistub.recorder.directories]
+for r in rows:
+    print(f"  {r}")
+assert rows == ["6x05. Arlong Park", "6x05. Arlong Park  (Extended)", "6x06. Next"], rows
+assert [l.split("|")[1].strip() for l, _ in downloads.local_options("AR_5")] ==     ["Standard", "Extended"], "extended sorts before standard alphabetically"
+print("  both cuts sit together, standard above  OK")
 
 play = SRC[SRC.index("def play_url("):SRC.index("def downloaded_ids(")]
 assert '"video_url": path' in play, "the file would play outside the add-on"
