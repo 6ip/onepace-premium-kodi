@@ -85,13 +85,25 @@ print("  videoSize drives the progress bar and the short-read check  OK")
 
 print()
 print("=== a half-written file is never kept ===")
-dl = SRC[SRC.index("def download("):SRC.index("def delete(")]
-assert dl.index("xbmcvfs.delete(destination)") < dl.index("_remember(destination"), \
-    "a failed download would be indexed"
-assert dl.count("xbmcvfs.delete(destination)") == 2, "short reads and errors both clean up"
+dl = SRC[SRC.index("def download("):SRC.index("def _remove(")]
+assert 'xbmcvfs.File(partial, "w")' in dl, "a failed replacement would truncate the good copy"
+assert dl.count("xbmcvfs.delete(partial)") == 3, "errors, short reads and a failed swap"
+assert dl.index("xbmcvfs.rename(partial, destination)") < dl.index("_remember(destination"), "partial indexed"
 assert "raise_for_status()" in dl, "a 404 body would be written to disk"
 assert "abortRequested()" in dl, "closing Kodi would not stop the transfer"
-print("  errors, short reads and shutdown all delete the partial file  OK")
+print("  the real file only appears once the transfer finished  OK")
+
+print()
+print("=== the same episode never lands twice ===")
+sames = SRC[SRC.index("def _existing("):SRC.index("def _remove_rows(")]
+assert 'meta.get("episode_id") == episode_id' in sames, "a different extension would slip past"
+swap = SRC[SRC.index("if already and already != destination:"):]
+assert "xbmcvfs.delete(already)" in swap[:200], "the old file would sit beside the new one"
+for kind, ext in (("1080p mkv", ".mkv"), ("720p mp4", ".mp4")):
+    p2 = {"series_name": "One Pace", "episode_title": "Romance Dawn", "season": "1",
+          "episode": "1", "filename": "x" + ext, "video_url": "https://x/play/RO_1"}
+    print(f"  {kind:<10} -> {downloads._target(p2)[1]}")
+print("  matched on episode id, so replacing swaps rather than duplicates  OK")
 
 print()
 print("=== the index never outlives the files ===")

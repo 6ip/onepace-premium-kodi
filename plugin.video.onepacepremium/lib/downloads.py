@@ -137,6 +137,22 @@ def _remember(path, params, meta=None):
     _write_index(data)
 
 
+def _existing(params, destination):
+    """The file we already hold for this episode, whatever it was named."""
+    episode_id = params.get("episode_id") or params.get("video_id")
+    if episode_id:
+        for path, meta in read_index()["files"].items():
+            if meta.get("episode_id") == episode_id and xbmcvfs.exists(path):
+                return path
+    return destination if xbmcvfs.exists(destination) else ""
+
+
+def _remove_rows(paths):
+    data = read_index()
+    if any(data["files"].pop(x, None) is not None for x in paths):
+        _write_index(data)
+
+
 def download(params, meta=None):
     """Fetch one episode to disk. Runs for as long as the transfer takes."""
     url = params.get("video_url", "")
@@ -146,13 +162,23 @@ def download(params, meta=None):
 
     directory, name = _target(params)
     destination = directory + name
-    if xbmcvfs.exists(destination):
-        if not xbmcgui.Dialog().yesno("Download", f"{name}\n\nis already here. Fetch it again?",
-                                      nolabel="Keep", yeslabel="Replace"):
+
+    # A different stream of the same episode can carry a different extension,
+    # so match on the episode itself or the same file would arrive twice.
+    already = _existing(params, destination)
+    if already:
+        if not xbmcgui.Dialog().yesno(
+                "Download",
+                os.path.basename(already) + chr(10) + chr(10) + "is already here. Fetch it again?",
+                nolabel="Keep", yeslabel="Replace"):
             return
     if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
         _notify_error("Could not create the download folder")
         return
+
+    # Written beside the real name, so a failed replacement cannot destroy
+    # the copy that already worked.
+    partial = destination + ".part"
 
     progress = xbmcgui.DialogProgressBG()
     progress.create("Downloading", name)
@@ -163,7 +189,7 @@ def download(params, meta=None):
         response.raise_for_status()
         total = int(params.get("video_size") or 0) or int(
             response.headers.get("Content-Length") or 0)
-        with xbmcvfs.File(destination, "w") as handle:
+        with xbmcvfs.File(partial, "w") as handle:
             for chunk in response.iter_content(chunk_size=_CHUNK):
                 if monitor.abortRequested():
                     raise InterruptedError("Kodi is shutting down")
@@ -179,15 +205,25 @@ def download(params, meta=None):
     except Exception as exc:
         progress.close()
         log(f"[downloads] {name!r} failed after {written} bytes: {exc}")
-        xbmcvfs.delete(destination)
+        xbmcvfs.delete(partial)
         _notify_error(f"Download failed: {exc}")
         return
 
     progress.close()
     if total and written < total:
         log(f"[downloads] {name!r} stopped short: {written} of {total} bytes")
-        xbmcvfs.delete(destination)
+        xbmcvfs.delete(partial)
         _notify_error("Download ended early, nothing kept")
+        return
+
+    # Only now is the old copy expendable.
+    if already and already != destination:
+        xbmcvfs.delete(already)
+        _remove_rows([already])
+    xbmcvfs.delete(destination)
+    if not xbmcvfs.rename(partial, destination):
+        xbmcvfs.delete(partial)
+        _notify_error("Could not put the file in place")
         return
 
     _remember(destination, params, meta)
