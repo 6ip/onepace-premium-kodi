@@ -71,8 +71,8 @@ from kodistub import recorder
 
 for plugin_name, expected in (
         ("plugin.video.onepacepremium", ["Container.Refresh"]),
-        ("", []),
-        ("skin.arctic.fuse.3", [])):
+        ("", ["UpdateLibrary(video,special://skin/foo)"]),
+        ("skin.arctic.fuse.3", ["UpdateLibrary(video,special://skin/foo)"])):
     recorder.reset()
     recorder.infolabels["Container.PluginName"] = plugin_name
     refresh_container()

@@ -86,12 +86,14 @@ print(f"  first statement: {first}")
 assert first == "reset_for_invocation()"
 
 print()
-print("=== addon.xml opts in, in the element Kodi reads ===")
+print("=== reuselanguageinvoker stays off ===")
+# Pooled interpreters faulted in python3.8.dll on every crash between
+# 2026-08-22 and 2026-08-24. Blocking one for a whole episode is the cost.
 x = (harness.ADDON / "addon.xml").read_text(encoding="utf-8")
 meta = x[x.index('<extension point="xbmc.addon.metadata">'):]
-assert "<reuselanguageinvoker>true</reuselanguageinvoker>" in meta[:400], \
-    "it must sit in xbmc.addon.metadata, not pluginsource"
-print("  inside xbmc.addon.metadata  OK")
+assert "<reuselanguageinvoker>false</reuselanguageinvoker>" in meta[:400], \
+    "it must sit in xbmc.addon.metadata, and it must say false"
+print("  declared false, inside xbmc.addon.metadata  OK")
 
 print()
 print("all assertions passed")

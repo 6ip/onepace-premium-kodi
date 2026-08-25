@@ -138,15 +138,16 @@ def is_widget():
 
 
 def refresh_container():
-    """Redraw the list we just changed, unless a skin owns it.
+    """Redraw the list we just changed.
 
-    Every way of nudging a widget ends with the home screen reloading all of
-    them at once, and that is what takes Kodi 21 down here. A shelf that stays
-    stale until the skin redraws it beats a shelf that crashes.
+    A widget's container belongs to the skin, so Container.Refresh would hit
+    the skin rather than us. The library ping is the usual way round it: the
+    scan finds nothing under that path, but widgets reload on the way past.
     """
     if is_widget():
-        return
-    xbmc.executebuiltin("Container.Refresh")
+        xbmc.executebuiltin("UpdateLibrary(video,special://skin/foo)")
+    else:
+        xbmc.executebuiltin("Container.Refresh")
 
 
 # Climbs past 1 only when Kodi reuses the interpreter.
