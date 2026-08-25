@@ -30,6 +30,9 @@ _ACTIONS = {
     "list_my_lists":       "my_lists:list_my_lists",
     "list_in_progress":    "my_lists:list_in_progress",
     "list_next_episodes":  "my_lists:list_next_episodes",
+    "list_downloads":      "downloads:list_downloads",
+    "download_episode":    "episode_routes:download_episode",
+    "delete_download":     "downloads:delete",
 }
 
 

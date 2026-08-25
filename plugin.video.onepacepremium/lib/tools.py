@@ -57,7 +57,7 @@ def clear_cache():
     dialog.notification(
         "One Pace Premium",
         f"API cache cleared ({count} file{'s' if count != 1 else ''} removed).",
-        xbmcgui.NOTIFICATION_INFO,
+        xbmcgui.NOTIFICATION_INFO, 5000, False,
     )
 
 
@@ -85,7 +85,7 @@ def clear_subs_cache():
     dialog.notification(
         "One Pace Premium",
         f"Subtitle cache cleared ({count} file{'s' if count != 1 else ''} removed).",
-        xbmcgui.NOTIFICATION_INFO,
+        xbmcgui.NOTIFICATION_INFO, 5000, False,
     )
 
 
@@ -133,7 +133,7 @@ def clear_bookmarks():
     dialog.notification(
         "One Pace Premium",
         "All resume bookmarks cleared.",
-        xbmcgui.NOTIFICATION_INFO,
+        xbmcgui.NOTIFICATION_INFO, 5000, False,
     )
 
 
@@ -174,7 +174,7 @@ def clear_watched():
     dialog.notification(
         "One Pace Premium",
         "Watched history cleared.",
-        xbmcgui.NOTIFICATION_INFO,
+        xbmcgui.NOTIFICATION_INFO, 5000, False,
     )
 
 
@@ -351,7 +351,8 @@ def choose_preferred_service():
     code, name = options[chosen]
     if _save_settings(addon, {"preferred_service": code,
                               "preferred_service_display": name}):
-        xbmcgui.Dialog().notification("Preferred Service", name, xbmcgui.NOTIFICATION_INFO)
+        xbmcgui.Dialog().notification("Preferred Service", name,
+                                      xbmcgui.NOTIFICATION_INFO, 5000, False)
 
 
 def choose_highlight_color():
@@ -367,7 +368,8 @@ def choose_highlight_color():
 
     name, hexval = HIGHLIGHT_COLORS[chosen]
     if _save_settings(addon, {"highlight_color": hexval, "highlight_color_display": name}):
-        xbmcgui.Dialog().notification("Show Name Colour", name, xbmcgui.NOTIFICATION_INFO)
+        xbmcgui.Dialog().notification("Show Name Colour", name,
+                                      xbmcgui.NOTIFICATION_INFO, 5000, False)
 
 
 def choose_sub_langs():
@@ -391,7 +393,8 @@ def choose_sub_langs():
     if _save_settings(addon, {"sub_langs": ",".join(selected),
                               "sub_langs_display": summary}):
         xbmcgui.Dialog().notification(
-            "Subtitle Languages", summary, xbmcgui.NOTIFICATION_INFO
+            "Subtitle Languages", summary,
+            xbmcgui.NOTIFICATION_INFO, 5000, False,
         )
 
 

@@ -11,14 +11,14 @@ def check_elementum():
         xbmcgui.Dialog().notification(
             "One Pace Premium",
             "Elementum is not installed",
-            xbmcgui.NOTIFICATION_ERROR,
+            xbmcgui.NOTIFICATION_ERROR, 5000, True,
         )
         return
 
     xbmcgui.Dialog().notification(
         "One Pace Premium",
         f"Elementum detected (v{addon.getAddonInfo('version')})",
-        xbmcgui.NOTIFICATION_INFO,
+        xbmcgui.NOTIFICATION_INFO, 5000, False,
     )
 
 

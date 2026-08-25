@@ -64,6 +64,8 @@ def list_root():
     items = [
         (build_url("list_my_lists"), _nav_item("My Lists", f"{_skin_media}/lists2.png"),  True),
         (build_url("list_browse"),   _nav_item("Browse",   f"{_skin_media}/hat.png"),     True),
+        (build_url("list_downloads"),
+         _nav_item("Downloads", f"{_skin_media}/downloads.png"), True),
         # Not a folder — it opens the settings window instead of navigating.
         (build_url("open_addon_settings"),
          _nav_item("Settings", f"{_skin_media}/settings.png"), False),

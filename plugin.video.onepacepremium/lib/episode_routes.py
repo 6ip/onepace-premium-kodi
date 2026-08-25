@@ -13,7 +13,7 @@ from .art import (_cast_list, _episode_number, _season_thumbnails,
                    _stream_tagline)
 from .parser import parse_stream_info
 from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode_ids,
-                            episode_play_url,
+                            episode_params, episode_play_url,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
 from .route_common import (_add_directory_items, _notify_error, _notify_info,
@@ -331,6 +331,10 @@ def list_episodes(params):
                 "[B]Clear Progress[/B]",
                 f"RunPlugin({build_url('clear_progress', episode_id=stream_video_id)})",
             ))
+        ctx_items.append((
+            "[B]Download[/B]",
+            f"RunPlugin({build_url('download_episode', **episode_params(video, meta, video_id, catalog_type, season_poster, stream_video_id))})",
+        ))
         list_item.addContextMenuItems(ctx_items, replaceItems=True)
         items.append(
             (
@@ -358,14 +362,14 @@ def list_episodes(params):
     end_directory(cache=True)
 
 
-def check_resume(params):
-    from .playback import play_video as _play_video
+def _choose_stream(params, downloadable_only=False):
+    """Fetch this episode's streams and return the one to act on, or None.
 
-    def _fail():
-        xbmcplugin.setResolvedUrl(ADDON_HANDLE, False, xbmcgui.ListItem())
-
+    Playing and downloading want the same list and the same picker, so the
+    only difference is whether a magnet is allowed through.
+    """
     if not ensure_configured():
-        _fail(); return
+        return None
 
     if not get_secret_string():
         xbmcgui.Dialog().ok(
@@ -373,7 +377,7 @@ def check_resume(params):
             "Add-on is not configured.\nPlease set up your configuration first."
         )
         xbmc.executebuiltin("Addon.OpenSettings(plugin.video.onepacepremium)")
-        _fail(); return
+        return None
 
     catalog_type = params["catalog_type"]
     video_id     = params["video_id"]
@@ -393,13 +397,13 @@ def check_resume(params):
     if response is None:
         response = fetch_data(stream_url)
         if not response:
-            _fail(); return
+            return None
         _cache.set(stream_url, response, 3600)
 
     streams = response.get("streams", ())
     if not streams:
         _notify_error("No streams available")
-        _fail(); return
+        return None
 
     # Detect server-side configuration error (externalUrl with no playable url/infoHash)
     config_error = next(
@@ -413,7 +417,7 @@ def check_resume(params):
             "Add-on settings will now open — please enter a valid configuration key."
         )
         xbmc.executebuiltin("Addon.OpenSettings(plugin.video.onepacepremium)")
-        _fail(); return
+        return None
 
     id_parts = video_id.split(":", 2)
     if len(id_parts) == 3:
@@ -494,6 +498,10 @@ def check_resume(params):
         playback_params["stream_desc"] = stream_desc
         if episode_plot:
             playback_params["episode_plot"] = episode_plot
+        # What the provider knows about this exact file, for downloading.
+        playback_params["filename"] = video_info["filename"]
+        playback_params["video_size"] = video_info["size"]
+        playback_params["duration"] = video_info["duration"]
 
         label = stream_name
         if stream_tagline:
@@ -505,21 +513,51 @@ def check_resume(params):
 
     if not valid_streams:
         _notify_error("No streams available")
-        _fail(); return
+        return None
 
     choices = _preferred_streams(binge_groups)
+    if downloadable_only:
+        from .downloads import is_downloadable
+        choices = [i for i in choices
+                   if is_downloadable(valid_streams[i]["video_url"])]
+        if not choices:
+            _notify_error("No stream here can be downloaded")
+            return None
     log(f"[streams] {len(valid_streams)} available, {len(choices)} after preferences")
     if len(choices) == 1:
         selected = choices[0]
     else:
         pick = xbmcgui.Dialog().select(
-            "Select Stream", [dialog_labels[i] for i in choices]
+            "Download" if downloadable_only else "Select Stream",
+            [dialog_labels[i] for i in choices],
         )
         if pick < 0:
-            _fail(); return
+            return None
         selected = choices[pick]
 
-    _play_video(valid_streams[selected])
+    return valid_streams[selected]
+
+
+def check_resume(params):
+    chosen = _choose_stream(params)
+    if chosen is None:
+        xbmcplugin.setResolvedUrl(ADDON_HANDLE, False, xbmcgui.ListItem())
+        return
+    from .playback import play_video as _play_video
+    _play_video(chosen)
+
+
+def download_episode(params):
+    """Context-menu target on an episode row: pick a stream, then keep it."""
+    chosen = _choose_stream(params, downloadable_only=True)
+    if chosen is None:
+        return
+    from .downloads import download
+    # Fetched while we are certainly online, so the list still looks right
+    # when the connection is gone.
+    meta = _fetch_provider_meta(params.get("catalog_type", "series"),
+                                params.get("parent_id", "")) or {}
+    download(chosen, meta)
 
 
 def get_streams(params):

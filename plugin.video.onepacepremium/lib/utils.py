@@ -91,7 +91,7 @@ def fetch_data(url: str):
             f"Request failed ({status_code}) on {target}"
             if status_code
             else f"Request failed on {target}",
-            xbmcgui.NOTIFICATION_ERROR,
+            xbmcgui.NOTIFICATION_ERROR, 5000, True,
         )
         return None
 
@@ -213,7 +213,7 @@ def ensure_configured():
     xbmcgui.Dialog().notification(
         "One Pace Premium",
         "Not configured. Open add-on settings.",
-        xbmcgui.NOTIFICATION_INFO,
+        xbmcgui.NOTIFICATION_INFO, 5000, True,
     )
     xbmc.executebuiltin(
         f"RunScript(special://home/addons/{ADDON_ID}/lib/custom_settings_window.py)"

@@ -110,21 +110,30 @@ def episode_play_url(video, meta, series_id, catalog_type="series",
     title = video.get("name") or video.get("title") or f"Episode {number}"
     # Only set when autoplaying, so ordinary rows keep the URL Kodi already knows.
     extra = {"autoplay": "1"} if autoplay else {}
-    return build_url(
-        "check_resume",
-        **extra,
-        catalog_type=catalog_type,
-        video_id=episode_id or video.get("id"),
-        thumb=_upgrade_metahub_url(video.get("thumbnail")) or "",
-        logo=meta.get("logo") or "",
-        parent_id=series_id,
-        series_name=meta.get("name") or "",
-        episode_title=title,
-        season=season,
-        episode=number,
-        season_poster=season_poster,
-        episode_plot=video.get("overview") or meta.get("description") or "",
-    )
+    return build_url("check_resume", **extra, **episode_params(
+        video, meta, series_id, catalog_type, season_poster, episode_id))
+
+
+def episode_params(video, meta, series_id, catalog_type="series",
+                   season_poster="", episode_id=None):
+    """What every route needs to act on one episode — play it or keep it."""
+    from .art import _episode_number, _upgrade_metahub_url
+
+    number = _episode_number(video)
+    title = video.get("name") or video.get("title") or f"Episode {number}"
+    return {
+        "catalog_type": catalog_type,
+        "video_id": episode_id or video.get("id"),
+        "thumb": _upgrade_metahub_url(video.get("thumbnail")) or "",
+        "logo": meta.get("logo") or "",
+        "parent_id": series_id,
+        "series_name": meta.get("name") or "",
+        "episode_title": title,
+        "season": video.get("season"),
+        "episode": number,
+        "season_poster": season_poster,
+        "episode_plot": video.get("overview") or meta.get("description") or "",
+    }
 
 
 def countable_episode_ids(meta: dict):

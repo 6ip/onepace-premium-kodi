@@ -18,7 +18,9 @@ def _add_directory_items(items: list, total_items: Optional[int] = None):
 
 
 def _notify_error(message: str):
-    xbmcgui.Dialog().notification("One Pace Premium", message, xbmcgui.NOTIFICATION_ERROR)
+    # The trailing False is the sound flag, which defaults to on.
+    xbmcgui.Dialog().notification("One Pace Premium", message,
+                                  xbmcgui.NOTIFICATION_ERROR, 5000, True)
 
 
 def _notify_info(message: str):

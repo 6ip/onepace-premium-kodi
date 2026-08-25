@@ -58,6 +58,9 @@
         <setting label="Clear Bookmarks" id="clear_bookmarks" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_bookmarks)" />
         <setting label="Clear Watched History" id="clear_watched" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_watched)" />
         <setting type="sep" />
+        <setting type="lsep" label="Downloads" />
+        <setting label="Download Folder" id="download_folder" type="folder" default="" />
+        <setting type="sep" />
         <setting type="lsep" label="Backup" />
         <setting label="Export Backup" id="export_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=export_settings)" />
         <setting label="Restore Backup" id="import_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=import_settings)" />

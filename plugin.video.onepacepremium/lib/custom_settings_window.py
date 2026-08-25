@@ -157,7 +157,7 @@ def configure_addon():
                 dialog.notification(
                     "One Pace Premium",
                     "Failed to generate setup code",
-                    xbmcgui.NOTIFICATION_ERROR,
+                    xbmcgui.NOTIFICATION_ERROR, 5000, True,
                 )
                 xbmc.log(f"Failed to generate setup code: {exc}", xbmc.LOGERROR)
                 xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
@@ -196,7 +196,7 @@ def configure_addon():
             dialog.notification(
                 "One Pace Premium",
                 "Setup complete!",
-                xbmcgui.NOTIFICATION_INFO,
+                xbmcgui.NOTIFICATION_INFO, 5000, True,
             )
             xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
             return
@@ -207,7 +207,7 @@ def configure_addon():
             dialog.notification(
                 "One Pace Premium",
                 "Setup code expired. Run setup again.",
-                xbmcgui.NOTIFICATION_ERROR,
+                xbmcgui.NOTIFICATION_ERROR, 5000, True,
             )
             xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
             return
@@ -219,7 +219,7 @@ def configure_addon():
         dialog.notification(
             "One Pace Premium",
             f"Waiting for setup code {code}...",
-            xbmcgui.NOTIFICATION_INFO,
+            xbmcgui.NOTIFICATION_INFO, 5000, False,
         )
 
         deadline = time.time() + expires_in
@@ -252,7 +252,7 @@ def configure_addon():
                     dialog.notification(
                         "One Pace Premium",
                         "Setup complete!",
-                        xbmcgui.NOTIFICATION_INFO,
+                        xbmcgui.NOTIFICATION_INFO, 5000, True,
                     )
                     xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
                     return
@@ -266,7 +266,7 @@ def configure_addon():
             dialog.notification(
                 "One Pace Premium",
                 "Setup code expired. Run setup again.",
-                xbmcgui.NOTIFICATION_ERROR,
+                xbmcgui.NOTIFICATION_ERROR, 5000, True,
             )
             xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
     except Exception:
@@ -277,7 +277,7 @@ def configure_addon():
         xbmcgui.Dialog().notification(
             "One Pace Premium",
             "Setup failed (check Kodi log)",
-            xbmcgui.NOTIFICATION_ERROR,
+            xbmcgui.NOTIFICATION_ERROR, 5000, True,
         )
 
 

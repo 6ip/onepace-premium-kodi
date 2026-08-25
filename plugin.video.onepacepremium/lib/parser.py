@@ -1,3 +1,5 @@
+import re
+
 KODI_META_KEY = "cometKodiMetaV1"
 
 _FIELDS = (
@@ -23,6 +25,18 @@ _DEFAULTS = {field: "" for field in _FIELDS}
 _DEFAULTS["width"] = 0
 _DEFAULTS["height"] = 0
 
+# "Dur: 17:57" or "Dur: 1:17:57" — the real length of this file, where the
+# provider's series-level runtime is only ever a round number.
+_DURATION = re.compile(r"Dur:\s*(?:(\d+):)?(\d{1,2}):(\d{2})")
+
+
+def _duration_seconds(text):
+    found = _DURATION.search(text or "")
+    if not found:
+        return 0
+    hours, minutes, seconds = found.groups()
+    return int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds)
+
 
 def _safe_int(value):
     try:
@@ -34,6 +48,8 @@ def _safe_int(value):
 def parse_stream_info(_name: str, _description: str, behavior_hints: dict):
     stream_info = _DEFAULTS.copy()
     stream_info["size"] = behavior_hints.get("videoSize") or 0
+    stream_info["filename"] = behavior_hints.get("filename") or ""
+    stream_info["duration"] = _duration_seconds(_description)
     stream_info["languages"] = []
 
     kodi_meta = behavior_hints.get(KODI_META_KEY)
