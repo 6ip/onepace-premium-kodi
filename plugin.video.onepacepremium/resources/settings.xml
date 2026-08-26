@@ -50,17 +50,23 @@
         <setting label="Showing" id="sub_langs_display" type="text" default="All languages" enable="false" subsetting="true" />
         <setting id="sub_langs" type="text" default="" visible="false" />
     </category>
-    <category label="Tools">
-        <setting type="lsep" label="Downloads" />
-        <setting label="Enable Downloads" id="downloads_enabled" type="bool" default="true" />
-        <setting label="Download Folder" id="choose_download_folder" type="action" enable="eq(-1,true)" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_download_folder)" />
+    <category label="Downloads">
+        <setting label="Enable Downloads" id="downloads_enabled" type="bool" default="false" />
+        <setting type="sep" />
+        <setting type="lsep" label="Where They Go" />
+        <setting label="Download Folder" id="choose_download_folder" type="action" enable="eq(-3,true)" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_download_folder)" />
         <setting label="Showing" id="download_folder_display" type="text" default="Default" enable="false" subsetting="true" />
         <setting id="download_folder" type="text" default="special://profile/addon_data/plugin.video.onepacepremium/downloads/" visible="false" />
-        <setting label="Move Existing Downloads" id="move_downloads" type="action" enable="eq(-4,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=move_downloads)" />
-        <setting label="Last Download Summary" id="show_download_report" type="action" enable="eq(-5,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_download_report)" />
-        <setting label="Mark Downloaded Episodes" id="download_marker" type="bool" default="true" enable="eq(-6,true)" />
-        <setting label="Play the Downloaded Copy" id="prefer_downloads" type="bool" default="true" enable="eq(-7,true)" />
+        <setting label="Move Existing Downloads" id="move_downloads" type="action" enable="eq(-6,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=move_downloads)" />
         <setting type="sep" />
+        <setting type="lsep" label="In the Lists" />
+        <setting label="Mark Downloaded Episodes" id="download_marker" type="bool" default="true" enable="eq(-9,true)" />
+        <setting label="Play the Downloaded Copy" id="prefer_downloads" type="bool" default="true" enable="eq(-10,true)" />
+        <setting type="sep" />
+        <setting type="lsep" label="History" />
+        <setting label="Last Download Summary" id="show_download_report" type="action" enable="eq(-13,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_download_report)" />
+    </category>
+    <category label="Tools">
         <setting type="lsep" label="Backup" />
         <setting label="Export Backup" id="export_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=export_settings)" />
         <setting label="Restore Backup" id="import_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=import_settings)" />

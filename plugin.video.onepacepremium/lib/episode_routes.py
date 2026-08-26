@@ -32,6 +32,7 @@ _NOTICE_ID_PREFIX = "pp_COMPLETE"
 # code directly; the version is an enum.
 _VERSION_BY_INDEX = {"1": "standard", "2": "extended"}
 
+
 # bingeGroup service codes and their names, in the order the settings picker
 # lists them. tools.py holds the same pairs but runs its dispatch on import,
 # so it cannot be the one place they live.
@@ -639,45 +640,45 @@ def _season_episodes(meta, video_id, catalog_type, season):
 
 
 def _season_preference(picks, label):
-    """Ask once what the whole run should prefer, or None if cancelled.
+    """Ask at most two questions before a run, or None if cancelled.
 
-    Looking at every chosen episode first, not just the first one: a season
-    where only episode two has an extended cut must still offer it, and one
-    where every episode has the same single stream must not ask at all.
+    Deliberately does not survey the season: that would be one listing request
+    per episode, sixty of them for a long arc, fired before anything is even
+    downloaded and wasted entirely if the questions are cancelled.
+
+    The cut comes from a setting instead. The services come from one sample,
+    because which debrid hosts answer depends on the account rather than the
+    episode, so the first pick speaks for the rest.
     """
-    services, versions = set(), set()
-    busy = xbmcgui.DialogProgressBG()
-    busy.create(f"Checking {label}")
-    try:
-        for index, episode in enumerate(picks, 1):
-            busy.update(int(index * 100 / len(picks)), f"Checking {label}",
-                        episode.get("episode_title", ""))
-            for service, version in _choose_stream(
-                    episode, downloadable_only=True, survey=True) or ():
-                services.add(service)
-                versions.add(version)
-    finally:
-        busy.close()
-
     want_service, want_version = "", ""
-    if len(services) > 1 and not get_setting("preferred_service"):
-        # Same order as Preferred Service, so the two lists read alike.
-        ordered = sorted(services, key=lambda c: (_SERVICE_ORDER.get(c, 99), c))
-        pick = xbmcgui.Dialog().select(
-            f"{label} — which service?",
-            [_SERVICE_NAMES.get(c, c.upper()) for c in ordered])
-        if pick < 0:
-            return None
-        want_service = ordered[pick]
 
-    if len(versions) > 1 and not _VERSION_BY_INDEX.get(get_setting("preferred_version")):
+    if not get_setting("preferred_service"):
+        offered = _choose_stream(picks[0], downloadable_only=True, survey=True) or ()
+        services = sorted({service for service, _ in offered},
+                          key=lambda c: (_SERVICE_ORDER.get(c, 99), c))
+        if len(services) > 1:
+            pick = xbmcgui.Dialog().select(
+                f"{label} — which service?",
+                [_SERVICE_NAMES.get(c, c.upper()) for c in services])
+            if pick < 0:
+                return None
+            want_service = services[pick]
+
+    # Preferred Version governs this too. A second download-only setting would
+    # only be another thing to keep in step, and "Always ask" already gives a
+    # per-season choice for anyone who wants Extended to stream and Standard
+    # to keep.
+    if not _VERSION_BY_INDEX.get(get_setting("preferred_version")):
         from .downloads import variant_label
-        ordered = sorted(versions, key=lambda v: (v != "standard", v))
+        options = ["standard", "extended"]
         pick = xbmcgui.Dialog().select(
-            f"{label} — which cut?", [variant_label(v) for v in ordered])
+            f"{label} — which cut?",
+            [variant_label(v) for v in options]
+            + ["Whatever each episode has"])
         if pick < 0:
             return None
-        want_version = ordered[pick]
+        # The last entry means no preference, so every episode keeps its own.
+        want_version = options[pick] if pick < len(options) else ""
 
     log(f"[downloads] {label} will prefer {(want_service, want_version)}")
     return want_service, want_version

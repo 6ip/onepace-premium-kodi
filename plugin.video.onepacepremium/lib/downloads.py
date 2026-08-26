@@ -630,9 +630,24 @@ def _empty(message):
 
 
 def _counts(item, metas):
-    """The same properties the season list sets, so skins read them the same."""
-    item.setProperties({"TotalEpisodes": str(len(metas)),
-                        "UnWatchedEpisodes": str(len(metas))})
+    """The same properties the season list sets, so skins read them the same.
+
+    Counted against the watched store, not assumed unwatched — a row saying
+    4 when three have been seen is worse than saying nothing.
+    """
+    from . import watched as _watched
+
+    series_id = next((m.get("series_id") for m in metas if m.get("series_id")), "")
+    seen = _watched.get_watched(series_id) if series_id else set()
+    total = len(metas)
+    watched = sum(1 for m in metas if m.get("episode_id") in seen)
+    props = {"TotalEpisodes": str(total),
+             "UnWatchedEpisodes": str(total - watched)}
+    if watched:
+        props["WatchedEpisodes"] = str(watched)
+    item.setProperties(props)
+    if total and watched >= total:
+        item.getVideoInfoTag().setPlaycount(1)
 
 
 def play_url(path, meta):
@@ -692,7 +707,8 @@ _MARK_PLAIN = f"[COLOR FF2ECC71]{_ARROW}[/COLOR]"
 
 
 def enabled():
-    return get_setting("downloads_enabled") != "false"
+    """Off until asked for, so an update does not rearrange anyone's menu."""
+    return get_setting("downloads_enabled") == "true"
 
 
 def mark(label, episode_id, on_disk, plain=False):

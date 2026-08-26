@@ -471,6 +471,44 @@ assert [r[1] for r in rows] == ["3x01. Elsewhere"], "one season should not add a
 print("  a series with one season skips straight to its episodes  OK")
 
 print()
+print("=== folder rows count what has been watched ===")
+from lib import watched as _w
+_real_watched = _w.get_watched
+
+
+def _rows(series, sid, plan, seen):
+    files = {}
+    for season, count in plan:
+        for n in range(1, count + 1):
+            files[f"/d/{series}/S{season}/{season}x0{n}.mkv"] = {
+                "series_name": series, "season": str(season), "episode": str(n),
+                "episode_title": f"E{n}", "episode_id": f"{sid}_{season}_{n}",
+                "series_id": sid, "variant": "standard"}
+    downloads.read_index = lambda: {"files": dict(files),
+                                    "series": {series: {"name": series}}}
+    downloads._write_index = lambda data: None
+    downloads.xbmcvfs.exists = lambda p: True
+    _w.get_watched = lambda s: seen
+    kodistub.recorder.reset()
+    downloads.list_downloads({"series": series})
+    return [(i.label, i.properties) for _, i, _ in kodistub.recorder.directories]
+
+
+for label, props in _rows("One Pace", "pp", [(1, 4), (2, 1)], {"pp_1_1", "pp_1_2", "pp_1_3"}):
+    print(f"  {label:<12} {props.get('WatchedEpisodes', '0')}/{props.get('TotalEpisodes')}"
+          f" watched, {props.get('UnWatchedEpisodes')} left")
+first = _rows("One Pace", "pp", [(1, 4), (2, 1)], {"pp_1_1", "pp_1_2", "pp_1_3"})[0][1]
+assert first["TotalEpisodes"] == "4", first
+assert first["WatchedEpisodes"] == "3", "the row claimed nothing had been watched"
+assert first["UnWatchedEpisodes"] == "1", first
+
+none_seen = _rows("One Pace", "pp", [(1, 2), (2, 1)], set())[0][1]
+assert "WatchedEpisodes" not in none_seen, "a zero count is noise the skin has to hide"
+_w.get_watched = _real_watched
+downloads.read_index = lambda: {"files": dict(FAKE), "series": dict(SHOW)}
+print("  counted against the watched store, not assumed unwatched  OK")
+
+print()
 print("=== the counts and artwork the season list already uses ===")
 kodistub.recorder.reset()
 downloads.list_downloads({"series": "One Pace"})
@@ -606,6 +644,14 @@ assert downloads.mark("x", "RO_9", {"RO_1"}) == "x", "an undownloaded row must s
 store["download_marker"] = "false"
 assert downloads.mark("x", "RO_1", {"RO_1"}) == "x", "the marker setting does nothing"
 store["download_marker"] = "true"
+
+print()
+print("=== off until asked for ===")
+store.pop("downloads_enabled", None)
+assert downloads.enabled() is False, "a fresh install would rearrange the menu unasked"
+store["downloads_enabled"] = "true"
+assert downloads.enabled() is True, "turning it on should turn it on"
+print("  a fresh install has it off, and only 'true' turns it on  OK")
 
 print()
 print("=== turning downloads off hides the whole feature ===")
@@ -850,46 +896,62 @@ assert attempts == ["AR_1", "AR_2", "AR_4"], "AR_3 has no stream, so it is skipp
 # Asked once, up front, then never during the run.
 print(f"  quiet on each call: {asked_quiet}")
 assert all(asked_quiet), "a picker mid-run is a picker per episode"
+
+# A sixty-episode arc must not fire sixty listing requests to answer a question.
+surveyed = []
+_plain_choose = _fake_choose
+
+
+def _counting_choose(p, downloadable_only=False, quiet=False, prefer=None, survey=False):
+    if survey:
+        surveyed.append(p["video_id"])
+    return _plain_choose(p, downloadable_only, quiet, prefer, survey)
+
+
+er._choose_stream = _counting_choose
+store["preferred_service"] = ""
+store["download_cut"] = "0"
+up_front.clear()
+surveyed.clear()
+er.download_season({"catalog_type": "series", "video_id": "pp_onepacee", "season": "6"})
+print(f"  episodes surveyed for 4 picked: {surveyed}")
+assert len(surveyed) <= 1, "one listing request per episode is a burst nobody asked for"
 for heading, options in up_front:
-    print(f"  asked up front: {heading!r} -> {options}")
-assert len(up_front) == 1, "only the cut is ambiguous here, so only the cut is asked"
-assert up_front[0][0] == "Season 6 — which cut?", up_front
-assert up_front[0][1] == ["Standard", "Extended"], "standard should lead"
+    print(f"  asked: {heading!r} -> {options}")
+assert [h for h, _ in up_front] == ["Season 6 — which cut?"],     "one service means nothing to choose between, so it should not ask"
+assert up_front[0][1] == ["Standard", "Extended", "Whatever each episode has"], up_front[0]
 
-# The survey reads the stream listing, which is cached; no /play/ is touched.
-survey_src = STREAMS[STREAMS.index("    if survey:"):]
-survey_src = survey_src[:survey_src.index("choices = _preferred_streams")]
-assert "/play/" not in survey_src and "video_url" in survey_src,     "surveying must not fetch the files themselves"
-fetch = STREAMS[STREAMS.index("def _choose_stream("):STREAMS.index("    if survey:")]
-assert "_cache.set(stream_url, response, 3600)" in fetch,     "without the cache the survey doubles every listing request"
-
-# Services listed the way Preferred Service lists them, not alphabetically.
-from lib.episode_routes import _SERVICE_ORDER, _SERVICE_NAMES
-picked = sorted({"ad", "tb", "rd", "p2p", "pm"},
-                key=lambda c: (_SERVICE_ORDER.get(c, 99), c))
-print(f"  service order: {[_SERVICE_NAMES[c] for c in picked]}")
-assert picked[0] == "rd" and picked[-1] == "p2p", picked
-
-# One episode carrying the only extended cut must still get it offered.
+# Two hosts on the account, so that one is worth asking about.
+OFFERS["AR_1"] = [("rd", "standard"), ("pm", "standard"), ("pm", "extended")]
 up_front.clear()
-OFFERS.update({"AR_1": [("rd", "standard")], "AR_3": [("rd", "standard")],
-               "AR_2": [("rd", "standard"), ("rd", "extended")],
-               "AR_4": [("rd", "standard")]})
-attempts.clear()
+surveyed.clear()
 er.download_season({"catalog_type": "series", "video_id": "pp_onepacee", "season": "6"})
-print(f"  one episode has an extra cut: asked {len(up_front)} question(s)")
-assert len(up_front) == 1 and "which cut" in up_front[0][0], up_front
-
-# Nothing to choose between: no questions at all.
-up_front.clear()
-OFFERS.update({k: [("rd", "standard")] for k in ("AR_1", "AR_2", "AR_3", "AR_4")})
-attempts.clear()
-er.download_season({"catalog_type": "series", "video_id": "pp_onepacee", "season": "6"})
-print(f"  every episode identical: asked {len(up_front)} question(s)")
-assert up_front == [], "it asked about a choice that did not exist"
+print(f"  two hosts: surveyed {surveyed}, asked {[h for h, _ in up_front]}")
+assert len(surveyed) <= 1, "still only one sample"
+assert up_front[0][0] == "Season 6 — which service?", up_front
+assert up_front[0][1] == ["Real-Debrid", "Premiumize"], "settings order, not alphabetical"
 OFFERS.clear()
-assert kodistub.recorder.notifications[-1][0] == "Season 6: downloaded 3, 1 with no stream", \
-    kodistub.recorder.notifications[-1]
+
+# Preferred Version governs downloads too: one setting, no second one to
+# contradict it.
+for value, expected, asks in (("1", "standard", 0), ("2", "extended", 0), ("0", "", 1)):
+    store["preferred_version"] = value
+    store["preferred_service"] = "realdebrid"
+    up_front.clear()
+    prefer = er._season_preference([picks[0][2]], "Season 6")
+    print(f"  preferred_version={value} -> asked {len(up_front)}, prefer={prefer}")
+    assert len(up_front) == asks, (value, up_front)
+    if asks:
+        assert up_front[0][1] == ["Standard", "Extended", "Whatever each episode has"]
+assert "download_cut" not in STREAMS, "a second cut setting would drift from this one"
+settings_xml = (harness.ADDON / "resources" / "settings.xml").read_text(encoding="utf-8")
+assert "download_cut" not in settings_xml, "the removed setting is still on the screen"
+store["preferred_version"] = "0"
+store["preferred_service"] = ""
+er._choose_stream = _plain_choose
+store["download_cut"] = "0"
+store["preferred_service"] = ""
+er._choose_stream = _plain_choose
 
 attempts.clear()
 verdicts["AR_2"] = downloads.BLOCKED

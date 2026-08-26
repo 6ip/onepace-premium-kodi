@@ -56,10 +56,26 @@ assert "if downloads_on:" in block, "it would show with downloads turned off"
 print("  Download Season sits on the season row, behind the setting")
 
 print()
-print("  Tools order:", [x.get("label") for x in SETTINGS.iter("setting")
-                          if x.get("type") == "lsep"][-4:])
-assert [x.get("label") for x in SETTINGS.iter("setting")
-        if x.get("type") == "lsep"][-4:] == ["Downloads", "Backup", "Cache", "Advanced"]
+tabs = [c.get("label") for c in SETTINGS.iter("category")]
+print(f"  tabs: {tabs}")
+assert tabs.index("Downloads") < tabs.index("Tools"), "Downloads should sit before Tools"
+groups = {c.get("label"): [x.get("label") for x in c if x.get("type") == "lsep"]
+          for c in SETTINGS.iter("category")}
+print(f"  Downloads: {groups['Downloads']}")
+print(f"  Tools:     {groups['Tools']}")
+assert groups["Downloads"] == ["Where They Go", "In the Lists", "History"]
+assert groups["Tools"] == ["Backup", "Cache", "Advanced"]
+
+# Every row in the Downloads tab greys out with the feature turned off.
+rows = list(next(c for c in SETTINGS.iter("category") if c.get("label") == "Downloads"))
+for at, row in enumerate(rows):
+    rule = row.get("enable", "")
+    if rule.startswith("eq(-"):
+        target = rows[at - int(rule[4:rule.index(",")])].get("id")
+        assert target == "downloads_enabled", (row.get("id"), rule, target)
+assert rows[0].get("id") == "downloads_enabled", "the switch has to come first"
+assert rows[0].get("default") == "false", "an update should not change a menu unasked"
+print(f"  {sum(1 for r in rows if r.get('enable', '').startswith('eq(-'))} rows follow the switch")
 assert "[COLOR" not in ET.tostring(SETTINGS, encoding="unicode"), "labels carry markup"
 default = next(x for x in SETTINGS.iter("setting") if x.get("id") == "highlight_color")
 print(f"  show name colour default: {default.get('default')}")
