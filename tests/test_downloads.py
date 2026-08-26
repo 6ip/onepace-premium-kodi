@@ -425,6 +425,40 @@ for name, src in (("episode list", STREAMS),
     print(f"  {name}: Download, and Re-download when stale  OK")
 
 print()
+print("=== a reinstall can find the files again ===")
+store["download_folder"] = "D:/dl"
+HOME2 = downloads.folder()
+TREE = {
+    HOME2: (["One Pace"], []),
+    f"{HOME2}One Pace/": (["Season 01", "Season 06", downloads.SUBS_DIR], []),
+    f"{HOME2}One Pace/Season 01/": ([], ["1x01 - Romance Dawn.mkv", "notes.txt"]),
+    f"{HOME2}One Pace/Season 06/": ([], ["6x05 - Arlong Park.mkv",
+                                         "6x05 - Arlong Park (Extended).mkv",
+                                         "weird name.mkv"]),
+}
+_real_listdir = downloads.xbmcvfs.listdir
+downloads.xbmcvfs.listdir = lambda p: TREE.get(p, ([], []))
+found = downloads._walk_downloads()
+for f in found:
+    print(f"  s{f['season']:02d}e{f['episode']:02d} {f['variant']:<9} {f['path'].rsplit('/', 1)[-1]}")
+assert len(found) == 3, "a .txt, an unparseable name and the subs folder should be skipped"
+assert [f["variant"] for f in found] == ["standard", "standard", "extended"], found
+assert all(f["series_name"] == "One Pace" for f in found), found
+assert not any("weird name" in f["path"] for f in found), "it guessed at a name it cannot read"
+assert not any(downloads.SUBS_DIR in f["path"] for f in found), "it walked into the subtitles"
+downloads.xbmcvfs.listdir = _real_listdir
+store["download_folder"] = ""
+
+rescan_src = SRC[SRC.index("def rescan("):SRC.index("def _series_ids(")]
+assert "_fetch_provider_meta" in rescan_src, "titles guessed from filenames would be thin"
+assert "Dialog().yesno" in rescan_src, "it would rewrite the index unasked"
+assert 'f["path"] not in known' in rescan_src, "it would re-add what is already listed"
+assert "write_report(" in rescan_src, "no record of what it did"
+rebuilt = SRC[SRC.index("def _rebuilt("):SRC.index("def check_updates(")]
+assert '"episode_id": video.get("id"' in rebuilt,     "without an id a rebuilt row cannot be marked watched"
+print("  season and cut from the name, everything else from the provider  OK")
+
+print()
 print("=== the same jumps, whichever list you are standing in ===")
 lists_src = (harness.ADDON / "lib" / "my_lists.py").read_text(encoding="utf-8")
 for name, src in (("episode list", STREAMS), ("My Lists", lists_src)):

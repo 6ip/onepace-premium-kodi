@@ -61,9 +61,38 @@ assert backup.SKIP == {"last_seen_version"}
 
 print()
 print("=== ticking the key includes it ===")
-p2 = export([0, 1, 2, 3])
+p2 = export(list(range(len(backup.PARTS))))          # every part, by name not index
 assert all(k in p2["settings"] for k in backup.SENSITIVE)
 print(f"  secret_string present: {'secret_string' in p2['settings']}")
+
+backup_src = (harness.ADDON / "lib" / "backup.py").read_text(encoding="utf-8")
+
+print()
+print("=== a reinstall should not lose sight of the files on disk ===")
+names = [key for key, _, _ in backup.PARTS]
+print(f"  parts: {names}")
+assert "downloads" in names, "the index would be gone and every download invisible"
+label = next(text for key, text, _ in backup.PARTS if key == "downloads")
+print(f"  shown as: {label!r}")
+assert "episode" not in label.lower(), "that reads as though it backs up the videos"
+
+# Every store must be read and written, or a part can be ticked and silently
+# left out — which is what a hardcoded pair of names did here.
+for src, what in ((backup_src[backup_src.index("def export_settings("):
+                              backup_src.index("def import_settings(")], "export"),
+                  (backup_src[backup_src.index("def import_settings("):], "restore")):
+    assert "for name in _STORES:" in src, f"{what} walks a fixed list of stores"
+    assert '("watched", "bookmarks")' not in src, f"{what} still hardcodes the pair"
+print("  export and restore both walk every store  OK")
+
+whole = export(list(range(len(backup.PARTS))))
+print(f"  a full backup carries: {sorted(k for k in whole if k in backup._STORES)}")
+assert "downloads" in whole, "ticking it did nothing"
+assert backup._STORES.get("downloads") == "downloads.json", backup._STORES
+on_by_default = {key for key, _, default in backup.PARTS if default}
+assert "downloads" in on_by_default, "it is the common case, so it should be ticked"
+assert "config" not in on_by_default, "the key should stay opt-in"
+print("  downloads travel with the backup, ticked by default  OK")
 
 print()
 print("=== you can export one part alone ===")

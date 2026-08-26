@@ -22,9 +22,17 @@ PARTS = [
     ("settings",  "Settings",           True),
     ("watched",   "Watched history",    True),
     ("bookmarks", "Resume points",      True),
+    # The list of what was downloaded, not the videos: a few kilobytes of
+    # paths and titles. Worth restoring on the same machine, and harmless
+    # elsewhere, where rows whose file is missing are swept on first sight.
+    ("downloads", "Download list",       True),
     ("config",    "Configuration key",  False),
 ]
-_STORES = {"watched": "watched.json", "bookmarks": "bookmarks.json"}
+_STORES = {"watched": "watched.json", "bookmarks": "bookmarks.json",
+           "downloads": "downloads.json"}
+# What each store is called in the "Restored:" summary.
+_NOUNS = {"watched": "watched", "bookmarks": "resume points",
+          "downloads": "downloads"}
 _FORMAT = 2
 
 
@@ -69,6 +77,9 @@ def _write_store(addon, name, data):
 def _count(part, section):
     if part == "settings":
         return len(section)
+    if part == "downloads":
+        # Two keys, "files" and "series", so counting them says 2 either way.
+        return len(section.get("files", {}))
     return sum(len(v) if isinstance(v, list) else 1
                for k, v in section.items() if not k.startswith("__"))
 
@@ -103,7 +114,7 @@ def export_settings(_params=None):
                 continue
             values[sid] = addon.getSetting(sid)
         payload["settings"] = values
-    for name in ("watched", "bookmarks"):
+    for name in _STORES:
         if name in want:
             payload[name] = _read_store(addon, name)
 
@@ -204,10 +215,11 @@ def import_settings(_params=None):
             except Exception as exc:
                 log(f"[backup] could not set {sid}: {exc}")
         done.append(f"{n} settings")
-    for name in ("watched", "bookmarks"):
-        if name in want and _write_store(addon, name, data[name]):
-            noun = "watched" if name == "watched" else "resume points"
-            done.append(f"{_count(name, data[name])} {noun}")
+    for name in _STORES:
+        # An older backup will not carry every store we know about today.
+        section = data.get(name) or {}
+        if name in want and _write_store(addon, name, section):
+            done.append(f"{_count(name, section)} {_NOUNS.get(name, name)}")
 
     # Our lists draw the tick from watched.json, but Kodi keeps its own
     # playCount. Without this the two disagree until each episode is replayed.

@@ -491,6 +491,135 @@ def _release_of(episode_id, variant):
     return "", 0
 
 
+# What our own naming produces: "6x05 - Arlong Park (Extended).mkv". Only the
+# numbers and an optional trailing cut are read back; the title and everything
+# else come from the provider, which is far more reliable than a filename.
+_NAMED = re.compile(r"^(\d+)x(\d+) - (.+?)(?: \(([^)]+)\))?$")
+_VIDEO_EXTS = (".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".webm")
+
+
+def _walk_downloads():
+    """Every video file under the download folder, with what its name says."""
+    found = []
+    root = folder()
+    series_dirs, _ = xbmcvfs.listdir(root)
+    for series in series_dirs:
+        seasons, _ = xbmcvfs.listdir(f"{root}{series}/")
+        for season_dir in seasons:
+            if season_dir.startswith("."):
+                continue
+            here = f"{root}{series}/{season_dir}/"
+            _, names = xbmcvfs.listdir(here)
+            for name in names:
+                stem, ext = os.path.splitext(name)
+                if ext.lower() not in _VIDEO_EXTS:
+                    continue
+                match = _NAMED.match(stem)
+                if not match:
+                    log(f"[rescan] cannot read a season and episode from {name!r}")
+                    continue
+                season, episode, _title, cut = match.groups()
+                found.append({"path": here + name, "series_name": series,
+                              "season": int(season), "episode": int(episode),
+                              "variant": (cut or "standard").lower()})
+    return found
+
+
+def rescan(_params=None):
+    """Rebuild the index from what is actually on disk.
+
+    A reinstall leaves the files but takes the index with it, and every
+    download becomes invisible. Names carry the season and episode; the
+    provider supplies the rest, so the rebuilt rows are as good as the
+    originals apart from the release hash.
+    """
+    from .provider_api import _fetch_provider_meta
+
+    data = _sweep(read_index())
+    known = set(data["files"])
+    try:
+        on_disk = _walk_downloads()
+    except Exception as exc:
+        log(f"[rescan] could not read the download folder: {exc}")
+        _notify_error("Could not read the download folder")
+        return
+
+    missing = [f for f in on_disk if f["path"] not in known]
+    if not missing:
+        _notify_info(f"All {len(on_disk)} file(s) already listed")
+        return
+    if not xbmcgui.Dialog().yesno(
+            "Rescan", f"{len(missing)} file(s) here are not in the list."
+            + chr(10) + chr(10) + "Look them up and add them?",
+            nolabel="Cancel", yeslabel="Add"):
+        return
+
+    progress = xbmcgui.DialogProgressBG()
+    progress.create("Rescanning downloads")
+    added, unknown = 0, 0
+    ids = _series_ids()
+    for index, entry in enumerate(missing, 1):
+        progress.update(int(index * 100 / len(missing)), "Rescanning downloads",
+                        os.path.basename(entry["path"]))
+        series_id = ids.get(entry["series_name"])
+        meta = _fetch_provider_meta("series", series_id) if series_id else None
+        video = _match_episode(meta, entry) if meta else None
+        if not video:
+            unknown += 1
+            log(f"[rescan] no provider entry for {entry['path']!r}")
+            continue
+        _remember(entry["path"], _rebuilt(entry, video, meta), meta)
+        added += 1
+    progress.close()
+
+    lines = [f"Added {added} of {len(missing)} found"]
+    if unknown:
+        lines.append(f"{unknown} could not be matched to an episode")
+    write_report("Rescanned downloads", lines)
+    _notify_info(f"Added {added} download(s)" if added else "Nothing could be added")
+    refresh_container()
+
+
+def _series_ids():
+    """Series name -> provider id, from the catalog, in one request."""
+    from .provider_api import _catalog_specs, _catalog_url, _fetch_provider_manifest
+
+    try:
+        specs = _catalog_specs(_fetch_provider_manifest() or {}, "series")
+        if not specs:
+            return {}
+        from .provider_api import _fetch_catalog
+        response = _fetch_catalog(_catalog_url("series", specs[0]["id"], "skip=0"))
+        return {v["name"]: v["id"] for v in (response or {}).get("metas", ())
+                if v.get("name") and v.get("id")}
+    except Exception as exc:
+        log(f"[rescan] could not read the catalog: {exc}")
+        return {}
+
+
+def _match_episode(meta, entry):
+    for video in meta.get("videos", ()):
+        if (video.get("season") == entry["season"]
+                and (video.get("episode") or video.get("number")) == entry["episode"]):
+            return video
+    return None
+
+
+def _rebuilt(entry, video, meta):
+    """The params _remember expects, from the provider rather than the file."""
+    season_poster = next(
+        (s["poster"] for s in meta.get("seasons", ())
+         if s.get("season") == entry["season"] and s.get("poster")), "")
+    return {
+        "series_name": entry["series_name"], "season": str(entry["season"]),
+        "episode": str(entry["episode"]), "variant": entry["variant"],
+        "episode_id": video.get("id", ""), "series_id": meta.get("id", ""),
+        "episode_title": video.get("name") or video.get("title") or "",
+        "thumb": video.get("thumbnail", ""), "season_poster": season_poster,
+        "logo": meta.get("logo", ""), "video_size": 0, "duration": 0,
+    }
+
+
 def check_updates(_params=None):
     """See which downloads the repo has re-released since we fetched them.
 
