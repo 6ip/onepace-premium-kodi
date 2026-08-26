@@ -363,6 +363,88 @@ assert play_src.index("local_subtitles(video_url)") < play_src.index('elif sub_i
 print("  plain track untagged, feed order handed to Kodi  OK")
 
 print()
+print("=== a re-release is spotted without touching the add-on's server ===")
+for eid, want in (("RO_1", "RO_1"), ("MUHN_WC_15", "Muhn/MUHN_WC_15"),
+                  ("ONIG_1", "ONIG/ONIG_1"), ("KUMA_SHAVED_3", "KUMA_SHAVED/KUMA_SHAVED_3"),
+                  ("fan_2", "Specials/fan_2")):
+    got = downloads.stream_path(eid)
+    print(f"  {eid:<16} -> stream/{got}.json")
+    assert got == want, (eid, got)
+
+for url, want in (
+        ("https://srv/play/k/cdab4a928dbbff643bbe5531f216eb36a60c85af/397698454/realdebrid/RO_1",
+         "cdab4a928dbbff643bbe5531f216eb36a60c85af"),
+        ("https://srv/real.mkv", "")):
+    assert downloads._info_hash_of(url) == want, url
+assert '"info_hash": _info_hash_of' in SRC, "nothing to compare a re-release against"
+
+check = SRC[SRC.index("def check_updates("):SRC.index("def _prune(")]
+assert "_tree_hashes()" in check, "it would fetch every episode one by one"
+assert 'current == meta.get("stream_sha")' in check,     "an unchanged file would still be fetched"
+assert check.index("_tree_hashes()") < check.index("_release_of("),     "the cheap list has to come before the per-episode reads"
+assert "6ip.github.io" in SRC and "onepace-premium" not in SRC.split("_TREE_URL")[1][:200],     "the check should not run through the add-on's own server"
+print("  one list request, then only what actually moved  OK")
+
+# Editing the JSON moves its hash without touching the release, so the hash
+# can only decide *whether to look*, never whether something was re-released.
+HASH = "5ecc22012328be9e0cc0cc33f4290291effd6a84"
+decide = SRC[SRC.index("        was, was_size ="):SRC.index('meta["stream_sha"] = current')]
+assert "info_hash != was" in decide, "the release itself is what changed or did not"
+assert "size != was_size" in decide, "an older download has only its byte count"
+assert "stale = False" in decide, "with no baseline it would guess"
+for note, args, want in (
+        ("a field added, same release", (HASH, 475296656, HASH, 475296656), False),
+        ("a genuine re-release", ("f" * 40, 480000000, HASH, 475296656), True),
+        ("older download, size unchanged", (HASH, 475296656, "", 475296656), False),
+        ("older download, size changed", (HASH, 480000000, "", 475296656), True),
+        ("nothing stored to compare", (HASH, 475296656, "", 0), False)):
+    info_hash, size, was, was_size = args
+    if info_hash and was:
+        got = info_hash != was
+    elif size and was_size:
+        got = size != was_size
+    else:
+        got = False
+    print(f"  {note:<32} -> outdated={got}")
+    assert got is want, note
+print("  a cosmetic edit costs one extra read, and flags nothing  OK")
+
+# Held, but the repo moved on: a different colour and a different glyph.
+store["downloads_enabled"] = "true"
+fresh = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"})
+stale = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"}, stale={"RO_1"})
+print(f"  current : {fresh.encode('unicode_escape').decode()}")
+print(f"  outdated: {stale.encode('unicode_escape').decode()}")
+assert fresh.startswith("[COLOR FF2ECC71]"), fresh
+assert stale.startswith("[COLOR FFF5A623]"), "an outdated row looks the same as a current one"
+assert "[/B]" not in downloads.mark("x", "RO_1", {"RO_1"}, plain=True, stale={"RO_1"})
+for name, src in (("episode list", STREAMS),
+                  ("My Lists", (harness.ADDON / "lib" / "my_lists.py").read_text(encoding="utf-8"))):
+    assert '"[B]Re-download[/B]" if' in src, f"{name} never says why to fetch it again"
+    assert "download_episode" in src, f"{name} cannot download at all"
+    print(f"  {name}: Download, and Re-download when stale  OK")
+
+print()
+print("=== the same jumps, whichever list you are standing in ===")
+lists_src = (harness.ADDON / "lib" / "my_lists.py").read_text(encoding="utf-8")
+for name, src in (("episode list", STREAMS), ("My Lists", lists_src)):
+    block = src[src.index("ctx_items = []"):src.index("addContextMenuItems(ctx_items")]
+    assert "browse_download" in block, f"{name} cannot open the folder"
+    assert "episode_id=" in block.split("browse_download")[1][:60],         f"{name} has no path, so it must pass the episode instead"
+    print(f"  {name}: Browse Folder when the copy is held  OK")
+
+# The route has to accept an episode id, since only Downloads knows the path.
+route = SRC[SRC.index("def browse(params):"):SRC.index("def _remove(")]
+assert 'path_for(params.get("episode_id"' in route, "an id alone would open nothing"
+
+row = SRC[SRC.index('menu.append(("[B]Browse Folder[/B]"'):SRC.index("items.append((play_url")]
+assert "Browse Season..." in row, "no way back to the full season from Downloads"
+assert "list_episodes" in row and 'season=season' in row, row[:200]
+assert 'if meta.get("series_id")' in row, "an entry with no series would build a broken url"
+assert "Browse Season..." in lists_src, "the wording should match My Lists"
+print("  Downloads: Browse Season back to the whole thing  OK")
+
+print()
 print("=== a downloaded episode still offers the picker ===")
 store["downloads_enabled"] = "true"
 for pref, held, expect in (("true", {"RO_1"}, True), ("false", {"RO_1"}, False),

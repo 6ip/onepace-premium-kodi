@@ -233,6 +233,8 @@ def _remember(path, params, meta=None, subtitles=()):
         "video_size": params.get("video_size") or 0,
         "duration": params.get("duration") or 0,
         "variant": variant_of(params),
+        # The release we took, so a later check can tell it apart from a new one.
+        "info_hash": _info_hash_of(params.get("video_url", "")),
         # Kept so they go when the episode goes, and travel when it moves.
         "subtitles": list(subtitles),
         # The provider composes resolution, chapters, runtime, bitrate and
@@ -249,6 +251,13 @@ def _remember(path, params, meta=None, subtitles=()):
         "logo": params.get("logo", ""),
     }
     _write_index(data)
+
+
+def _info_hash_of(url):
+    """The debrid link carries the release hash: /play/<key>/<hash>/<size>/..."""
+    parts = [p for p in url.split("/") if len(p) == 40 and all(
+        c in "0123456789abcdef" for c in p.lower())]
+    return parts[0].lower() if parts else ""
 
 
 def _existing(params, destination):
@@ -445,6 +454,114 @@ def save_subtitles(destination, params):
     return saved
 
 
+# The stream data lives in a public repo, so checking it costs the add-on's
+# own server nothing. One call lists every file with the git hash of its
+# contents, which is all that is needed to know whether anything changed.
+_TREE_URL = ("https://api.github.com/repos/6ip/onepace-streams/git/trees/"
+             "main?recursive=1")
+_STREAM_URL = "https://6ip.github.io/onepace-streams/stream/{path}.json"
+
+# A few arcs sit in subfolders; the rest are at the root of /stream.
+_STREAM_DIRS = (("MUHN_", "Muhn"), ("ONIG_", "ONIG"),
+                ("KUMA_SHAVED_", "KUMA_SHAVED"), ("fan_", "Specials"))
+
+
+def stream_path(episode_id):
+    for prefix, directory in _STREAM_DIRS:
+        if episode_id.startswith(prefix):
+            return f"{directory}/{episode_id}"
+    return episode_id
+
+
+def _tree_hashes():
+    """path -> content hash, for every stream file, in one request."""
+    tree = session().get(_TREE_URL, timeout=20).json().get("tree", ())
+    return {t["path"]: t["sha"] for t in tree
+            if t.get("path", "").startswith("stream/")}
+
+
+def _release_of(episode_id, variant):
+    """The infoHash the repo currently lists for this episode and cut."""
+    url = _STREAM_URL.format(path=stream_path(episode_id))
+    for stream in session().get(url, timeout=20).json().get("streams", ()):
+        name = (stream.get("releaseName") or stream.get("filename") or "").lower()
+        is_extended = "extended" in name
+        if is_extended == (variant not in ("", "standard")):
+            return stream.get("infoHash") or "", stream.get("videoSize") or 0
+    return "", 0
+
+
+def check_updates(_params=None):
+    """See which downloads the repo has re-released since we fetched them.
+
+    One request lists every stream file with a content hash. Only the ones
+    whose hash moved are fetched individually, so a library of four hundred
+    episodes normally costs a single request — and none of them touch the
+    add-on's own server.
+    """
+    data = read_index()
+    held = [(path, meta) for path, meta in data["files"].items()
+            if meta.get("episode_id")]
+    if not held:
+        _notify_info("Nothing downloaded yet")
+        return
+
+    progress = xbmcgui.DialogProgressBG()
+    progress.create("Checking downloads")
+    changed, checked, failed = 0, 0, 0
+    try:
+        hashes = _tree_hashes()
+    except Exception as exc:
+        progress.close()
+        log(f"[updates] could not read the file list: {exc}")
+        _notify_error("Could not check for updates")
+        return
+
+    for index, (path, meta) in enumerate(held, 1):
+        episode_id = meta["episode_id"]
+        progress.update(int(index * 100 / len(held)), "Checking downloads",
+                        meta.get("episode_title", ""))
+        current = hashes.get(f"stream/{stream_path(episode_id)}.json", "")
+        if current and current == meta.get("stream_sha"):
+            continue                      # untouched since we fetched it
+        checked += 1
+        try:
+            info_hash, size = _release_of(episode_id, meta.get("variant", ""))
+        except Exception as exc:
+            log(f"[updates] {episode_id}: {exc}")
+            failed += 1
+            continue
+        # The file's hash only says the file was edited — adding a field to
+        # the JSON changes it while the release stays put. What decides is the
+        # release itself: its infoHash, or the byte count for a download made
+        # before we stored one. With neither, there is nothing to compare, so
+        # record what is there now and call it current.
+        was, was_size = meta.get("info_hash") or "", meta.get("video_size") or 0
+        if info_hash and was:
+            stale = info_hash != was
+        elif size and was_size:
+            stale = size != was_size
+        else:
+            stale = False
+            meta.setdefault("info_hash", info_hash)
+            meta.setdefault("video_size", size)
+        meta["stream_sha"] = current
+        meta["outdated"] = stale
+        if stale:
+            changed += 1
+            log(f"[updates] {episode_id} was re-released")
+    progress.close()
+    _write_index(data)
+
+    lines = [f"{changed} of {len(held)} look re-released",
+             f"{checked} needed a closer look, {len(held) - checked} unchanged"]
+    if failed:
+        lines.append(f"{failed} could not be checked")
+    write_report("Checked downloads", lines)
+    _notify_info(f"{changed} update(s) found" if changed else "Everything is current")
+    refresh_container()
+
+
 def _prune(path):
     """Drop the season and series folders once nothing is left in them.
 
@@ -473,8 +590,11 @@ _FILE_MANAGERS = (
 
 
 def browse(params):
-    """Open the folder in the desktop's file manager, or Kodi's if there is none."""
-    path = params.get("path", "")
+    """Open the folder in the desktop's file manager, or Kodi's if there is none.
+
+    Takes a path, or an episode id for the lists that only know that much.
+    """
+    path = params.get("path") or path_for(params.get("episode_id", ""))
     directory = os.path.dirname(_normalised(path)) if path else ""
     if not directory or not xbmcvfs.exists(directory + "/"):
         _notify_error("That folder is not there any more")
@@ -792,8 +912,12 @@ def _play_fields(path, meta):
 # bold inside the colour; the select dialog leaves its closing tag showing, so
 # that one goes without.
 _ARROW = "[↓]"
+_REDO = "[↻]"
 _MARK = f"[COLOR FF2ECC71][B]{_ARROW}[/B][/COLOR]"
 _MARK_PLAIN = f"[COLOR FF2ECC71]{_ARROW}[/COLOR]"
+# Amber, and a different glyph: held, but the repo has moved on.
+_STALE = f"[COLOR FFF5A623][B]{_REDO}[/B][/COLOR]"
+_STALE_PLAIN = f"[COLOR FFF5A623]{_REDO}[/COLOR]"
 
 
 def enabled():
@@ -801,8 +925,16 @@ def enabled():
     return get_setting("downloads_enabled") == "true"
 
 
-def mark(label, episode_id, on_disk, plain=False):
-    """Flag a title that is already on disk.
+def outdated_ids():
+    """Episode ids whose release moved on since we fetched them."""
+    if not enabled():
+        return set()
+    return {m.get("episode_id") for m in read_index()["files"].values()
+            if m.get("outdated") and m.get("episode_id")}
+
+
+def mark(label, episode_id, on_disk, plain=False, stale=()):
+    """Flag a title that is already on disk, or one worth fetching again.
 
     plain drops the bold, which a select dialog renders as a literal [/B].
     """
@@ -810,6 +942,8 @@ def mark(label, episode_id, on_disk, plain=False):
         return label
     if not enabled() or get_setting("download_marker") == "false":
         return label
+    if episode_id in stale:
+        return f"{_STALE_PLAIN if plain else _STALE} {label}"
     return f"{_MARK_PLAIN if plain else _MARK} {label}"
 
 
@@ -1064,6 +1198,13 @@ def list_downloads(params=None):
                     "clear_progress", episode_id=episode_id)))
         menu.append(("[B]Browse Folder[/B]",
                      "RunPlugin(%s)" % build_url("browse_download", path=path)))
+        # The same wording My Lists uses, and the same jump: out of a filtered
+        # view into the whole season, downloaded or not.
+        if meta.get("series_id"):
+            menu.append(("[B]Browse Season...[/B]",
+                         "ActivateWindow(Videos,%s,return)" % build_url(
+                             "list_episodes", catalog_type="series",
+                             video_id=meta["series_id"], season=season)))
         menu.append(("[B]Delete[/B]",
                      "RunPlugin(%s)" % build_url("delete_download", path=path)))
         item.addContextMenuItems(menu)

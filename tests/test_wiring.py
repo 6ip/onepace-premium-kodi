@@ -63,7 +63,7 @@ groups = {c.get("label"): [x.get("label") for x in c if x.get("type") == "lsep"]
           for c in SETTINGS.iter("category")}
 print(f"  Downloads: {groups['Downloads']}")
 print(f"  Tools:     {groups['Tools']}")
-assert groups["Downloads"] == ["Where They Go", "In the Lists", "History"]
+assert groups["Downloads"] == ["Where They Go", "In the Lists", "Updates", "History"]
 assert groups["Tools"] == ["Backup", "Cache", "Advanced"]
 
 # Every row in the Downloads tab greys out with the feature turned off.

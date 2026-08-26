@@ -63,8 +63,11 @@
         <setting label="Mark Downloaded Episodes" id="download_marker" type="bool" default="true" enable="eq(-9,true)" />
         <setting label="Play the Downloaded Copy" id="prefer_downloads" type="bool" default="true" enable="eq(-10,true)" />
         <setting type="sep" />
+        <setting type="lsep" label="Updates" />
+        <setting label="Check for Updates" id="check_updates" type="action" enable="eq(-13,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=check_updates)" />
+        <setting type="sep" />
         <setting type="lsep" label="History" />
-        <setting label="Last Download Summary" id="show_download_report" type="action" enable="eq(-13,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_download_report)" />
+        <setting label="Last Download Summary" id="show_download_report" type="action" enable="eq(-16,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_download_report)" />
     </category>
     <category label="Tools">
         <setting type="lsep" label="Backup" />

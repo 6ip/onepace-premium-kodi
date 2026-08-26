@@ -272,8 +272,9 @@ def list_episodes(params):
     series_actors = _cast_list(meta)
     hide_watched = get_setting("hide_watched") == "true"
     from .downloads import (downloaded_ids, enabled, mark as _download_mark,
-                            offer_manual as _offer_manual)
+                            offer_manual as _offer_manual, outdated_ids)
     on_disk, downloads_on = downloaded_ids(), enabled()
+    stale = outdated_ids()
     items = []
     n_watched = n_resume = n_hidden = 0
     for video in season_videos:
@@ -291,7 +292,7 @@ def list_episodes(params):
         title = video.get("name") or video.get("title") or f"Episode {episode_number}"
         label = _download_mark(
             _episode_label(title, selected_season, episode_number, stream_video_id),
-            stream_video_id, on_disk)
+            stream_video_id, on_disk, stale=stale)
         list_item = xbmcgui.ListItem(label=label, offscreen=True)
         tags = list_item.getVideoInfoTag()
         _set_ids(tags, video_id)
@@ -368,9 +369,14 @@ def list_episodes(params):
                 "[B]Clear Progress[/B]",
                 f"RunPlugin({build_url('clear_progress', episode_id=stream_video_id)})",
             ))
+        if stream_video_id in on_disk:
+            ctx_items.append((
+                "[B]Browse Folder[/B]",
+                f"RunPlugin({build_url('browse_download', episode_id=stream_video_id)})",
+            ))
         if downloads_on:
             ctx_items.append((
-            "[B]Download[/B]",
+            "[B]Re-download[/B]" if stream_video_id in stale else "[B]Download[/B]",
                 f"RunPlugin({build_url('download_episode', **episode_params(video, meta, video_id, catalog_type, season_poster, stream_video_id))})",
             ))
         list_item.addContextMenuItems(ctx_items, replaceItems=True)

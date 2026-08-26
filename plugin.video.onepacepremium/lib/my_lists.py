@@ -51,8 +51,10 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
     title = video.get("name") or video.get("title") or f"Episode {episode_number}"
     colour = get_setting("highlight_color") or "ff00d4ff"
     display_label = f"[[COLOR {colour}]{show_title}[/COLOR]] {title}" if show_title else title
-    from .downloads import downloaded_ids, mark as _download_mark
-    display_label = _download_mark(display_label, ep_id, downloaded_ids())
+    from .downloads import (downloaded_ids, enabled, mark as _download_mark,
+                            offer_manual, outdated_ids)
+    on_disk, stale = downloaded_ids(), outdated_ids()
+    display_label = _download_mark(display_label, ep_id, on_disk, stale=stale)
     list_item = xbmcgui.ListItem(label=display_label, offscreen=True)
     tags = list_item.getVideoInfoTag()
     tags.setTitle(title)
@@ -103,8 +105,7 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
 
     ep_ctx_label = "[B]Mark Unwatched[/B]" if is_watched else "[B]Mark Watched[/B]"
     ctx_items = []
-    from .downloads import downloaded_ids, offer_manual
-    if offer_manual(ep_id, downloaded_ids()):
+    if offer_manual(ep_id, on_disk):
         ctx_items.append((
             "[B]Play Manually[/B]",
             # PlayMedia, so Kodi hands check_resume a handle to resolve into.
@@ -118,6 +119,18 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
         ctx_items.append((
             "[B]Clear Progress[/B]",
             f"RunPlugin({build_url('clear_progress', episode_id=ep_id)})",
+        ))
+    # The lists where you decide what to watch next are where "take it with
+    # me" occurs to you, so the same item belongs here.
+    if enabled():
+        ctx_items.append((
+            "[B]Re-download[/B]" if ep_id in stale else "[B]Download[/B]",
+            f"RunPlugin({build_url('download_episode', **episode_params(video, meta, series_id, _CATALOG_TYPE, season_poster_map.get(selected_season) or '', ep_id))})",
+        ))
+    if ep_id in on_disk:
+        ctx_items.append((
+            "[B]Browse Folder[/B]",
+            f"RunPlugin({build_url('browse_download', episode_id=ep_id)})",
         ))
     if selected_season is not None:
         ctx_items.append((
