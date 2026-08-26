@@ -90,6 +90,66 @@ def _suffix(variant):
     return f" ({variant_label(variant)})"
 
 
+# When the debrid account cannot serve a file, the provider redirects to a
+# short video that says why. Watching it is the point when streaming; saving
+# it as the episode never is.
+_ERROR_PATH = "/api_errors/"
+
+_FIXABLE_IN_SETTINGS = {
+    "ACCOUNT_INVALID", "AUTH_BAD_APIKEY", "AUTH_BLOCKED", "AUTH_ERROR",
+    "AUTH_MISSING_APIKEY", "AUTH_USER_BANNED", "BADTOKEN", "BAD_TOKEN",
+    "EXPIRED_TOKEN", "INVALID_ACCOUNT_OR_PASSWORD", "INVALID_CLIENT", "NO_AUTH",
+    "UNAUTHENTICATED", "UNAUTHORIZED", "UNAUTHORIZED_CLIENT",
+}
+_ACCOUNT_LIMITS = {
+    "ACTIVE_LIMIT", "COOLDOWN_LIMIT", "FREE_TRIAL_LIMIT_REACHED",
+    "MAGNET_MUST_BE_PREMIUM", "MONTHLY_LIMIT", "MUST_BE_PREMIUM",
+    "PAYMENT_REQUIRED", "PLAN_RESTRICTED_FEATURE", "PROXY_LIMIT_REACHED",
+    "STORE_LIMIT_EXCEEDED", "TOO_MANY_REQUESTS",
+}
+_TEMPORARY = {
+    "BAD_GATEWAY", "DEBRID_SYNC_ALREADY_RUNNING", "DEBRID_SYNC_TRIGGERED",
+    "DOWNLOAD_SERVER_ERROR", "INTERNAL_SERVER_ERROR", "MAINTENANCE",
+    "NO_SERVER", "NO_SERVERS_AVAILABLE_ERROR", "SERVER_ERROR",
+    "SERVICE_UNAVAILABLE", "STORE_SERVER_DOWN",
+}
+_THIS_STREAM = {
+    "GONE", "LINK_OFFLINE", "MEDIA_NOT_CACHED_YET", "NOT_FOUND",
+    "STORE_MAGNET_INVALID", "STORE_NAME_INVALID",
+    "UNAVAILABLE_FOR_LEGAL_REASONS",
+}
+
+# BAD_REQUEST, CONFLICT, FORBIDDEN, LOCKED and the rest are left out on
+# purpose: they could mean a key, a plan or a server, and the fallback says
+# what the server said rather than sending someone to the wrong screen.
+
+
+def error_code(url):
+    """The provider's own name for what went wrong, if this is one of those."""
+    if _ERROR_PATH not in (url or ""):
+        return ""
+    tail = url.split(_ERROR_PATH, 1)[1].split("?")[0].split("/")[0]
+    return os.path.splitext(tail)[0].upper()
+
+
+def explain_error(code):
+    """A sentence a viewer can act on, and whether settings would help."""
+    plain = code.replace("_", " ").capitalize()
+    if code in _FIXABLE_IN_SETTINGS:
+        return (f"Your configuration key was rejected.{chr(10)}{chr(10)}{plain}."
+                f"{chr(10)}{chr(10)}Settings will open so you can enter a valid one."), True
+    if code in _ACCOUNT_LIMITS:
+        return (f"Your debrid account will not allow this right now."
+                f"{chr(10)}{chr(10)}{plain}."), False
+    if code in _TEMPORARY:
+        return (f"The server is having trouble.{chr(10)}{chr(10)}{plain}."
+                f"{chr(10)}{chr(10)}Try again in a little while."), False
+    if code in _THIS_STREAM:
+        return (f"That stream is not available.{chr(10)}{chr(10)}{plain}."
+                f"{chr(10)}{chr(10)}Pick a different one and try again."), False
+    return f"The server refused the download.{chr(10)}{chr(10)}{plain}.", False
+
+
 def _target(params):
     """Series folder, season folder and filename, in our own list's style."""
     series = safe_name(params.get("series_name"), "One Pace")
@@ -212,12 +272,27 @@ def _remove_rows(paths):
         _write_index(data)
 
 
+# What download() tells its caller, so a queue knows whether to carry on.
+OK, FAILED, CANCELLED, BLOCKED = "ok", "failed", "cancelled", "blocked"
+
+
+def _blocked(response):
+    """Say what the provider refused, and stop. Nothing has been written yet."""
+    code = error_code(response.url)
+    message, settings_help = explain_error(code)
+    log(f"[downloads] the server answered with {code}")
+    xbmcgui.Dialog().ok("Download", message)
+    if settings_help:
+        xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+    return BLOCKED
+
+
 def download(params, meta=None):
     """Fetch one episode to disk. Runs for as long as the transfer takes."""
     url = params.get("video_url", "")
     if not is_downloadable(url):
         _notify_error("This stream cannot be downloaded")
-        return
+        return FAILED
 
     directory, name = _target(params)
     destination = directory + name
@@ -230,10 +305,10 @@ def download(params, meta=None):
                 "Download",
                 os.path.basename(already) + chr(10) + chr(10) + "is already here. Fetch it again?",
                 nolabel="Keep", yeslabel="Replace"):
-            return
+            return CANCELLED
     if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
         _notify_error("Could not create the download folder")
-        return
+        return FAILED
 
     # Written beside the real name, so a failed replacement cannot destroy
     # the copy that already worked.
@@ -246,6 +321,10 @@ def download(params, meta=None):
     try:
         response = session().get(url, stream=True, timeout=30)
         response.raise_for_status()
+        # Checked before a byte is written: the redirect is the whole answer.
+        if error_code(response.url):
+            progress.close()
+            return _blocked(response)
         total = int(params.get("video_size") or 0) or int(
             response.headers.get("Content-Length") or 0)
         with xbmcvfs.File(partial, "w") as handle:
@@ -266,14 +345,14 @@ def download(params, meta=None):
         log(f"[downloads] {name!r} failed after {written} bytes: {exc}")
         xbmcvfs.delete(partial)
         _notify_error(f"Download failed: {exc}")
-        return
+        return FAILED
 
     progress.close()
     if total and written < total:
         log(f"[downloads] {name!r} stopped short: {written} of {total} bytes")
         xbmcvfs.delete(partial)
         _notify_error("Download ended early, nothing kept")
-        return
+        return FAILED
 
     # Swap through a side name. Deleting the old file first would mean a
     # rename that fails leaves neither copy.
@@ -282,13 +361,13 @@ def download(params, meta=None):
     if replacing and not xbmcvfs.rename(destination, backup):
         xbmcvfs.delete(partial)
         _notify_error("Could not replace the file already there")
-        return
+        return FAILED
     if not xbmcvfs.rename(partial, destination):
         xbmcvfs.delete(partial)
         if replacing:
             xbmcvfs.rename(backup, destination)
         _notify_error("Could not put the file in place")
-        return
+        return FAILED
     if replacing:
         xbmcvfs.delete(backup)
 
@@ -301,6 +380,7 @@ def download(params, meta=None):
     log(f"[downloads] saved {destination!r} ({written} bytes)")
     _notify_info(f"Downloaded {name}")
     refresh_container()
+    return OK
 
 
 def _prune(path):

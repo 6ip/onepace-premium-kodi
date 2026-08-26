@@ -84,6 +84,122 @@ assert '"video_size": params.get("video_size")' in SRC, "nothing to compare on a
 print("  videoSize drives the progress bar and the short-read check  OK")
 
 print()
+print("=== a message from the provider is never saved as the episode ===")
+import kodistub
+for url, want in (
+        ("https://srv/api_errors/MAGNET_MUST_BE_PREMIUM.mp4", "MAGNET_MUST_BE_PREMIUM"),
+        ("https://srv/api_errors/AUTH_BAD_APIKEY.mp4?x=1", "AUTH_BAD_APIKEY"),
+        ("https://srv/play/key/hash/723321457/realdebrid/DI_4", ""),
+        ("https://srv/real.mkv", ""),
+        ("", "")):
+    got = downloads.error_code(url)
+    print(f"  {(url or '(empty)')[-46:]:<48} {got or '-'}")
+    assert got == want, url
+
+print()
+print("  what each group tells you:")
+for code, opens_settings, opening in (
+        ("AUTH_BAD_APIKEY", True, "Your configuration key was rejected."),
+        ("EXPIRED_TOKEN", True, "Your configuration key was rejected."),
+        ("MAGNET_MUST_BE_PREMIUM", False, "Your debrid account will not allow this right now."),
+        ("MONTHLY_LIMIT", False, "Your debrid account will not allow this right now."),
+        ("MAINTENANCE", False, "The server is having trouble."),
+        ("LINK_OFFLINE", False, "That stream is not available."),
+        ("SOMETHING_BRAND_NEW", False, "The server refused the download.")):
+    message, settings_help = downloads.explain_error(code)
+    print(f"    {code:<24} settings={str(settings_help):<5} {message.splitlines()[0]}")
+    assert settings_help is opens_settings, code
+    assert message.startswith(opening), (code, message)
+    assert code.replace("_", " ").capitalize() in message, "the raw code is unreadable alone"
+
+# Every video in public/api_errors should land somewhere deliberate.
+known = (downloads._FIXABLE_IN_SETTINGS | downloads._ACCOUNT_LIMITS
+         | downloads._TEMPORARY | downloads._THIS_STREAM)
+overlap = [c for c in known if sum(
+    c in g for g in (downloads._FIXABLE_IN_SETTINGS, downloads._ACCOUNT_LIMITS,
+                     downloads._TEMPORARY, downloads._THIS_STREAM)) > 1]
+assert not overlap, f"a code in two groups gets whichever advice is checked first: {overlap}"
+print(f"  {len(known)} codes grouped, none in two groups at once  OK")
+
+dlx = SRC[SRC.index("def download("):SRC.index("def _prune(")]
+assert dlx.index("error_code(response.url)") < dlx.index('xbmcvfs.File(partial'),     "the message video would be written to disk before anyone looked at it"
+assert "response.url" in dlx, "checking the requested url misses the redirect"
+assert dlx.count("return FAILED") >= 4 and "return BLOCKED" in SRC,     "a queue cannot tell a refusal from a network blip"
+print("  caught on the redirect, before a byte is written  OK")
+
+
+class _Blocked:
+    """A provider response that redirected to a message instead of a file."""
+
+    def __init__(self, url, length):
+        self.url, self.headers = url, {"Content-Length": str(length)}
+        self.read = False
+
+    def raise_for_status(self):
+        pass
+
+    def iter_content(self, chunk_size=0):
+        self.read = True
+        yield b"x" * int(self.headers["Content-Length"])
+
+
+class _Handle:
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def write(self, blob):
+        return True
+
+
+_REAL_FOLDER = downloads.folder
+
+
+def _attempt(url, length, video_size):
+    downloads.read_index = lambda: {"files": {}, "series": {}}
+    downloads._write_index = lambda data: None
+    downloads.folder = lambda: "C:/dl/"
+    downloads.xbmcvfs.File = lambda p, mode="r": _Handle()
+    downloads.xbmcvfs.exists = lambda p: False
+    downloads.xbmcvfs.delete = lambda p: True
+    downloads.xbmcvfs.mkdirs = lambda p: True
+    downloads.xbmcvfs.rename = lambda a, b: True
+    reply = _Blocked(url, length)
+    downloads.session = lambda: type("S", (), {"get": lambda s, *a, **k: reply})()
+    kodistub.recorder.reset()
+    fields = {"video_url": "https://srv/play/k/h/1/realdebrid/DI_4", "episode_id": "DI_4",
+              "series_name": "One Pace", "episode_title": "T", "season": "1",
+              "episode": "4", "filename": "x.mkv"}
+    if video_size:
+        fields["video_size"] = video_size
+    return downloads.download(fields), reply.read, list(kodistub.recorder.builtins)
+
+
+ERR = "https://srv/api_errors/MAGNET_MUST_BE_PREMIUM.mp4"
+AUTH = "https://srv/api_errors/AUTH_BAD_APIKEY.mp4"
+for label, args, want_status, want_read in (
+        ("message, size known", (ERR, 388832, 723321457), downloads.BLOCKED, False),
+        ("message, size absent", (ERR, 388832, 0), downloads.BLOCKED, False),
+        ("a real file", ("https://srv/real.mkv", 10, 10), downloads.OK, True)):
+    status, was_read, ran = _attempt(*args)
+    print(f"  {label:<22} -> {status}, downloaded={was_read}")
+    assert status == want_status, (label, status)
+    assert was_read is want_read, "the message video was fetched anyway"
+
+status, _, ran = _attempt(AUTH, 388832, 0)
+assert any("OpenSettings" in c for c in ran), "a rejected key should open settings"
+status, _, ran = _attempt(ERR, 388832, 0)
+assert not any("OpenSettings" in c for c in ran),     "settings cannot fix a plan limit, so opening them just misleads"
+print("  settings open for a rejected key, and only then  OK")
+downloads.folder = _REAL_FOLDER          # the rest of the suite needs the real one
+downloads.xbmcvfs.exists = lambda p: True
+
+print()
 print("=== a half-written file is never kept ===")
 dl = SRC[SRC.index("def download("):SRC.index("def _remove(")]
 assert 'xbmcvfs.File(partial, "w")' in dl, "a failed replacement would truncate the good copy"
