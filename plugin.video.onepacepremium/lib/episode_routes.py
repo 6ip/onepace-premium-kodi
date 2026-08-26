@@ -32,27 +32,39 @@ _NOTICE_ID_PREFIX = "pp_COMPLETE"
 # code directly; the version is an enum.
 _VERSION_BY_INDEX = {"1": "standard", "2": "extended"}
 
+# bingeGroup service codes and their names, in the order the settings picker
+# lists them. tools.py holds the same pairs but runs its dispatch on import,
+# so it cannot be the one place they live.
+_SERVICES = (("rd", "Real-Debrid"), ("pm", "Premiumize"), ("dl", "DebridLink"),
+             ("tb", "TorBox"), ("ad", "AllDebrid"), ("p2p", "Torrent"))
+_SERVICE_NAMES = dict(_SERVICES)
+_SERVICE_ORDER = {code: i for i, (code, _) in enumerate(_SERVICES)}
+
 
 def _binge_part(group, index):
     parts = str(group or "").split("|")
     return parts[index] if len(parts) > index else ""
 
 
-def _preferred_streams(groups):
+def _preferred_streams(groups, prefer=None):
     """Narrow the streams to the preferred service and version.
 
     A preference that matches nothing is ignored rather than leaving no
-    choices, and a missing version falls back to the standard cut.
+    choices, and a missing version falls back to the standard cut. prefer
+    overrides the settings, which is how one answer covers a whole season.
     """
     indexes = list(range(len(groups)))
 
-    service = get_setting("preferred_service")
+    if prefer:
+        service, version = prefer
+    else:
+        service = get_setting("preferred_service")
+        version = _VERSION_BY_INDEX.get(get_setting("preferred_version"))
     if service:
         matched = [i for i in indexes if _binge_part(groups[i], 1) == service]
         if matched:
             indexes = matched
 
-    version = _VERSION_BY_INDEX.get(get_setting("preferred_version"))
     if version:
         matched = [i for i in indexes if _binge_part(groups[i], 2) == version]
         if not matched and version != "standard":
@@ -156,6 +168,8 @@ def list_seasons(params):
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
 
     series_actors = _cast_list(meta)
+    from .downloads import enabled as _downloads_enabled
+    downloads_on = _downloads_enabled()
     items = []
     for season in seasons:
         label = "Specials" if season == 0 else f"Season {season}"
@@ -186,10 +200,16 @@ def list_seasons(params):
                 tags.setPlaycount(1)
         tags.setMediaType("season")
         season_ctx_label = "[B]Mark Unwatched[/B]" if season_fully_watched else "[B]Mark Watched[/B]"
-        list_item.addContextMenuItems([(
+        season_menu = [(
             season_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='season', series_id=video_id, catalog_type=catalog_type, season=season)})",
-        )])
+        )]
+        if downloads_on:
+            season_menu.append((
+                "[B]Download Season[/B]",
+                f"RunPlugin({build_url('download_season', catalog_type=catalog_type, video_id=video_id, season=season)})",
+            ))
+        list_item.addContextMenuItems(season_menu)
 
         items.append(
             (
@@ -369,11 +389,14 @@ def list_episodes(params):
     end_directory(cache=True)
 
 
-def _choose_stream(params, downloadable_only=False):
+def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
+                   survey=False):
     """Fetch this episode's streams and return the one to act on, or None.
 
     Playing and downloading want the same list and the same picker, so the
-    only difference is whether a magnet is allowed through.
+    only difference is whether a magnet is allowed through. quiet is for a
+    season queue: it takes the preferred stream and says nothing, since one
+    dialog per episode is thirty dialogs.
     """
     if not ensure_configured():
         return None
@@ -510,6 +533,7 @@ def _choose_stream(params, downloadable_only=False):
         playback_params["video_size"] = video_info["size"]
         playback_params["duration"] = video_info["duration"]
         playback_params["variant"] = _binge_part(behavior_hints.get("bingeGroup"), 2)
+        playback_params["service"] = _binge_part(behavior_hints.get("bingeGroup"), 1)
 
         label = stream_name
         if stream_tagline:
@@ -523,7 +547,15 @@ def _choose_stream(params, downloadable_only=False):
         _notify_error("No streams available")
         return None
 
-    choices = _preferred_streams(binge_groups)
+    if survey:
+        # What this episode could offer, before any preference narrows it.
+        from .downloads import is_downloadable
+        return sorted({(valid_streams[i].get("service", ""),
+                        valid_streams[i].get("variant", "") or "standard")
+                       for i in range(len(valid_streams))
+                       if is_downloadable(valid_streams[i]["video_url"])})
+
+    choices = _preferred_streams(binge_groups, prefer)
 
     # The copy on disk goes first, so it is never hidden behind a preference
     # that narrowed the list down to one remote stream.
@@ -542,10 +574,11 @@ def _choose_stream(params, downloadable_only=False):
         choices = [i for i in choices
                    if is_downloadable(valid_streams[i]["video_url"])]
         if not choices:
-            _notify_error("No stream here can be downloaded")
+            if not quiet:
+                _notify_error("No stream here can be downloaded")
             return None
     log(f"[streams] {len(valid_streams)} available, {len(choices)} after preferences")
-    if len(choices) == 1:
+    if len(choices) == 1 or quiet:
         selected = choices[0]
     else:
         pick = xbmcgui.Dialog().select(
@@ -556,7 +589,12 @@ def _choose_stream(params, downloadable_only=False):
             return None
         selected = choices[pick]
 
-    return valid_streams[selected]
+    chosen = valid_streams[selected]
+    # How many there were to choose between. A season only remembers an answer
+    # that was actually given, so one episode with a single cut cannot decide
+    # for a later one that has two.
+    chosen["stream_choices"] = len(choices)
+    return chosen
 
 
 def check_resume(params):
@@ -573,6 +611,167 @@ def check_resume(params):
         return
     from .playback import play_video as _play_video
     _play_video(chosen)
+
+
+def _season_episodes(meta, video_id, catalog_type, season):
+    """Every episode of one season, in order, with what a download needs."""
+    from .provider_api import episode_params
+
+    season_poster = next(
+        (s["poster"] for s in meta.get("seasons", ())
+         if s.get("season") == season and s.get("poster")), "")
+    picks = []
+    for video in sorted((v for v in meta.get("videos", ())
+                         if v.get("season") == season),
+                        key=lambda v: _episode_number(v) or 0):
+        number = _episode_number(video)
+        if number is None:
+            continue
+        episode_id = video.get("id") or f"{video_id}:{season}:{number}"
+        if str(episode_id).startswith(_NOTICE_ID_PREFIX):
+            continue
+        picks.append((episode_id, _episode_label(
+            video.get("name") or video.get("title") or f"Episode {number}",
+            season, number, episode_id),
+            episode_params(video, meta, video_id, catalog_type,
+                           season_poster, episode_id)))
+    return picks
+
+
+def _season_preference(picks, label):
+    """Ask once what the whole run should prefer, or None if cancelled.
+
+    Looking at every chosen episode first, not just the first one: a season
+    where only episode two has an extended cut must still offer it, and one
+    where every episode has the same single stream must not ask at all.
+    """
+    services, versions = set(), set()
+    busy = xbmcgui.DialogProgressBG()
+    busy.create(f"Checking {label}")
+    try:
+        for index, episode in enumerate(picks, 1):
+            busy.update(int(index * 100 / len(picks)), f"Checking {label}",
+                        episode.get("episode_title", ""))
+            for service, version in _choose_stream(
+                    episode, downloadable_only=True, survey=True) or ():
+                services.add(service)
+                versions.add(version)
+    finally:
+        busy.close()
+
+    want_service, want_version = "", ""
+    if len(services) > 1 and not get_setting("preferred_service"):
+        # Same order as Preferred Service, so the two lists read alike.
+        ordered = sorted(services, key=lambda c: (_SERVICE_ORDER.get(c, 99), c))
+        pick = xbmcgui.Dialog().select(
+            f"{label} — which service?",
+            [_SERVICE_NAMES.get(c, c.upper()) for c in ordered])
+        if pick < 0:
+            return None
+        want_service = ordered[pick]
+
+    if len(versions) > 1 and not _VERSION_BY_INDEX.get(get_setting("preferred_version")):
+        from .downloads import variant_label
+        ordered = sorted(versions, key=lambda v: (v != "standard", v))
+        pick = xbmcgui.Dialog().select(
+            f"{label} — which cut?", [variant_label(v) for v in ordered])
+        if pick < 0:
+            return None
+        want_version = ordered[pick]
+
+    log(f"[downloads] {label} will prefer {(want_service, want_version)}")
+    return want_service, want_version
+
+
+def download_season(params):
+    """Fetch a whole season, one episode at a time.
+
+    Sequential on purpose: a debrid account rate-limits parallel connections,
+    and one writer means the download index cannot be raced.
+    """
+    from .downloads import (BLOCKED, OK, download, enabled, mark as _download_mark,
+                            downloaded_ids)
+
+    if not enabled() or not ensure_configured():
+        return
+
+    catalog_type = params.get("catalog_type", "series")
+    video_id = params["video_id"]
+    season = int(params["season"])
+    meta = _fetch_provider_meta(catalog_type, video_id)
+    if not meta:
+        _notify_error("Could not read the season")
+        return
+    show_title = meta.get("name") or ""
+
+    episodes = _season_episodes(meta, video_id, catalog_type, season)
+    if not episodes:
+        _notify_error("Nothing to download in this season")
+        return
+
+    # Anything already on disk starts unticked, so the usual press re-fetches
+    # nothing and the choice is still there when a copy is wanted again.
+    on_disk = downloaded_ids()
+    labels = [_download_mark(label, episode_id, on_disk, plain=True)
+              for episode_id, label, _ in episodes]
+    preselect = [i for i, (episode_id, _, _) in enumerate(episodes)
+                 if episode_id not in on_disk]
+    label = "Specials" if season == 0 else f"Season {season}"
+    chosen = xbmcgui.Dialog().multiselect(f"Download {label}", labels,
+                                          preselect=preselect)
+    if not chosen:
+        return
+
+    prefer = _season_preference([episodes[pick][2] for pick in chosen], label)
+    if prefer is None:
+        return
+
+    done = skipped = failed = 0
+    progress = xbmcgui.DialogProgressBG()
+    progress.create(f"Downloading {label}")
+    kodi_monitor = xbmc.Monitor()
+    for index, pick in enumerate(chosen, 1):
+        if kodi_monitor.abortRequested():
+            break
+        episode_id, title, episode = episodes[pick]
+        progress.update(int((index - 1) * 100 / len(chosen)),
+                        f"{label} — {index} of {len(chosen)}", title)
+        stream = _choose_stream(episode, downloadable_only=True, quiet=True,
+                                prefer=prefer)
+        if stream is None:
+            skipped += 1
+            log(f"[downloads] no stream to download for {episode_id!r}")
+            continue
+        outcome = download(dict(stream, in_season=True), meta)
+        if outcome == BLOCKED:
+            # One message beats the same one for every episode left.
+            progress.close()
+            log(f"[downloads] season download stopped at {episode_id!r}")
+            return
+        if outcome == OK:
+            done += 1
+        else:
+            # A blip on one episode is no reason to abandon the rest.
+            failed += 1
+    progress.close()
+
+    parts = [f"downloaded {done}"]
+    if skipped:
+        parts.append(f"{skipped} with no stream")
+    if failed:
+        parts.append(f"{failed} failed")
+    _notify_info(f"{label}: " + ", ".join(parts))
+    log(f"[downloads] {label}: {done} done, {skipped} skipped, {failed} failed")
+
+    from .downloads import write_report
+    report = [f"Downloaded {done} of {len(chosen)} picked"]
+    if skipped:
+        report.append(f"{skipped} had no stream we could fetch")
+    if failed:
+        report.append(f"{failed} could not be downloaded")
+    if prefer and any(prefer):
+        report.append(f"Cut used: {prefer[1] or 'standard'}")
+    write_report(f"{show_title or 'Downloads'} — {label}", report)
 
 
 def download_episode(params):

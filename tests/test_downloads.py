@@ -596,6 +596,11 @@ store["downloads_enabled"] = "true"
 marked = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"})
 print("  " + marked.encode("unicode_escape").decode())
 assert marked.startswith("[COLOR FF2ECC71][B]"), "a list renders the bold fine"
+plainly = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"}, plain=True)
+print("  " + plainly.encode("unicode_escape").decode())
+assert "[B]" not in plainly, "a select dialog shows the closing tag as text"
+assert plainly.startswith("[COLOR FF2ECC71]"), plainly
+assert "plain=True" in STREAMS, "the season picker would show the bold version"
 assert marked.endswith("1x01. Romance Dawn"), "a list view clips the tail, not the head"
 assert downloads.mark("x", "RO_9", {"RO_1"}) == "x", "an undownloaded row must stay plain"
 store["download_marker"] = "false"
@@ -626,7 +631,7 @@ print("  local copy is checked before any stream request  OK")
 
 print()
 print("=== with the preference off, the copy is offered rather than ignored ===")
-pickr = STREAMS[STREAMS.index("    choices = _preferred_streams(binge_groups)"):]
+pickr = STREAMS[STREAMS.index("    choices = _preferred_streams(binge_groups, prefer)"):]
 pickr = pickr[:pickr.index("    if downloadable_only:")]
 assert "local_options" in pickr, "the download would be invisible in the picker"
 assert "valid_streams.insert(offset, fields)" in pickr, "the cuts would not come first"
@@ -781,6 +786,196 @@ print("  silent:")
 for x in silent:
     print(f"    {x}")
 assert not unset, f"the sound flag defaults to on, so it must be explicit: {unset}"
+
+
+print()
+print("=== a season goes one episode at a time, and stops when refused ===")
+from lib import episode_routes as er
+
+META = {"name": "One Pace", "seasons": [{"season": 6, "poster": "s6.jpg"}],
+        "videos": [{"id": f"AR_{n}", "season": 6, "episode": n, "name": f"Arlong Park {n:02d}"}
+                   for n in range(1, 5)]}
+picks = er._season_episodes(META, "pp_onepacee", "series", 6)
+print(f"  the season offers: {[p[1] for p in picks]}")
+assert [p[0] for p in picks] == ["AR_1", "AR_2", "AR_3", "AR_4"], picks
+assert all(p[2]["video_id"] == p[0] for p in picks), "a pick must carry its own episode"
+
+er._fetch_provider_meta = lambda ct, vid: META
+er.ensure_configured = lambda: True
+downloads.downloaded_ids = lambda: {"AR_1"}
+downloads.enabled = lambda: True
+
+asked = {}
+kodistub.Dialog.multiselect = lambda self, heading, items, preselect=None: (
+    asked.update(heading=heading, items=items, preselect=preselect) or [0, 1, 2, 3])
+
+up_front = []
+kodistub.Dialog.select = lambda self, heading, items, **k: (
+    up_front.append((heading, list(items))) or 0)
+
+attempts, verdicts = [], {}
+
+
+def _fake_download(stream, meta=None):
+    attempts.append(stream["video_id"])
+    return verdicts.get(stream["video_id"], downloads.OK)
+
+
+asked_quiet = []
+# episode id -> what that episode could offer, before any preference
+OFFERS = {}
+DEFAULT_OFFER = [("rd", "standard"), ("rd", "extended")]
+
+
+def _fake_choose(p, downloadable_only=False, quiet=False, prefer=None, survey=False):
+    if survey:
+        return OFFERS.get(p["video_id"], DEFAULT_OFFER)
+    asked_quiet.append(quiet)
+    if p["video_id"] == "AR_3":
+        return None
+    return dict(p, video_url="https://x/y.mkv", service="rd", variant="extended")
+
+
+er._choose_stream = _fake_choose
+import lib.downloads as _dl
+_dl.download = _fake_download
+
+kodistub.recorder.reset()
+er.download_season({"catalog_type": "series", "video_id": "pp_onepacee", "season": "6"})
+print(f"  dialog: {asked['heading']!r}, preselected {asked['preselect']} of {len(asked['items'])}")
+assert asked["heading"] == "Download Season 6", asked["heading"]
+assert asked["preselect"] == [1, 2, 3], "the one already on disk should start unticked"
+print(f"  attempted: {attempts}")
+assert attempts == ["AR_1", "AR_2", "AR_4"], "AR_3 has no stream, so it is skipped not retried"
+# Asked once, up front, then never during the run.
+print(f"  quiet on each call: {asked_quiet}")
+assert all(asked_quiet), "a picker mid-run is a picker per episode"
+for heading, options in up_front:
+    print(f"  asked up front: {heading!r} -> {options}")
+assert len(up_front) == 1, "only the cut is ambiguous here, so only the cut is asked"
+assert up_front[0][0] == "Season 6 — which cut?", up_front
+assert up_front[0][1] == ["Standard", "Extended"], "standard should lead"
+
+# The survey reads the stream listing, which is cached; no /play/ is touched.
+survey_src = STREAMS[STREAMS.index("    if survey:"):]
+survey_src = survey_src[:survey_src.index("choices = _preferred_streams")]
+assert "/play/" not in survey_src and "video_url" in survey_src,     "surveying must not fetch the files themselves"
+fetch = STREAMS[STREAMS.index("def _choose_stream("):STREAMS.index("    if survey:")]
+assert "_cache.set(stream_url, response, 3600)" in fetch,     "without the cache the survey doubles every listing request"
+
+# Services listed the way Preferred Service lists them, not alphabetically.
+from lib.episode_routes import _SERVICE_ORDER, _SERVICE_NAMES
+picked = sorted({"ad", "tb", "rd", "p2p", "pm"},
+                key=lambda c: (_SERVICE_ORDER.get(c, 99), c))
+print(f"  service order: {[_SERVICE_NAMES[c] for c in picked]}")
+assert picked[0] == "rd" and picked[-1] == "p2p", picked
+
+# One episode carrying the only extended cut must still get it offered.
+up_front.clear()
+OFFERS.update({"AR_1": [("rd", "standard")], "AR_3": [("rd", "standard")],
+               "AR_2": [("rd", "standard"), ("rd", "extended")],
+               "AR_4": [("rd", "standard")]})
+attempts.clear()
+er.download_season({"catalog_type": "series", "video_id": "pp_onepacee", "season": "6"})
+print(f"  one episode has an extra cut: asked {len(up_front)} question(s)")
+assert len(up_front) == 1 and "which cut" in up_front[0][0], up_front
+
+# Nothing to choose between: no questions at all.
+up_front.clear()
+OFFERS.update({k: [("rd", "standard")] for k in ("AR_1", "AR_2", "AR_3", "AR_4")})
+attempts.clear()
+er.download_season({"catalog_type": "series", "video_id": "pp_onepacee", "season": "6"})
+print(f"  every episode identical: asked {len(up_front)} question(s)")
+assert up_front == [], "it asked about a choice that did not exist"
+OFFERS.clear()
+assert kodistub.recorder.notifications[-1][0] == "Season 6: downloaded 3, 1 with no stream", \
+    kodistub.recorder.notifications[-1]
+
+attempts.clear()
+verdicts["AR_2"] = downloads.BLOCKED
+kodistub.recorder.reset()
+er.download_season({"catalog_type": "series", "video_id": "pp_onepacee", "season": "6"})
+print(f"  after a refusal: {attempts}")
+assert attempts == ["AR_1", "AR_2"], "the queue carried on past a provider refusal"
+assert not kodistub.recorder.notifications, "a summary after a refusal buries the real message"
+
+attempts.clear()
+verdicts.clear()
+kodistub.Dialog.multiselect = lambda self, h, i, preselect=None: []
+er.download_season({"catalog_type": "series", "video_id": "pp_onepacee", "season": "6"})
+assert attempts == [], "picking nothing should download nothing"
+print("  one at a time, skips what it cannot fetch, stops dead on a refusal  OK")
+
+quiet = STREAMS[STREAMS.index("def _choose_stream("):STREAMS.index("def check_resume(")]
+assert "len(choices) == 1 or quiet" in quiet, "a season would ask which stream, per episode"
+assert "if not quiet:" in quiet, "a season would pop an error for every episode with no stream"
+print("  the picker and its errors stay quiet inside a season  OK")
+
+print()
+print("=== the last summary outlives its notification ===")
+kept = {}
+
+
+class _Report:
+    def __init__(self, path, mode="r"):
+        self.path = path
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def write(self, text):
+        kept["text"] = text
+        return True
+
+    def read(self):
+        return kept.get("text", "")
+
+
+downloads.xbmcvfs.File = _Report
+downloads.xbmcvfs.mkdirs = lambda p: True
+downloads.xbmcvfs.exists = lambda p: "text" in kept
+downloads.write_report("One Pace - Season 6",
+                       ["Downloaded 6 of 8 picked", "2 had no stream", "Cut used: extended"])
+for _line in kept["text"].split(chr(10)):
+    print(f"  {_line}")
+assert kept["text"].startswith("[B]One Pace - Season 6[/B]"), kept["text"]
+assert "[COLOR FF888899]" in kept["text"], "no date, so two runs look the same"
+assert kept["text"].count(chr(8226)) == 3, "the bullets the changelog window expects"
+
+downloads.write_report("One Pace - Season 7", ["Downloaded 1 of 1 picked"])
+assert kept["text"].index("Season 7") < kept["text"].index("Season 6"), "newest should lead"
+
+for n in range(20):
+    downloads.write_report(f"Run {n}", ["one line"])
+blocks = [b for b in kept["text"].split(chr(10) * 3) if b.strip()]
+print(f"  after 22 runs the file holds {len(blocks)} of them, newest first:")
+print(f"    {blocks[0].splitlines()[0][:52]}")
+print(f"    {blocks[-1].splitlines()[0][:52]}")
+assert len(blocks) == downloads._REPORT_KEEP, blocks
+assert "Run 19" in blocks[0] and "Run 10" in blocks[-1], "the wrong end was trimmed"
+print("  the last ten kept, older ones dropped  OK")
+
+single = SRC[SRC.index("def download("):SRC.index("def _prune(")]
+assert 'if not params.get("in_season")' in single, "a season would write a summary per episode"
+assert "write_report(name," in single, "a single download would leave no record"
+assert 'in_season=True' in STREAMS, "the season never marks its downloads as part of a run"
+print("  single downloads are recorded too, a season only once  OK")
+
+report_src = SRC[SRC.index("def show_report("):SRC.index("def _remove(")]
+assert "show_text" in report_src, "a plain dialog would not match What's New"
+assert "Nothing has been downloaded yet" in report_src, "an empty file would open a blank window"
+# Opening the window by hand here meant its donate button did nothing.
+changelog_src = (harness.ADDON / "lib" / "changelog.py").read_text(encoding="utf-8")
+shared = changelog_src[changelog_src.index("def show_text("):
+                       changelog_src.index("def show_changelog(")]
+assert "dialog.donate" in shared and "show_donate()" in shared,     "the donate button on the report window would do nothing"
+assert "show_text(" in changelog_src[changelog_src.index("def show_changelog("):],     "What's New and the report should open the same way"
+summary = STREAMS[STREAMS.index("    from .downloads import write_report"):]
+assert "Cut used" in summary[:400], "the season summary never records which cut it took"
+print("  shown in the same window as What's New  OK")
 
 print()
 print("all assertions passed")

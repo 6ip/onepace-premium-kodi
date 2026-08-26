@@ -57,8 +57,9 @@
         <setting label="Showing" id="download_folder_display" type="text" default="Default" enable="false" subsetting="true" />
         <setting id="download_folder" type="text" default="special://profile/addon_data/plugin.video.onepacepremium/downloads/" visible="false" />
         <setting label="Move Existing Downloads" id="move_downloads" type="action" enable="eq(-4,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=move_downloads)" />
-        <setting label="Mark Downloaded Episodes" id="download_marker" type="bool" default="true" enable="eq(-5,true)" />
-        <setting label="Play the Downloaded Copy" id="prefer_downloads" type="bool" default="true" enable="eq(-6,true)" />
+        <setting label="Last Download Summary" id="show_download_report" type="action" enable="eq(-5,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_download_report)" />
+        <setting label="Mark Downloaded Episodes" id="download_marker" type="bool" default="true" enable="eq(-6,true)" />
+        <setting label="Play the Downloaded Copy" id="prefer_downloads" type="bool" default="true" enable="eq(-7,true)" />
         <setting type="sep" />
         <setting type="lsep" label="Backup" />
         <setting label="Export Backup" id="export_settings" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=export_settings)" />

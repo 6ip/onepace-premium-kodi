@@ -54,21 +54,13 @@ def _read_changelog(addon_path):
         return ""
 
 
-def show_changelog(_params=None):
+def show_text(text, version):
+    """Open the What's New window on any text, and honour its donate button."""
     addon = xbmcaddon.Addon(ADDON_ID)
     addon_path = xbmcvfs.translatePath(addon.getAddonInfo("path"))
-    text = _read_changelog(addon_path)
-    if not text:
-        xbmcgui.Dialog().notification(
-            "One Pace Premium", "No changelog found",
-            xbmcgui.NOTIFICATION_ERROR, 4000, False,
-        )
-        return
-
     dialog = ChangelogDialog(
         "changelog.xml", addon_path, "Default", "1080i",
-        text=text,
-        version=f"v{addon.getAddonInfo('version')}",
+        text=text, version=version,
         icon_path=xbmcvfs.translatePath(addon.getAddonInfo("icon")),
     )
     donate = False
@@ -81,6 +73,19 @@ def show_changelog(_params=None):
     if donate:
         from .donate import show_donate
         show_donate()
+
+
+def show_changelog(_params=None):
+    addon = xbmcaddon.Addon(ADDON_ID)
+    text = _read_changelog(xbmcvfs.translatePath(addon.getAddonInfo("path")))
+    if not text:
+        xbmcgui.Dialog().notification(
+            "One Pace Premium", "No changelog found",
+            xbmcgui.NOTIFICATION_ERROR, 4000, False,
+        )
+        return
+
+    show_text(text, f"v{addon.getAddonInfo('version')}")
 
 
 def maybe_show_on_update():

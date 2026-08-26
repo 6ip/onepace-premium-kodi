@@ -49,6 +49,12 @@ if _passed != _takes:
 assert not wrong, wrong
 print("  every target accepts what the router passes it")
 
+seasons = (LIB / "episode_routes.py").read_text(encoding="utf-8")
+block = seasons[seasons.index("season_ctx_label ="):seasons.index("addContextMenuItems(season_menu)")]
+assert "download_season" in block, "Download Season is not on the season row"
+assert "if downloads_on:" in block, "it would show with downloads turned off"
+print("  Download Season sits on the season row, behind the setting")
+
 print()
 print("  Tools order:", [x.get("label") for x in SETTINGS.iter("setting")
                           if x.get("type") == "lsep"][-4:])

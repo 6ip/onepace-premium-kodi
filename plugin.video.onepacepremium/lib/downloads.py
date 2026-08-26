@@ -379,6 +379,9 @@ def download(params, meta=None):
     _remember(destination, params, meta)
     log(f"[downloads] saved {destination!r} ({written} bytes)")
     _notify_info(f"Downloaded {name}")
+    if not params.get("in_season"):
+        # A season writes one summary for the whole run instead.
+        write_report(name, [describe(read_index()["files"].get(destination, {}))])
     refresh_container()
     return OK
 
@@ -428,6 +431,58 @@ def browse(params):
 
     log(f"[downloads] no file manager here, showing {directory!r} in Kodi")
     xbmc.executebuiltin(f"ActivateWindow(Videos,{directory},return)")
+
+
+_REPORT = "last_download.txt"
+
+# Enough to see what happened over an evening, few enough that the file stays
+# small and the window stays readable.
+_REPORT_KEEP = 10
+
+
+def _read_report():
+    try:
+        path = _profile() + _REPORT
+        if xbmcvfs.exists(path):
+            with xbmcvfs.File(path) as handle:
+                return handle.read() or ""
+    except Exception as exc:
+        log(f"[downloads] could not read the report: {exc}")
+    return ""
+
+
+def write_report(heading, lines):
+    """Add a summary at the top, keeping the last few.
+
+    A background notification is gone in four seconds, which is no use when
+    a season took twenty minutes and you were in another room.
+    """
+    import time
+
+    entry = [f"[B]{heading}[/B]  [COLOR FF888899]"
+             f"{time.strftime('%d %B %Y, %H:%M')}[/COLOR]", ""]
+    entry += [f"  {chr(8226)}  {line}" for line in lines]
+
+    older = [block for block in _read_report().split(chr(10) * 3) if block.strip()]
+    body = (chr(10) * 3).join([chr(10).join(entry)] + older[:_REPORT_KEEP - 1])
+    try:
+        xbmcvfs.mkdirs(_profile())
+        with xbmcvfs.File(_profile() + _REPORT, "w") as handle:
+            handle.write(body)
+    except Exception as exc:
+        log(f"[downloads] could not write the report: {exc}")
+
+
+def show_report(_params=None):
+    """Recent summaries, in the same window the changelog uses."""
+    text = _read_report()
+    if not text.strip():
+        _notify_info("Nothing has been downloaded yet")
+        return
+
+    # The same helper What's New uses, so the donate button works here too.
+    from .changelog import show_text
+    show_text(text, "Downloads")
 
 
 def _remove(paths):
@@ -640,13 +695,16 @@ def enabled():
     return get_setting("downloads_enabled") != "false"
 
 
-def mark(label, episode_id, on_disk):
-    """Flag a title that is already on disk."""
+def mark(label, episode_id, on_disk, plain=False):
+    """Flag a title that is already on disk.
+
+    plain drops the bold, which a select dialog renders as a literal [/B].
+    """
     if not episode_id or episode_id not in on_disk:
         return label
     if not enabled() or get_setting("download_marker") == "false":
         return label
-    return f"{_MARK} {label}"
+    return f"{_MARK_PLAIN if plain else _MARK} {label}"
 
 
 # The version picker stores an index, the same one Preferred Version uses.

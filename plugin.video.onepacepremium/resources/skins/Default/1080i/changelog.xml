@@ -102,7 +102,7 @@
                 <texturesliderbarfocus colordiffuse="FF81A6C6" border="8">../media/round_btn.png</texturesliderbarfocus>
                 <textureslidernib>-</textureslidernib>
                 <textureslidernibfocus>-</textureslidernibfocus>
-                <onleft>2060</onleft><onright>11</onright>
+                <onleft>10</onleft><onright>11</onright>
                 <onup>2060</onup><ondown>2060</ondown>
                 <showonepage>false</showonepage>
                 <orientation>vertical</orientation>

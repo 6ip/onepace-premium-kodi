@@ -149,4 +149,32 @@ print(f"  {len(bullets)} bullets, longest {len(longest)} chars")
 assert len(longest) <= 95, f"getting wordy: {longest}"
 
 print()
+print()
+print("=== the What's New window cycles both ways ===")
+import re as _re
+_xml = (harness.ADDON / "resources" / "skins" / "Default" / "1080i"
+        / "changelog.xml").read_text(encoding="utf-8")
+_nav = {}
+for _m in _re.finditer(r'<control type="(?:scrollbar|button)" id="(\d+)">(.*?)</control>',
+                       _xml, _re.S):
+    _left = _re.search(r"<onleft>(\d+)</onleft>", _m.group(2))
+    _right = _re.search(r"<onright>(\d+)</onright>", _m.group(2))
+    _nav[_m.group(1)] = (_left.group(1) if _left else "", _right.group(1) if _right else "")
+for _who, (_l, _r) in sorted(_nav.items()):
+    print(f"  {_who:>5}: left -> {_l:<5} right -> {_r}")
+assert all(l and r for l, r in _nav.values()), "an arrow that goes nowhere reads as broken"
+assert all(l != who and r != who for who, (l, r) in _nav.items()),     "a control pointing at itself swallows the keypress"
+_seen, _at = [], "2060"
+for _ in range(len(_nav)):
+    _seen.append(_at)
+    _at = _nav[_at][1]
+assert _at == "2060" and len(set(_seen)) == len(_nav), f"right does not cycle: {_seen}"
+_seen, _at = [], "2060"
+for _ in range(len(_nav)):
+    _seen.append(_at)
+    _at = _nav[_at][0]
+assert _at == "2060" and len(set(_seen)) == len(_nav), f"left does not cycle: {_seen}"
+print("  every control is reachable from either arrow  OK")
+
+print()
 print("all assertions passed")
