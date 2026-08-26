@@ -221,7 +221,7 @@ def _video_entry(meta, episode_id):
     return {}
 
 
-def _remember(path, params, meta=None):
+def _remember(path, params, meta=None, subtitles=()):
     """The list reads this, so a download looks like the rest of the add-on."""
     data = read_index()
     series = params.get("series_name") or "Downloads"
@@ -233,6 +233,8 @@ def _remember(path, params, meta=None):
         "video_size": params.get("video_size") or 0,
         "duration": params.get("duration") or 0,
         "variant": variant_of(params),
+        # Kept so they go when the episode goes, and travel when it moves.
+        "subtitles": list(subtitles),
         # The provider composes resolution, chapters, runtime, bitrate and
         # source hash into this. Rebuilding it offline is not possible.
         "stream_desc": params.get("stream_desc", ""),
@@ -376,7 +378,7 @@ def download(params, meta=None):
         xbmcvfs.delete(already)
         _remove_rows([already])
 
-    _remember(destination, params, meta)
+    _remember(destination, params, meta, save_subtitles(destination, params))
     log(f"[downloads] saved {destination!r} ({written} bytes)")
     _notify_info(f"Downloaded {name}")
     if not params.get("in_season"):
@@ -384,6 +386,63 @@ def download(params, meta=None):
         write_report(name, [describe(read_index()["files"].get(destination, {}))])
     refresh_container()
     return OK
+
+
+# Not "Subs" or "Subtitles": Kodi scans subfolders with those names as well
+# as the video's own, so the files it found there were added on top of the
+# ordered list we hand it and every track appeared twice.
+SUBS_DIR = ".onepace-subs"
+
+
+def _subs_dir(video):
+    """A folder of their own beside the video, that Kodi will not scan."""
+    return f"{os.path.dirname(_normalised(video))}/{SUBS_DIR}/"
+
+
+def save_subtitles(destination, params):
+    """Write subtitle files beside the video, so Kodi finds them offline.
+
+    Only for languages actually chosen. Playback already works this way — it
+    fetches nothing when the setting is "all languages" — and downloading
+    thirty files an episode for a setting nobody narrowed is worse than none.
+    """
+    from .playback import (_SUBS_URL, _fetch_subtitle, _filter_subtitles,
+                           _wanted_langs, _VARIANT_RE)
+
+    sub_id = params.get("sub_id", "")
+    if not sub_id or get_setting("subs_enabled") == "false":
+        return []
+    wanted = _wanted_langs()
+    if not wanted:
+        log("[subs] no languages chosen, so none are kept beside the download")
+        return []
+
+    try:
+        response = session().get(_SUBS_URL, timeout=10)
+        response.raise_for_status()
+        tracks = _filter_subtitles(response.json().get(sub_id, []), sub_id, wanted)
+    except Exception as exc:
+        log(f"[subs] could not read the subtitle list: {exc}")
+        return []
+
+    folder_for_subs = _subs_dir(destination)
+    xbmcvfs.mkdirs(folder_for_subs)
+    stem = folder_for_subs + os.path.splitext(os.path.basename(destination))[0]
+    saved = []
+    for track in tracks:
+        url, lang = track.get("url"), track.get("lang")
+        if not (url and lang):
+            continue
+        # A label only appears on alternate cuts; the plain track is the one
+        # most people actually want, and it has none — so it gets no tag in
+        # the filename either.
+        match = _VARIANT_RE.search(track.get("label") or "")
+        tag = "." + re.sub(r"[^\w.-]", "_", match.group(1)) if match else ""
+        path = f"{stem}{tag}.{lang}.vtt"
+        if _fetch_subtitle(url, path):
+            saved.append(path)
+    log(f"[subs] kept {len(saved)} file(s) beside {os.path.basename(destination)}")
+    return saved
 
 
 def _prune(path):
@@ -459,8 +518,8 @@ def write_report(heading, lines):
     """
     import time
 
-    entry = [f"[B]{heading}[/B]  [COLOR FF888899]"
-             f"{time.strftime('%d %B %Y, %H:%M')}[/COLOR]", ""]
+    when = time.strftime("%d %B %Y, %H:%M") + time.strftime(" (%I:%M %p)").replace(" 0", " ")
+    entry = [f"[B]{heading}[/B]  [COLOR FF888899]{when}[/COLOR]", ""]
     entry += [f"  {chr(8226)}  {line}" for line in lines]
 
     older = [block for block in _read_report().split(chr(10) * 3) if block.strip()]
@@ -491,6 +550,10 @@ def _remove(paths):
     removed = 0
     for path in paths:
         if not xbmcvfs.exists(path) or xbmcvfs.delete(path):
+            for sidecar in data["files"].get(path, {}).get("subtitles", ()):
+                xbmcvfs.delete(sidecar)
+            # Empty now, and rmdir refuses it otherwise.
+            xbmcvfs.rmdir(_subs_dir(path))
             data["files"].pop(path, None)
             _prune(path)
             removed += 1
@@ -548,6 +611,30 @@ def _relocate(src, dst):
     return False
 
 
+def _move_subtitles(paths, was, now):
+    """Move each sidecar into the Subs folder beside the video's new home.
+
+    Every one was written as the video's own name plus a tail, so swapping
+    the stem is exact — no guessing where the name ends and the tail begins.
+    """
+    old_stem = _subs_dir(was) + os.path.splitext(os.path.basename(was))[0]
+    new_stem = _subs_dir(now) + os.path.splitext(os.path.basename(now))[0]
+    moved = []
+    if not paths:
+        return moved
+    xbmcvfs.mkdirs(_subs_dir(now))
+    for path in paths:
+        if not _normalised(path).startswith(old_stem) or not xbmcvfs.exists(path):
+            continue
+        target = new_stem + _normalised(path)[len(old_stem):]
+        if _relocate(path, target):
+            moved.append(target)
+        else:
+            log(f"[subs] could not move {path!r}")
+    xbmcvfs.rmdir(_subs_dir(was))
+    return moved
+
+
 def move_downloads(_params=None):
     """Bring everything already downloaded under the current folder.
 
@@ -585,7 +672,10 @@ def move_downloads(_params=None):
             log(f"[downloads] could not move {path!r}")
             failed += 1
             continue
-        data["files"][destination] = data["files"].pop(path)
+        entry = data["files"].pop(path)
+        # Subtitles only work where the video is, so they go with it.
+        entry["subtitles"] = _move_subtitles(entry.get("subtitles", ()), path, destination)
+        data["files"][destination] = entry
         _prune(path)
         moved += 1
     progress.close()
@@ -755,6 +845,27 @@ def local_playback(episode_id):
         held = [kv for kv in held if (kv[1].get("variant") or "standard") == wanted] or held
     path, meta = held[0]
     return _play_fields(path, meta)
+
+
+def local_subtitles(path):
+    """The sidecars we saved for this file, in the order the feed listed them.
+
+    Kodi sorts what it finds in a folder by name, which puts ALT above the
+    plain track. Handing it the list instead keeps the feed's own order.
+    """
+    kept = [p for p in read_index()["files"].get(path, {}).get("subtitles", ())
+            if xbmcvfs.exists(p)]
+    return kept
+
+
+def offer_manual(episode_id, on_disk):
+    """True when pressing play would silently use the copy on disk.
+
+    That is what the preference is for, but it leaves no way to stream a
+    better cut tonight — so the row gets a way back to the picker.
+    """
+    return (enabled() and episode_id in on_disk
+            and get_setting("prefer_downloads") != "false")
 
 
 def local_options(episode_id):

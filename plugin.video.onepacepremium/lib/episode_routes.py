@@ -271,7 +271,8 @@ def list_episodes(params):
         xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
     series_actors = _cast_list(meta)
     hide_watched = get_setting("hide_watched") == "true"
-    from .downloads import downloaded_ids, enabled, mark as _download_mark
+    from .downloads import (downloaded_ids, enabled, mark as _download_mark,
+                            offer_manual as _offer_manual)
     on_disk, downloads_on = downloaded_ids(), enabled()
     items = []
     n_watched = n_resume = n_hidden = 0
@@ -349,10 +350,19 @@ def list_episodes(params):
             list_item.setProperty("Downloaded", "true")
         _set_episode_art(list_item, video, meta, season_poster)
         ep_ctx_label = "[B]Mark Unwatched[/B]" if stream_video_id in series_watched else "[B]Mark Watched[/B]"
-        ctx_items = [(
+        ctx_items = []
+        if _offer_manual(stream_video_id, on_disk):
+            ctx_items.append((
+                "[B]Play Manually[/B]",
+                # PlayMedia, not RunPlugin: check_resume answers with
+                # setResolvedUrl, which needs the handle Kodi only supplies
+                # when it is resolving something to play.
+                f"PlayMedia({build_url('check_resume', manual='1', **episode_params(video, meta, video_id, catalog_type, season_poster, stream_video_id))})",
+            ))
+        ctx_items.append((
             ep_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='episode', series_id=video_id, episode_id=stream_video_id)})",
-        )]
+        ))
         if bm:
             ctx_items.append((
                 "[B]Clear Progress[/B]",
@@ -601,8 +611,9 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
 def check_resume(params):
     from .downloads import local_playback
 
-    # Already on disk, so there is nothing to ask a provider for.
-    chosen = local_playback(params.get("video_id", ""))
+    # Already on disk, so there is nothing to ask a provider for — unless the
+    # row asked for the picker on purpose.
+    chosen = None if params.get("manual") else local_playback(params.get("video_id", ""))
     if chosen:
         log(f"[downloads] playing the copy on disk for {params.get('video_id')!r}")
     else:
@@ -669,16 +680,14 @@ def _season_preference(picks, label):
     # per-season choice for anyone who wants Extended to stream and Standard
     # to keep.
     if not _VERSION_BY_INDEX.get(get_setting("preferred_version")):
-        from .downloads import variant_label
         options = ["standard", "extended"]
         pick = xbmcgui.Dialog().select(
-            f"{label} — which cut?",
-            [variant_label(v) for v in options]
-            + ["Whatever each episode has"])
+            f"{label} — which cut?", ["Standard", "Extended (if available)"])
         if pick < 0:
             return None
-        # The last entry means no preference, so every episode keeps its own.
-        want_version = options[pick] if pick < len(options) else ""
+        # Either way an episode without that cut keeps the one it has, so a
+        # third "whatever each has" entry would promise nothing new.
+        want_version = options[pick]
 
     log(f"[downloads] {label} will prefer {(want_service, want_version)}")
     return want_service, want_version

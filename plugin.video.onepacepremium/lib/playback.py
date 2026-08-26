@@ -342,14 +342,15 @@ _VARIANT_RE = re.compile(r"\(([^)]*)\)\s*$")
 
 
 def _cache_path(track, sub_id):
-    """Where a variant would live, or None if it isn't one."""
-    label = track.get("label")
-    if not (label and track.get("url") and track.get("lang")):
+    """Where this track would live on disk, or None if it cannot be fetched.
+
+    Most tracks carry no label at all — only the alternate cuts do — so the
+    plain ones were never cached and never survived offline.
+    """
+    if not (track.get("url") and track.get("lang")):
         return None
-    match = _VARIANT_RE.search(label)
-    if not match:
-        return None
-    variant = re.sub(r"[^\w.-]", "_", match.group(1))
+    match = _VARIANT_RE.search(track.get("label") or "")
+    variant = re.sub(r"[^\w.-]", "_", match.group(1)) if match else "main"
     return f"{_SUBS_CACHE}{sub_id}/{variant}.{track['lang']}.vtt"
 
 
@@ -429,7 +430,7 @@ def _subtitle_paths(subs, sub_id, fetch=True):
 
     if targets:
         missed = len(targets) - len(done)
-        log(f"[subs] {sub_id}: {cached} variant(s) local"
+        log(f"[subs] {sub_id}: {cached} file(s) local"
             + (f", {missed} fell back (over {_SUBS_BUDGET:.0f}s)" if missed else ""))
     return paths
 
@@ -540,7 +541,13 @@ def play_video(params):
         from .episode_routes import _clear_kodi_episode_state
         _clear_kodi_episode_state(episode_id, ("streamdetails",))
 
-    if sub_id and get_setting("subs_enabled") != "false":
+    # A downloaded episode carries its own, already in the right order.
+    from .downloads import local_subtitles
+    beside = local_subtitles(video_url)
+    if beside:
+        log(f"[subs] {len(beside)} file(s) beside the download")
+        list_item.setSubtitles(beside)
+    elif sub_id and get_setting("subs_enabled") != "false":
         try:
             resp = session().get(_SUBS_URL, timeout=10)
             if resp.ok:

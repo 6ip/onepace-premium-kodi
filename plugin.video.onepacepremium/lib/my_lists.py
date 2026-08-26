@@ -10,7 +10,7 @@ from .art import (_cast_list, _episode_number, _set_episode_art,
 from .provider_api import (_fetch_provider_meta,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds, _prefetch_metas,
-                            episode_play_url)
+                            episode_params, episode_play_url)
 from .route_common import _add_directory_items, end_directory
 
 from .utils import (ADDON_DIR, ADDON_HANDLE, build_url,
@@ -102,10 +102,18 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
     _set_episode_art(list_item, video, meta, season_poster_map.get(selected_season))
 
     ep_ctx_label = "[B]Mark Unwatched[/B]" if is_watched else "[B]Mark Watched[/B]"
-    ctx_items = [(
+    ctx_items = []
+    from .downloads import downloaded_ids, offer_manual
+    if offer_manual(ep_id, downloaded_ids()):
+        ctx_items.append((
+            "[B]Play Manually[/B]",
+            # PlayMedia, so Kodi hands check_resume a handle to resolve into.
+            f"PlayMedia({build_url('check_resume', manual='1', **episode_params(video, meta, series_id, _CATALOG_TYPE, season_poster_map.get(selected_season) or '', ep_id))})",
+        ))
+    ctx_items.append((
         ep_ctx_label,
         f"RunPlugin({build_url('mark_watched', scope='episode', series_id=series_id, episode_id=ep_id)})",
-    )]
+    ))
     if bm:
         ctx_items.append((
             "[B]Clear Progress[/B]",

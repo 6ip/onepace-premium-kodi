@@ -253,7 +253,7 @@ print("=== moving downloads follows the folder setting ===")
 mv = SRC[SRC.index("def move_downloads("):SRC.index("def _sweep(")]
 assert "_relocate(path, destination)" in mv, "nothing is actually moved"
 assert "xbmcvfs.copy" in SRC[SRC.index("def _relocate("):SRC.index("def move_downloads(")],     "a rename across drives fails, so a copy has to back it up"
-assert 'data["files"][destination] = data["files"].pop(path)' in mv, "the index would point at the old path"
+assert 'data["files"][destination] = entry' in mv, "the index would point at the old path"
 assert mv.index("if not planned:") < mv.index("Dialog().yesno"), "it would ask with nothing to do"
 assert mv.index("xbmcvfs.exists(destination)") < mv.index("_relocate"), "it would overwrite a file already there"
 print("  renames, falls back to copy, and re-keys the index  OK")
@@ -303,6 +303,118 @@ assert kodistub.recorder.notifications[-1] == ("Moved 1 file", "INFO"),     "the
 downloads.xbmcvfs.exists = lambda p: True
 store["download_folder"] = ""
 print("  only what was outside the folder moves, and the index follows  OK")
+
+print()
+print("=== the plain track is the one most people want ===")
+from lib.playback import _cache_path
+for track, expect in (
+        ({"url": "u", "lang": "eng"}, "main.eng.vtt"),
+        ({"url": "u", "lang": "eng", "label": "English (CC)"}, "CC.eng.vtt"),
+        ({"url": "u", "lang": "spa", "label": "Spanish (DUB)"}, "DUB.spa.vtt"),
+        ({"lang": "eng"}, None),
+        ({"url": "u"}, None)):
+    got = _cache_path(track, "RO_1")
+    print(f"  {str(track.get('label') or '(no label)'):<18} -> {got.rsplit('/', 1)[-1] if got else '-'}")
+    if expect is None:
+        assert got is None, (track, got)
+    else:
+        assert got and got.endswith(expect), (track, got)
+subs_src = SRC[SRC.index("def save_subtitles("):SRC.index("def _prune(")]
+assert 'track.get("label") or ""' in subs_src, "an unlabelled track would be skipped"
+assert 'if not (url and lang)' in subs_src, "a label is not what makes a track usable"
+
+# Saved with no tag for the plain one, and in the order the feed listed them.
+import lib.playback as _pb
+_real_fetch, _real_session = _pb._fetch_subtitle, downloads.session
+FEED = [{"url": "u1", "lang": "eng"},
+        {"url": "u2", "lang": "eng", "label": "English (DUB)"},
+        {"url": "u3", "lang": "eng", "label": "English (CC)"},
+        {"url": "u4", "lang": "eng", "label": "English (ALT)"}]
+store["subs_enabled"], store["sub_langs"] = "true", "eng"
+downloads.session = lambda: type("S", (), {"get": lambda self, *a, **k: type(
+    "R", (), {"raise_for_status": lambda s: None,
+              "json": lambda s: {"RO_1": FEED}})()})()
+_pb._fetch_subtitle = lambda url, path: path
+downloads.xbmcvfs.mkdirs = lambda p: True
+saved = downloads.save_subtitles("C:/dl/One Pace/Season 01/1x01 - Romance Dawn.mkv",
+                                 {"sub_id": "RO_1"})
+for _s in saved:
+    print(f"  {_s}")
+assert saved[0].endswith("1x01 - Romance Dawn.eng.vtt"), "the plain track was tagged"
+assert [_s.split("Dawn")[1] for _s in saved] ==     [".eng.vtt", ".DUB.eng.vtt", ".CC.eng.vtt", ".ALT.eng.vtt"], saved
+# Beside the video, Kodi's own folder scan finds them as well as our list,
+# and every track shows twice.
+assert all("/" + downloads.SUBS_DIR + "/" in _s for _s in saved), (
+    "Kodi scans Subs and Subtitles folders, so it would find them too")
+assert downloads.SUBS_DIR.lower() not in ("subs", "subtitles", "vobsubs"), (
+    "that is one of the folder names Kodi looks in")
+assert not any(_s.startswith("C:/dl/One Pace/Season 01/1x01") for _s in saved), saved
+_pb._fetch_subtitle, downloads.session = _real_fetch, _real_session
+
+# Kodi sorts a folder by name, which puts ALT above the plain track, so the
+# order has to be handed to it rather than left to the filesystem.
+downloads.read_index = lambda: {"files": {"C:/dl/a.mkv": {"subtitles": saved}}, "series": {}}
+downloads.xbmcvfs.exists = lambda p: True
+assert downloads.local_subtitles("C:/dl/a.mkv") == saved, "the stored order was lost"
+assert downloads.local_subtitles("https://x/remote.mkv") == [], "a stream has no sidecars"
+play_src = (harness.ADDON / "lib" / "playback.py").read_text(encoding="utf-8")
+assert "local_subtitles(video_url)" in play_src, "a download would fall back to the feed"
+assert play_src.index("local_subtitles(video_url)") < play_src.index('elif sub_id and'),     "the remote list would win over the files already on disk"
+print("  plain track untagged, feed order handed to Kodi  OK")
+
+print()
+print("=== a downloaded episode still offers the picker ===")
+store["downloads_enabled"] = "true"
+for pref, held, expect in (("true", {"RO_1"}, True), ("false", {"RO_1"}, False),
+                           ("true", set(), False)):
+    store["prefer_downloads"] = pref
+    got = downloads.offer_manual("RO_1", held)
+    print(f"  prefer={pref:<5} downloaded={bool(held)} -> {got}")
+    assert got is expect, (pref, held)
+store["downloads_enabled"] = "false"
+store["prefer_downloads"] = "true"
+assert downloads.offer_manual("RO_1", {"RO_1"}) is False, "the feature is off"
+store["downloads_enabled"] = "true"
+
+for name, src in (("episode list", STREAMS),
+                  ("My Lists", (harness.ADDON / "lib" / "my_lists.py").read_text(encoding="utf-8"))):
+    block = src[src.index("ctx_items = []"):src.index("ep_ctx_label,")]
+    assert "Play Manually" in block, f"{name} does not offer it"
+    assert "manual='1'" in block, f"{name} would play the copy on disk anyway"
+    print(f"  {name}: sits above Mark Watched  OK")
+resume = STREAMS[STREAMS.index("def check_resume(params):"):]
+assert 'params.get("manual")' in resume[:400], "the flag would be ignored"
+
+print()
+print("=== subtitles live beside the video and travel with it ===")
+subs_src = SRC[SRC.index("def save_subtitles("):SRC.index("def _prune(")]
+assert "if not wanted:" in subs_src, "'all languages' would write thirty files an episode"
+assert 'get_setting("subs_enabled")' in subs_src, "turning subtitles off would not stop it"
+assert "_subs_dir(destination)" in subs_src,     "beside the video, Kodi's folder scan doubles our own list"
+
+downloads.xbmcvfs.exists = lambda p: True
+relocated = []
+_real_relocate = downloads._relocate
+downloads._relocate = lambda a, b: relocated.append((a, b)) or True
+video = "C:/old/One Pace/S1/1x01 - A. Long. Name.mkv"
+sidecars = [f"C:/old/One Pace/S1/{downloads.SUBS_DIR}/1x01 - A. Long. Name.CC.eng.vtt",
+            f"C:/old/One Pace/S1/{downloads.SUBS_DIR}/1x01 - A. Long. Name.spa.vtt"]
+downloads.xbmcvfs.mkdirs = lambda p: True
+out = downloads._move_subtitles(sidecars + ["C:/other/stranger.vtt"], video,
+                                "D:/new/One Pace/Season 01/1x01 - A. Long. Name.mkv")
+for _, _to in relocated:
+    print(f"  -> {_to}")
+assert len(out) == 2, out
+assert all(x.startswith(f"D:/new/One Pace/Season 01/{downloads.SUBS_DIR}/1x01 - A. Long. Name.")
+           for x in out), out
+assert "C:/other/stranger.vtt" not in [a for a, _ in relocated],     "a file that was never ours would be dragged along"
+downloads._relocate = _real_relocate
+
+gone = SRC[SRC.index("def _remove("):SRC.index("def delete(")]
+assert 'get("subtitles", ())' in gone and "xbmcvfs.delete(sidecar)" in gone,     "deleting an episode would leave its subtitles behind"
+mv2 = SRC[SRC.index("def move_downloads("):SRC.index("def _sweep(")]
+assert "_move_subtitles(" in mv2, "moving an episode would strand its subtitles"
+print("  written, moved and deleted alongside the episode  OK")
 
 print()
 print("=== the folders we made go when the last file leaves ===")
@@ -919,7 +1031,7 @@ assert len(surveyed) <= 1, "one listing request per episode is a burst nobody as
 for heading, options in up_front:
     print(f"  asked: {heading!r} -> {options}")
 assert [h for h, _ in up_front] == ["Season 6 — which cut?"],     "one service means nothing to choose between, so it should not ask"
-assert up_front[0][1] == ["Standard", "Extended", "Whatever each episode has"], up_front[0]
+assert up_front[0][1] == ["Standard", "Extended (if available)"], up_front[0]
 
 # Two hosts on the account, so that one is worth asking about.
 OFFERS["AR_1"] = [("rd", "standard"), ("pm", "standard"), ("pm", "extended")]
@@ -942,7 +1054,7 @@ for value, expected, asks in (("1", "standard", 0), ("2", "extended", 0), ("0", 
     print(f"  preferred_version={value} -> asked {len(up_front)}, prefer={prefer}")
     assert len(up_front) == asks, (value, up_front)
     if asks:
-        assert up_front[0][1] == ["Standard", "Extended", "Whatever each episode has"]
+        assert up_front[0][1] == ["Standard", "Extended (if available)"]
 assert "download_cut" not in STREAMS, "a second cut setting would drift from this one"
 settings_xml = (harness.ADDON / "resources" / "settings.xml").read_text(encoding="utf-8")
 assert "download_cut" not in settings_xml, "the removed setting is still on the screen"
