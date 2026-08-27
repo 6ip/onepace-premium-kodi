@@ -372,6 +372,10 @@ def _fetch_subtitle(url, path):
             return None
         with xbmcvfs.File(partial, "w") as handle:
             handle.write(content)
+        # Windows refuses a rename onto a name already taken, which is what
+        # fetching the same episode twice does.
+        if xbmcvfs.exists(path):
+            xbmcvfs.delete(path)
         if not xbmcvfs.rename(partial, path):
             xbmcvfs.delete(partial)
             return None

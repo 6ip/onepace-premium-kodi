@@ -58,6 +58,34 @@ for xml in sorted(SKINS.glob("*.xml")):
                                  f"and no arrow key reaches a button")
 
 print()
+print("=== a window opened from a menu row lets go of the listing first ===")
+# A non-folder row leaves Kodi waiting on this invocation. doModal does not
+# return until the window is closed, so Kodi times the listing out after two
+# minutes and the whole media window wedges.
+import inspect
+from lib import downloads_manager, route_common
+body = inspect.getsource(downloads_manager.show)
+# The comment explaining this names doModal before the call it guards.
+code = chr(10).join(l for l in body.split(chr(10)) if not l.lstrip().startswith("#"))
+assert "end_directory" in body, "the listing is never released"
+assert code.index("end_directory") < code.index("doModal"),     "the directory is only ended once the window closes, which is far too late"
+print("  end_directory comes before doModal  OK")
+
+for opener, source in (("open_addon_settings", inspect.getsource(route_common.open_addon_settings)),
+                       ("downloads_manager.show", body)):
+    assert "succeeded=False" in source, f"{opener} reports a listing it never drew"
+    print(f"  {opener:<24} ends it, unsuccessfully  OK")
+
+# always="true" drags focus back to a control that is hidden when the queue is
+# empty, which Kodi logs as an error on every redraw.
+manager = (SKINS / "downloads_manager.xml").read_text(encoding="utf-8")
+default = re.search(r"<defaultcontrol([^>]*)>(\d+)<", manager)
+print(f"  default control: {default.group(2)}, always={'always' in default.group(1)}")
+assert "always" not in default.group(1), "focus is forced back onto a hidden list"
+hidden = manager.split('<control type="list"')[1].split(">")[0]
+assert default.group(2) != "2500", "the default control is the one that gets hidden"
+
+print()
 print("=== window properties: what the skin reads, the python sets ===")
 for skin, module in [("changelog.xml", "changelog"), ("donate.xml", "donate"),
                      ("downloads_manager.xml", "downloads_manager")]:

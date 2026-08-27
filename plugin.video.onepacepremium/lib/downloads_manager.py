@@ -4,6 +4,7 @@ import xbmcgui
 import xbmcvfs
 
 from . import download_queue
+from .route_common import end_directory
 from .utils import ADDON_ID, log
 
 _LIST = 2500
@@ -97,6 +98,9 @@ class DownloadsManager(xbmcgui.WindowXMLDialog):
 
 def show(_params=None):
     """Open the manager. Called from the Downloads menu."""
+    # Before the window, not after: Kodi holds the listing that led here open
+    # until this invocation answers, and doModal does not return for minutes.
+    end_directory(succeeded=False)
     addon = xbmcaddon.Addon(ADDON_ID)
     addon_path = xbmcvfs.translatePath(addon.getAddonInfo("path"))
     window = DownloadsManager("downloads_manager.xml", addon_path, "Default", "1080i")
