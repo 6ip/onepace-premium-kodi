@@ -530,10 +530,27 @@ _NAMED = re.compile(r"^(\d+)x(\d+) - (.+?)(?: \(([^)]+)\))?$")
 _VIDEO_EXTS = (".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".webm")
 
 
+def _roots():
+    """Where downloads can be, not only where they go now.
+
+    Changing the folder leaves the old files working where they are, so a
+    rescan that only looked at the current one would miss every one of them.
+    """
+    here = folder()
+    was = _profile().rstrip("/" + chr(92)).replace(chr(92), "/") + "/downloads/"
+    return [here] + ([was] if was != here else [])
+
+
 def _walk_downloads():
-    """Every video file under the download folder, with what its name says."""
+    """Every video file under a download folder, with what its name says."""
     found = []
-    root = folder()
+    for root in _roots():
+        found.extend(_walk_one(root))
+    return found
+
+
+def _walk_one(root):
+    found = []
     series_dirs, _ = xbmcvfs.listdir(root)
     for series in series_dirs:
         seasons, _ = xbmcvfs.listdir(f"{root}{series}/")
@@ -643,6 +660,14 @@ def _match_episode(meta, entry):
     return None
 
 
+def _size_on_disk(path):
+    try:
+        return int(xbmcvfs.Stat(path).st_size())
+    except Exception as exc:
+        log(f"[rescan] could not measure {path!r}: {exc}")
+        return 0
+
+
 def _sidecars(path):
     """Subtitles already sitting beside a file we are adopting.
 
@@ -673,7 +698,8 @@ def _rebuilt(entry, video, meta):
         "episode_id": video.get("id", ""), "series_id": meta.get("id", ""),
         "episode_title": video.get("name") or video.get("title") or "",
         "thumb": video.get("thumbnail", ""), "season_poster": season_poster,
-        "logo": meta.get("logo", ""), "video_size": 0, "duration": 0,
+        "logo": meta.get("logo", ""), "duration": 0,
+        "video_size": _size_on_disk(entry["path"]),
     }
 
 
@@ -1059,9 +1085,14 @@ def _shared_folder(paths):
         while cut < min(len(shared), len(parts)) and shared[cut] == parts[cut]:
             cut += 1
         shared = shared[:cut]
-    # Nothing above a drive letter is a folder anyone can open. Files split
-    # across two of them share no folder at all, so open the first one's.
-    return "/".join(shared) if len(shared) > 1 else folders[0]
+    # Our layout is <root>/<series>/Season NN/file, so the only answers that
+    # mean anything are a season folder or the series folder above it. Files
+    # under two different roots share something like C:/Users/<name> — a real
+    # folder, and no use to anyone — so fall back to where the first one is.
+    first = folders[0].split("/")
+    library = {"/".join(first), "/".join(first[:-1])}
+    joined = "/".join(shared)
+    return joined if joined in library else folders[0]
 
 
 def _empty(message):

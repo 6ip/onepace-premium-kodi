@@ -1004,6 +1004,40 @@ assert "_sidecars(" in rescan_src, "the rescan rebuilds rows without their subti
 print("  adopted in the feed's order, nothing else picked up  OK")
 
 print()
+print("=== a rescan looks where downloads used to go, not only where they go now ===")
+# Changing the folder leaves the old files working where they are, so a scan
+# that only saw the current one found a library of exactly the newest episode.
+_real_folder, _real_profile = downloads.folder, downloads._profile
+downloads.folder = lambda: "C:/Users/hheb5/Downloads/One Pace Premium/"
+downloads._profile = lambda: "C:/Users/hheb5/AppData/Roaming/Kodi/userdata/addon_data/pp/"
+roots = downloads._roots()
+for r in roots:
+    print(f"  {r}")
+assert len(roots) == 2, roots
+assert roots[1].endswith("/downloads/"), roots[1]
+
+# Pointed at the default, there is only one place to look.
+downloads.folder = lambda: "C:/Users/hheb5/AppData/Roaming/Kodi/userdata/addon_data/pp/downloads/"
+assert len(downloads._roots()) == 1, downloads._roots()
+downloads.folder, downloads._profile = _real_folder, _real_profile
+print("  both roots when they differ, one when they do not  OK")
+
+print()
+print("=== a rebuilt row knows how big the file is ===")
+# video_size was hardcoded to 0, which is what emptied the information panel
+# and left the update check with nothing to compare.
+downloads.xbmcvfs.Stat.sizes = {"C:/dl/One Pace/Season 01/1x01 - Romance Dawn.mkv": 397698454}
+got = downloads._size_on_disk("C:/dl/One Pace/Season 01/1x01 - Romance Dawn.mkv")
+print(f"  measured {got / 1_000_000:.2f} MB from disk")
+assert got == 397698454, got
+assert downloads._size_on_disk("C:/nothing/here.mkv") == 0, "a missing file should measure zero"
+_rb = SRC.index("def _rebuilt(")
+rebuilt = SRC[_rb:SRC.index(chr(10) + "def ", _rb + 1)]
+assert '"video_size": 0' not in rebuilt, "a rebuilt row still claims the file is empty"
+assert "_size_on_disk(" in rebuilt, "the size is never measured"
+print("  taken from the file rather than assumed to be zero  OK")
+
+print()
 print("=== rearranging the library waits for the transfers to stop ===")
 # A running download writes to a .part nothing has indexed yet. Moving would
 # leave it behind in the old folder; a rescan would adopt it half-written.
@@ -1034,11 +1068,20 @@ for label, paths, want in (
                          "D:/b/One Pace/S1/y.mkv"], "C:/a/One Pace/S1"),
         ("moved once",  ["C:/old/One Pace/S1/x.mkv",
                          "C:/new/One Pace/S1/y.mkv"], "C:/old/One Pace/S1"),
+        # Reported from a real library: half in Downloads, half in the profile.
+        # These share C:/Users/hheb5, which exists and is no use at all.
+        ("real split",  ["C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01/a.mkv",
+                         "C:/Users/hheb5/AppData/Roaming/Kodi/userdata/addon_data/"
+                         "plugin.video.onepacepremium/downloads/One Pace/Season 01/b.mkv"],
+                        "C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01"),
         ("none",        [], "")):
     got = downloads._shared_folder(paths)
     print(f"  {label:<12} -> {got!r}")
     assert got == want, (label, got, want)
     assert not got or ":" in got or got.startswith("/"),         f"{label} produced a path that is not rooted anywhere: {got!r}"
+    # Never an ancestor of the library itself: a home folder is not an answer.
+    assert not got or got in {f.rsplit("/", 1)[0] for f in paths if f} or any(
+        f.startswith(got + "/") and f[len(got) + 1:].count("/") == 1 for f in paths if f),         f"{label} climbed above the library: {got!r}"
 
 taken = []
 downloads._remove = lambda paths: taken.extend(paths) or len(paths)

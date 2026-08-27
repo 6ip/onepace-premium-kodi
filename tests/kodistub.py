@@ -226,6 +226,16 @@ def install(addon_root, fixtures, settings=None):
            NOTIFICATION_WARNING=NOTIFICATION_WARNING,
            INPUT_ALPHANUM=INPUT_ALPHANUM)
 
+    class _Stat:
+        """Kodi's file stat. Tests override sizes through Stat.sizes."""
+        sizes = {}
+
+        def __init__(self, path):
+            self.path = path
+
+        def st_size(self):
+            return _Stat.sizes.get(self.path, 0)
+
     def _add_dir(handle, items, total=None):
         recorder.directories.extend(items)
 
@@ -243,7 +253,7 @@ def install(addon_root, fixtures, settings=None):
            File=object, mkdirs=lambda p: None, delete=lambda p: None,
            rename=lambda a, b: True, copy=lambda a, b: True,
            rmdir=lambda p, force=False: recorder.rmdirs.append(p) or True,
-           listdir=lambda p: ([], []))
+           listdir=lambda p: ([], []), Stat=_Stat)
 
     if ADDON_ROOT not in sys.path:
         sys.path.insert(0, ADDON_ROOT)
