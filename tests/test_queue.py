@@ -17,6 +17,13 @@ def fresh():
     q._last_beat = (0, -1)
 
 
+def queue_up(*entries):
+    """Put waiters in the line the way a real one arrives: beating."""
+    for entry in entries:
+        q._wait_beat(entry["id"])
+    q._write(q._WAITING, list(entries))
+
+
 print("=== the first caller takes the slot without waiting ===")
 fresh()
 started = time.time()
@@ -56,8 +63,7 @@ print("=== cancel all: a waiter must never start, then stop ===")
 fresh()
 first = q.acquire("1x01")
 # Two behind it, both cancelled while the first is still going.
-q._write(q._WAITING, [{"id": "second", "label": "1x02"},
-                      {"id": "third", "label": "1x03"}])
+queue_up({"id": "second", "label": "1x02"}, {"id": "third", "label": "1x03"})
 q.request_cancel([first, "second", "third"])
 q.release(first)
 
@@ -66,7 +72,7 @@ q.release(first)
 started = []
 for who in ("second", "third"):
     line = [w for w in q.waiting() if w["id"] != who]
-    q._write(q._WAITING, [{"id": who, "label": who}] + line)
+    queue_up(*([{"id": who, "label": who}] + line))
     if q.cancelled(who):
         q._leave(who)
     else:
@@ -81,6 +87,36 @@ assert body.index("if cancelled(ticket):") < body.index("_write(_HOLDER"),     "
 print("  the cancel is read before the slot is taken  OK")
 
 print()
+print("=== a row nobody is waiting on cannot survive Cancel All ===")
+fresh()
+running = q.acquire("1x01")
+queue_up({"id": "b", "label": "1x02"}, {"id": "c", "label": "1x03"})
+
+# Two waiters leaving at once: each writes a list it read a moment earlier, so
+# the second write puts the first one back. That row belongs to no invocation,
+# and pressing Cancel on it does nothing — which is what was seen.
+before = q.waiting()
+q._leave("b")
+q._write(q._WAITING, [w for w in before if w.get("id") != "c"])   # the stale write
+listed = q._read(q._WAITING, [])
+print(f"  the stale write put back: {[w['label'] for w in listed]}")
+assert [w["id"] for w in listed] == ["b"], "the race did not happen"
+print(f"  but the queue reads:      {[w['label'] for w in q.waiting()]}")
+assert q.waiting() == [], "the resurrected row is listed, and nothing can cancel it"
+
+# And a waiter that dies without ever leaving stops being counted too.
+fresh()
+running = q.acquire("1x01")
+queue_up({"id": "d", "label": "1x04"})
+assert len(q.waiting()) == 1
+q.xbmcgui.Window(q._HOME).setProperty(
+    q._wait_key("d"), str(time.time() - q._WAIT_STALE - 1))
+print(f"  after it stops beating:   {[w['label'] for w in q.waiting()]}")
+assert q.waiting() == [], "a waiter that died still holds up the queue"
+assert not q.busy() or q.holder(), "busy should now be the holder alone"
+q.release(running)
+print("  a row with nobody behind it drops out on its own  OK")
+
 print("=== releasing hands the slot to whoever is next ===")
 q.release(one)
 assert q.holder() == {}, "the slot is still held"
@@ -140,7 +176,7 @@ print("=== what the manager window is given to draw ===")
 fresh()
 alpha = q.acquire("6x01 Arlong Park 01")
 q.beat(alpha, 42)
-q._write(q._WAITING, [{"id": "later", "label": "6x02 Arlong Park 02"}])
+queue_up({"id": "later", "label": "6x02 Arlong Park 02"})
 rows = q.snapshot()
 for row in rows:
     print(f"  {row['name']:<22} {row['pct']:>3}%  {row['status']}")

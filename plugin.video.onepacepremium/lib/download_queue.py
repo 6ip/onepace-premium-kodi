@@ -21,6 +21,8 @@ _CANCEL = "onepace.dl.cancel"
 
 # A holder that stopped beating this long ago died without tidying up.
 _STALE = 90
+# A waiter beats every time round its loop, so this is many turns of silence.
+_WAIT_STALE = 15
 # Two invocations can both read an empty slot, so the winner is whoever the
 # property still names a moment later.
 _SETTLE = 0.15
@@ -68,8 +70,34 @@ def holder():
     return current
 
 
+def _wait_key(ticket):
+    return f"onepace.dl.wait.{ticket}"
+
+
+def _wait_beat(ticket):
+    """Kept in a property of its own, not in the shared list.
+
+    Two waiters leaving at once both write a list they read a moment earlier,
+    and whoever writes second puts the other one back — a row nothing owns any
+    more, which no cancel can then remove. Beating separately means such a row
+    is simply not read back.
+    """
+    xbmcgui.Window(_HOME).setProperty(_wait_key(ticket), str(time.time()))
+
+
 def waiting():
-    return _read(_WAITING, [])
+    live, now = [], time.time()
+    for entry in _read(_WAITING, []):
+        raw = xbmcgui.Window(_HOME).getProperty(_wait_key(entry.get("id", "")))
+        try:
+            beat = float(raw)
+        except ValueError:
+            beat = 0.0
+        if now - beat <= _WAIT_STALE:
+            live.append(entry)
+        else:
+            log(f"[queue] dropping {entry.get('label')!r}, nothing is waiting on it")
+    return live
 
 
 def busy():
@@ -77,6 +105,7 @@ def busy():
 
 
 def _leave(ticket):
+    xbmcgui.Window(_HOME).clearProperty(_wait_key(ticket))
     _write(_WAITING, [w for w in waiting() if w.get("id") != ticket])
     _write(_CANCEL, [x for x in _read(_CANCEL, []) if x != ticket])
 
@@ -94,6 +123,8 @@ def acquire(label, progress=None, total=1, detail=""):
     ticket = uuid.uuid4().hex[:8]
     monitor = xbmc.Monitor()
     while True:
+        # Before joining the line, or the entry reads as abandoned at once.
+        _wait_beat(ticket)
         line = waiting()
         if ticket not in [w.get("id") for w in line]:
             line.append({"id": ticket, "label": label})
