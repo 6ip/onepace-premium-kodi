@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+    <defaultcontrol always="true">2500</defaultcontrol>
+    <controls>
+
+        <!-- Dimmed background overlay -->
+        <control type="image">
+            <left>0</left><top>0</top>
+            <width>1920</width><height>1080</height>
+            <texture colordiffuse="E60A0C10">../media/white.png</texture>
+            <animation type="WindowOpen" reversible="false">
+                <effect type="fade" start="0" end="100" time="200" tween="sine" easing="in"/>
+            </animation>
+            <animation type="WindowClose" reversible="false">
+                <effect type="fade" start="100" end="0" time="150" tween="sine" easing="out"/>
+            </animation>
+        </control>
+
+        <!-- Dialog: 1200x760, centred on 1080p -->
+        <control type="group">
+            <left>360</left><top>160</top>
+            <animation type="WindowOpen" reversible="false">
+                <effect type="fade" start="0" end="100" time="200" tween="sine" easing="in"/>
+                <effect type="zoom" start="95" end="100" time="200" center="auto" tween="quadratic" easing="out"/>
+            </animation>
+            <animation type="WindowClose" reversible="false">
+                <effect type="fade" start="100" end="0" time="150" tween="sine" easing="out"/>
+                <effect type="zoom" start="100" end="95" time="150" center="auto" tween="quadratic" easing="out"/>
+            </animation>
+
+            <!-- Faux outer border -->
+            <control type="image">
+                <left>-1</left><top>-1</top>
+                <width>1202</width><height>762</height>
+                <texture colordiffuse="26FFFFFF" border="16">../media/round_dialog.png</texture>
+            </control>
+
+            <!-- Dialog background -->
+            <control type="image">
+                <left>0</left><top>0</top>
+                <width>1200</width><height>760</height>
+                <texture colordiffuse="FF14191E" border="16">../media/round_dialog.png</texture>
+            </control>
+
+            <!-- HEADER -->
+
+            <control type="image">
+                <left>30</left><top>17</top>
+                <width>44</width><height>44</height>
+                <aspectratio>keep</aspectratio>
+                <texture>../media/downloading.png</texture>
+            </control>
+
+            <control type="label">
+                <left>86</left><top>17</top>
+                <width>700</width><height>44</height>
+                <font>font14</font>
+                <textcolor>FFFFFFFF</textcolor>
+                <align>left</align>
+                <aligny>center</aligny>
+                <label>[B]Downloading[/B]</label>
+            </control>
+
+            <control type="label">
+                <left>870</left><top>17</top>
+                <width>300</width><height>44</height>
+                <font>font13</font>
+                <textcolor>FF81A6C6</textcolor>
+                <align>right</align>
+                <aligny>center</aligny>
+                <label>[B]$INFO[Window.Property(pp.count)] in flight[/B]</label>
+                <visible>!String.IsEqual(Window.Property(pp.count),0)</visible>
+            </control>
+
+            <!-- Hairline separator -->
+            <control type="image">
+                <left>0</left><top>78</top>
+                <width>1200</width><height>1</height>
+                <texture colordiffuse="1AFFFFFF">../media/white.png</texture>
+            </control>
+
+            <!-- BODY -->
+
+            <control type="label">
+                <left>40</left><top>300</top>
+                <width>1120</width><height>60</height>
+                <font>font13</font>
+                <textcolor>FF888899</textcolor>
+                <align>center</align>
+                <aligny>center</aligny>
+                <label>Nothing is downloading right now.</label>
+                <visible>String.IsEqual(Window.Property(pp.count),0)</visible>
+            </control>
+
+            <control type="list" id="2500">
+                <left>40</left><top>102</top>
+                <width>1120</width><height>556</height>
+                <onleft>10</onleft><onright>11</onright>
+                <onup>2500</onup><ondown>2500</ondown>
+                <scrolltime tween="sine">200</scrolltime>
+                <visible>!String.IsEqual(Window.Property(pp.count),0)</visible>
+
+                <itemlayout height="92" width="1120">
+                    <control type="image">
+                        <left>0</left><top>4</top>
+                        <width>1120</width><height>84</height>
+                        <texture colordiffuse="0DFFFFFF" border="14">../media/round_btn.png</texture>
+                    </control>
+                    <control type="label">
+                        <left>24</left><top>10</top>
+                        <width>860</width><height>32</height>
+                        <font>font13</font>
+                        <textcolor>FFCCCCCC</textcolor>
+                        <aligny>center</aligny>
+                        <label>$INFO[ListItem.Property(name)]</label>
+                    </control>
+                    <control type="label">
+                        <left>24</left><top>44</top>
+                        <width>860</width><height>28</height>
+                        <font>font12</font>
+                        <textcolor>FF888899</textcolor>
+                        <aligny>center</aligny>
+                        <label>$INFO[ListItem.Property(detail)]</label>
+                    </control>
+                    <control type="progress">
+                        <left>24</left><top>72</top>
+                        <width>860</width><height>6</height>
+                        <midtexture colordiffuse="FF81A6C6" border="3">../media/round_btn.png</midtexture>
+                        <lefttexture colordiffuse="14FFFFFF" border="3">../media/round_btn.png</lefttexture>
+                        <righttexture colordiffuse="14FFFFFF" border="3">../media/round_btn.png</righttexture>
+                        <info>ListItem.Property(percent)</info>
+                    </control>
+                    <control type="label">
+                        <left>908</left><top>10</top>
+                        <width>188</width><height>32</height>
+                        <font>font13</font>
+                        <textcolor>FF81A6C6</textcolor>
+                        <align>right</align>
+                        <aligny>center</aligny>
+                        <label>[B]$INFO[ListItem.Property(percent)]%[/B]</label>
+                    </control>
+                    <control type="label">
+                        <left>908</left><top>44</top>
+                        <width>188</width><height>28</height>
+                        <font>font12</font>
+                        <textcolor>FF888899</textcolor>
+                        <align>right</align>
+                        <aligny>center</aligny>
+                        <label>$INFO[ListItem.Property(status)]</label>
+                    </control>
+                </itemlayout>
+
+                <focusedlayout height="92" width="1120">
+                    <control type="image">
+                        <left>0</left><top>4</top>
+                        <width>1120</width><height>84</height>
+                        <texture colordiffuse="26FFFFFF" border="14">../media/round_btn.png</texture>
+                        <visible>Control.HasFocus(2500)</visible>
+                    </control>
+                    <control type="image">
+                        <left>0</left><top>4</top>
+                        <width>1120</width><height>84</height>
+                        <texture colordiffuse="0DFFFFFF" border="14">../media/round_btn.png</texture>
+                        <visible>!Control.HasFocus(2500)</visible>
+                    </control>
+                    <control type="label">
+                        <left>24</left><top>10</top>
+                        <width>860</width><height>32</height>
+                        <font>font13</font>
+                        <textcolor>FFFFFFFF</textcolor>
+                        <aligny>center</aligny>
+                        <label>$INFO[ListItem.Property(name)]</label>
+                    </control>
+                    <control type="label">
+                        <left>24</left><top>44</top>
+                        <width>860</width><height>28</height>
+                        <font>font12</font>
+                        <textcolor>FFAAAAAA</textcolor>
+                        <aligny>center</aligny>
+                        <label>$INFO[ListItem.Property(detail)]</label>
+                    </control>
+                    <control type="progress">
+                        <left>24</left><top>72</top>
+                        <width>860</width><height>6</height>
+                        <midtexture colordiffuse="FF81A6C6" border="3">../media/round_btn.png</midtexture>
+                        <lefttexture colordiffuse="20FFFFFF" border="3">../media/round_btn.png</lefttexture>
+                        <righttexture colordiffuse="20FFFFFF" border="3">../media/round_btn.png</righttexture>
+                        <info>ListItem.Property(percent)</info>
+                    </control>
+                    <control type="label">
+                        <left>908</left><top>10</top>
+                        <width>188</width><height>32</height>
+                        <font>font13</font>
+                        <textcolor>FF81A6C6</textcolor>
+                        <align>right</align>
+                        <aligny>center</aligny>
+                        <label>[B]$INFO[ListItem.Property(percent)]%[/B]</label>
+                    </control>
+                    <control type="label">
+                        <left>908</left><top>44</top>
+                        <width>188</width><height>28</height>
+                        <font>font12</font>
+                        <textcolor>FFAAAAAA</textcolor>
+                        <align>right</align>
+                        <aligny>center</aligny>
+                        <label>$INFO[ListItem.Property(status)]</label>
+                    </control>
+                </focusedlayout>
+            </control>
+
+            <!-- Hairline above the footer -->
+            <control type="image">
+                <left>0</left><top>680</top>
+                <width>1200</width><height>1</height>
+                <texture colordiffuse="1AFFFFFF">../media/white.png</texture>
+            </control>
+
+            <!-- FOOTER -->
+
+            <control type="button" id="11">
+                <left>640</left><top>698</top>
+                <width>256</width><height>48</height>
+                <onleft>2500</onleft><onright>10</onright>
+                <onup>2500</onup><ondown>2500</ondown>
+                <label>[B]Cancel All[/B]</label>
+                <font>font13</font>
+                <textcolor>FF888899</textcolor>
+                <focusedcolor>FF14191E</focusedcolor>
+                <texturefocus colordiffuse="FFFFFFFF" border="14">../media/round_btn.png</texturefocus>
+                <texturenofocus colordiffuse="18FFFFFF" border="14">../media/round_btn.png</texturenofocus>
+                <align>center</align>
+                <aligny>center</aligny>
+                <visible>String.IsEqual(Window.Property(pp.many),true)</visible>
+            </control>
+
+            <control type="button" id="10">
+                <left>914</left><top>698</top>
+                <width>256</width><height>48</height>
+                <onleft>11</onleft><onright>2500</onright>
+                <onup>2500</onup><ondown>2500</ondown>
+                <label>[B]Close[/B]</label>
+                <font>font13</font>
+                <textcolor>FF14191E</textcolor>
+                <focusedcolor>FF14191E</focusedcolor>
+                <texturefocus colordiffuse="FF81A6C6" border="14">../media/round_btn.png</texturefocus>
+                <texturenofocus colordiffuse="CC81A6C6" border="14">../media/round_btn.png</texturenofocus>
+                <align>center</align>
+                <aligny>center</aligny>
+            </control>
+
+        </control>
+    </controls>
+</window>

@@ -672,11 +672,44 @@ assert "_sweep(read_index())" in SRC, "the list never sweeps"
 print("  files removed by hand are swept on the next visit  OK")
 
 print()
+print("=== Downloads opens on two ways in ===")
+kodistub._WINDOW_PROPS.clear()
+kodistub.recorder.reset()
+downloads.list_downloads(None)
+landing = kodistub.recorder.directories
+print("  " + ", ".join(f"{i.label!r} folder={f}" for _, i, f in landing))
+assert [i.label for _, i, f in landing] == ["Downloading", "On Device"]
+assert not landing[0][2], "the manager opens a window, so it must not be a folder"
+assert landing[1][2], "On Device is a folder to walk into"
+for url, item, _ in landing:
+    icon = item.art.get("icon", "")
+    assert (harness.ADDON / "resources" / "skins" / "Default" / "media"
+            / icon.rsplit("/", 1)[-1]).exists(), f"missing art: {icon}"
+assert "open_downloads_manager" in landing[0][0] and "list_on_device" in landing[1][0]
+assert kodistub.recorder.content == "", "an icon menu should carry no content type"
+
+# The count has to be read fresh every time, so the listing cannot be cached.
+assert kodistub.recorder.ended == [True]
+from lib import download_queue as _queue
+kodistub.recorder.reset()   # a reset is a fresh Kodi, so the queue goes with it
+_queue.acquire("1x01 Romance Dawn")
+downloads.list_downloads(None)
+assert kodistub.recorder.directories[0][1].label == "Downloading  (1)",     kodistub.recorder.directories[0][1].label
+print(f"  with one running: {kodistub.recorder.directories[0][1].label!r}  OK")
+kodistub._WINDOW_PROPS.clear()
+
+# A menu elsewhere linking straight to a series must not land on the menu.
+kodistub.recorder.reset()
+downloads.list_downloads({"series": "One Pace"})
+assert [i.label for _, i, _ in kodistub.recorder.directories] != ["Downloading", "On Device"],     "a deep link fell through to the landing page"
+print("  a deep link still goes straight to the series  OK")
+
+print()
 print("=== an empty section is dressed like the root menu ===")
 downloads.read_index = lambda: {"files": {}, "series": {}}
 downloads._write_index = lambda data: None
 kodistub.recorder.reset()
-downloads.list_downloads(None)
+downloads.list_on_device(None)
 _, blank, is_folder = kodistub.recorder.directories[0]
 print(f"  {blank.label!r}, content={kodistub.recorder.content!r}")
 print(f"  art: {sorted(v.rsplit('/', 1)[-1] for v in blank.art.values())}")
@@ -725,7 +758,7 @@ downloads.xbmcvfs.exists = lambda p: True
 
 def walk(**params):
     kodistub.recorder.reset()
-    downloads.list_downloads(params or None)
+    downloads.list_on_device(params or None)
     return [(url, item.label, folder)
             for url, item, folder in kodistub.recorder.directories]
 
@@ -780,7 +813,7 @@ def _rows(series, sid, plan, seen):
     downloads.xbmcvfs.exists = lambda p: True
     _w.get_watched = lambda s: seen
     kodistub.recorder.reset()
-    downloads.list_downloads({"series": series})
+    downloads.list_on_device({"series": series})
     return [(i.label, i.properties) for _, i, _ in kodistub.recorder.directories]
 
 
@@ -801,7 +834,7 @@ print("  counted against the watched store, not assumed unwatched  OK")
 print()
 print("=== the counts and artwork the season list already uses ===")
 kodistub.recorder.reset()
-downloads.list_downloads({"series": "One Pace"})
+downloads.list_on_device({"series": "One Pace"})
 _, first, _ = kodistub.recorder.directories[0]
 print(f"  Specials  ->  {first.properties.get('TotalEpisodes')} episode(s), "
       f"poster={first.art.get('poster')}")
@@ -809,7 +842,7 @@ assert first.properties.get("TotalEpisodes") == "1", first.properties
 assert "(" not in first.label, "counts belong in properties, not the label"
 
 kodistub.recorder.reset()
-downloads.list_downloads({"series": "One Pace", "season": "1"})
+downloads.list_on_device({"series": "One Pace", "season": "1"})
 _, ep, _ = kodistub.recorder.directories[0]
 shown = ep._tag.calls
 print(f"  episode tags set offline: {sorted(shown)[:6]}")
@@ -820,7 +853,7 @@ print("  same tag and art helpers as normal browsing  OK")
 print()
 print("=== a downloaded episode carries what the online one does ===")
 kodistub.recorder.reset()
-downloads.list_downloads({"series": "One Pace", "season": "1"})
+downloads.list_on_device({"series": "One Pace", "season": "1"})
 _, first, _ = kodistub.recorder.directories[0]
 have = set(first._tag.calls)
 print(f"  {len(have)} tags set: {', '.join(sorted(have))[:88]}...")
@@ -873,13 +906,13 @@ downloads.xbmcvfs.exists = lambda p: True
 _xbmc.getCondVisibility = _was
 
 kodistub.recorder.reset()
-downloads.list_downloads({"series": "One Pace"})
+downloads.list_on_device({"series": "One Pace"})
 _, season_row, _ = kodistub.recorder.directories[0]
 print(f"  season :  {[c[0] for c in season_row.context]}")
 assert "Delete Specials" in season_row.context[0][0], season_row.context
 
 kodistub.recorder.reset()
-downloads.list_downloads(None)
+downloads.list_on_device(None)
 _, series_row, _ = kodistub.recorder.directories[0]
 print(f"  series :  {[c[0] for c in series_row.context]}")
 assert "Delete Series" in series_row.context[0][0], series_row.context
@@ -902,7 +935,7 @@ print("  one episode, one season, or a whole series  OK")
 print()
 print("=== a downloaded episode is the same episode everywhere ===")
 kodistub.recorder.reset()
-downloads.list_downloads({"series": "One Pace", "season": "1"})
+downloads.list_on_device({"series": "One Pace", "season": "1"})
 _, row, _ = kodistub.recorder.directories[0]
 assert row.properties.get("Downloaded") == "true", row.properties
 menu = [c[0] for c in row.context]
@@ -1020,7 +1053,7 @@ downloads.read_index = lambda: {"files": {
         "episode_title": "Next", "episode_id": "AR_6", "variant": "standard"},
 }, "series": {"One Pace": {"name": "One Pace"}}}
 kodistub.recorder.reset()
-downloads.list_downloads({"series": "One Pace", "season": "6"})
+downloads.list_on_device({"series": "One Pace", "season": "6"})
 rows = [i.label for _, i, _ in kodistub.recorder.directories]
 for r in rows:
     print(f"  {r}")

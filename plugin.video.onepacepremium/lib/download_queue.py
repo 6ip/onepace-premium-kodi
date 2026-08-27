@@ -102,6 +102,26 @@ def acquire(label, progress=None, total=1):
             return None
 
 
+def snapshot():
+    """Rows for the manager: the transfer running, then whatever waits."""
+    rows = []
+    running = holder()
+    if running:
+        total = running.get("total") or 1
+        detail = running.get("now") or ""
+        if total > 1:
+            # A season: say which episode, and how far through the run it is.
+            place = f"{running.get('index') or 1} of {total}"
+            detail = f"{place}  ·  {detail}" if detail else place
+        rows.append({"ticket": running.get("id", ""),
+                     "name": running.get("label", ""), "detail": detail,
+                     "pct": running.get("pct") or 0, "status": "Downloading"})
+    for entry in waiting():
+        rows.append({"ticket": entry.get("id", ""), "name": entry.get("label", ""),
+                     "detail": "", "pct": 0, "status": "Waiting"})
+    return rows
+
+
 def beat(ticket, pct):
     """Keep the slot alive and say how far along it is."""
     global _last_beat

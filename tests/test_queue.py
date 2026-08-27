@@ -106,22 +106,17 @@ assert "Window(_HOME)" in SRC
 print("  the queue lives in window properties, so Kodi restarting clears it  OK")
 
 print()
-print("=== the rows the Downloads section draws ===")
+print("=== what the manager window is given to draw ===")
 fresh()
-from lib import downloads
-assert downloads._active_rows() == [], "an idle add-on should draw no busy rows"
 alpha = q.acquire("6x01 Arlong Park 01")
 q.beat(alpha, 42)
 q._write(q._WAITING, [{"id": "later", "label": "6x02 Arlong Park 02"}])
-rows = downloads._active_rows()
-labels = [r[1].label for r in rows]
-print("  " + chr(10) + "  ".join(labels))
-assert "(42%)" in labels[0] and "(waiting)" in labels[1]
-assert all(is_folder for _, _, is_folder in rows),     "a non-folder row would have Kodi try to play the download in progress"
-assert all("action=list_downloads" in url for url, _, _ in rows),     "selecting a row should redraw the list, not fire an action"
-menu = rows[0][1].context
-assert any("Cancel All" in text for text, _ in menu), "two in flight, no way to stop both"
-print("  folder rows, cancel on the menu  OK")
+rows = q.snapshot()
+for row in rows:
+    print(f"  {row['name']:<22} {row['pct']:>3}%  {row['status']}")
+assert [r["status"] for r in rows] == ["Downloading", "Waiting"]
+assert rows[0]["pct"] == 42 and rows[1]["pct"] == 0
+assert [r["ticket"] for r in rows] == [alpha, "later"], "no ticket, nothing to cancel"
 
 print()
 print("=== a season row says what cancelling it would stop ===")
@@ -129,19 +124,25 @@ fresh()
 job = q.acquire("Season 6", total=12)
 q.on_item(job, "6x03 Arlong Park 03", 3)
 q.beat(job, 55)
-row = downloads._active_rows()[0]
-print(f"  {row[1].label}")
-print(f"  menu: {[t for t, _ in row[1].context]}")
-assert "Season 6" in row[1].label and "3 of 12" in row[1].label,     "the row only named the episode, so a cancel looked like it stopped one"
-assert "6x03 Arlong Park 03" in row[1].getVideoInfoTag().calls["setPlot"],     "the plot never named the episode actually in flight"
-assert any("Cancel Season 6" in text for text, _ in row[1].context),     'the menu said only "Cancel" for a job covering twelve episodes'
+row = q.snapshot()[0]
+print(f"  {row['name']}  |  {row['detail']}  |  {row['pct']}%")
+assert row["name"] == "Season 6", "the episode overwrote the season it belongs to"
+assert "3 of 12" in row["detail"] and "6x03 Arlong Park 03" in row["detail"]
 
-# One episode on its own must not be dressed up as a season.
+# One episode on its own must not be dressed up as a run of many.
 fresh()
 q.acquire("1x01 Romance Dawn")
-solo = downloads._active_rows()[0]
-assert [t for t, _ in solo[1].context] == ["[B]Cancel[/B]"], solo[1].context
-print("  a single episode still reads plainly  OK")
+solo = q.snapshot()[0]
+assert solo["detail"] == "", solo
+print("  a single episode carries no run detail  OK")
+
+print()
+print("=== the window stops redrawing once the queue empties ===")
+MSRC = (harness.ADDON / "lib" / "downloads_manager.py").read_text(encoding="utf-8")
+watch = MSRC[MSRC.index("def _watch("):]
+assert "while not self.closed and download_queue.busy():" in watch,     "an idle window would redraw forever, holding an interpreter open"
+assert "waitForAbort" in watch, "a raw sleep ignores Kodi shutting down"
+print("  the redraw loop ends when nothing is in flight  OK")
 
 print()
 print("all assertions passed")

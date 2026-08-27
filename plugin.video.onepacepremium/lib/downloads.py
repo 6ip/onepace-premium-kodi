@@ -981,70 +981,6 @@ def _sweep(data):
     return data
 
 
-# Blue, and moving: this one is not on disk yet.
-_BUSY = "[COLOR FF81A6C6][B][»][/B][/COLOR]"
-
-
-def _active_rows():
-    """A row for the transfer running now, and one for anything behind it."""
-    running, queued = download_queue.holder(), download_queue.waiting()
-    if not running and not queued:
-        return []
-    rows = []
-    if running:
-        name = running.get("label", "Downloading")
-        total = running.get("total") or 1
-        plot = "Downloading now. Select this row to update it."
-        if total > 1:
-            # Say what a cancel would stop: the season, not this episode.
-            name = f"{name} — {running.get('index') or 1} of {total}"
-            plot = f"{running.get('now', '')}{chr(10)}{chr(10)}{plot}"
-        rows.append((running.get("id"), f"{name}  ({running.get('pct') or 0}%)",
-                     plot, running.get("label", ""), total))
-    for entry in queued:
-        rows.append((entry.get("id"), f"{entry.get('label', '')}  (waiting)",
-                     "Waiting for the transfer above to finish.",
-                     entry.get("label", ""), 1))
-
-    media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
-    icon = f"{media}/info.png"
-    items = []
-    for ticket, label, plot, job, total in rows:
-        item = xbmcgui.ListItem(label=f"{_BUSY} {label}", offscreen=True)
-        item.setArt({"icon": icon, "thumb": icon, "poster": icon,
-                     "banner": icon, "landscape": icon})
-        item.getVideoInfoTag().setPlot(plot)
-        stop = f"Cancel {job}" if total > 1 else "Cancel"
-        menu = [(f"[B]{stop}[/B]",
-                 f"RunPlugin({build_url('cancel_download', ticket=ticket)})")]
-        if len(rows) > 1:
-            menu.append(("[B]Cancel All[/B]",
-                         f"RunPlugin({build_url('cancel_download', all='1')})"))
-        item.addContextMenuItems(menu)
-        # A folder back to this same list: selecting it redraws the row with
-        # the percentage it is on now. Anything else would have Kodi try to
-        # play the row.
-        items.append((build_url("list_downloads"), item, True))
-    return items
-
-
-def cancel_download(params=None):
-    """Stop one transfer, or everything in flight."""
-    params = params or {}
-    running, queued = download_queue.holder(), download_queue.waiting()
-    if params.get("all"):
-        tickets = [e.get("id") for e in ([running] if running else []) + list(queued)]
-    else:
-        tickets = [params.get("ticket")]
-    tickets = [t for t in tickets if t]
-    if not tickets:
-        _notify_info("Nothing is downloading")
-        return
-    download_queue.request_cancel(tickets)
-    _notify_info("Stopping" if len(tickets) == 1 else f"Stopping {len(tickets)}")
-    refresh_container()
-
-
 def _empty(message):
     """Dressed like the root menu, since that is what an empty section is.
 
@@ -1260,6 +1196,38 @@ def _season_art(meta_for_series, metas):
 
 
 def list_downloads(params=None):
+    """Two ways in: what is transferring now, and what is already here."""
+    params = params or {}
+    # Menus elsewhere link straight to a series or season on disk.
+    if params.get("series") is not None or params.get("season") is not None:
+        list_on_device(params)
+        return
+
+    media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
+    fanart = f"special://home/addons/{ADDON_ID}/resources/fanart.png"
+
+    def _nav(label, icon):
+        item = xbmcgui.ListItem(label=label, offscreen=True)
+        item.setArt({"icon": icon, "thumb": icon, "poster": icon,
+                     "fanart": fanart, "banner": icon, "landscape": icon})
+        item.getVideoInfoTag().setPlot("​")
+        return item
+
+    running = len(download_queue.snapshot())
+    xbmcplugin.setContent(ADDON_HANDLE, "")
+    xbmcplugin.setPluginCategory(ADDON_HANDLE, "Downloads")
+    _add_directory_items([
+        # Not a folder: it opens a window rather than navigating.
+        (build_url("open_downloads_manager"),
+         _nav(f"Downloading  ({running})" if running else "Downloading",
+              f"{media}/downloading.png"), False),
+        (build_url("list_on_device"), _nav("On Device", f"{media}/library.png"), True),
+    ])
+    # Never cached: the count above moves while you are looking at it.
+    end_directory()
+
+
+def list_on_device(params=None):
     """Series, then seasons, then episodes — the same walk as browsing."""
     from .art import (_cast_list, _set_art, _set_episode_art, _set_episode_rating,
                       _set_season_art, _set_show_tags, _set_video_tags)
@@ -1269,17 +1237,11 @@ def list_downloads(params=None):
     params = params or {}
     data = _sweep(read_index())
     files, series_meta = data["files"], data["series"]
-    series = params.get("series")
-    # Only at the top level: the rows underneath are one series' episodes.
-    busy = _active_rows() if series is None else []
     if not files:
-        if busy:
-            xbmcplugin.setContent(ADDON_HANDLE, "")
-            _add_directory_items(busy)
-            end_directory()
-            return
         _empty("Pick an episode, then choose Download from its menu.")
         return
+
+    series = params.get("series")
 
     season = params.get("season")
 
@@ -1307,8 +1269,8 @@ def list_downloads(params=None):
                     "[B]Delete Series[/B]",
                     f"RunPlugin({build_url('delete_download', series=name)})",
                 )])
-                items.append((build_url("list_downloads", series=name), item, True))
-            _add_directory_items(busy + items)
+                items.append((build_url("list_on_device", series=name), item, True))
+            _add_directory_items(items)
             end_directory()
             return
 
@@ -1344,9 +1306,9 @@ def list_downloads(params=None):
                     f"[B]Delete {label}[/B]",
                     f"RunPlugin({build_url('delete_download', series=series, season=number)})",
                 )])
-                items.append((build_url("list_downloads", series=series, season=number),
+                items.append((build_url("list_on_device", series=series, season=number),
                               item, True))
-            _add_directory_items(busy + items)
+            _add_directory_items(items)
             end_directory()
             return
         season = next(iter(seasons))
@@ -1440,5 +1402,5 @@ def list_downloads(params=None):
                      "RunPlugin(%s)" % build_url("delete_download", path=path)))
         item.addContextMenuItems(menu)
         items.append((play_url(path, meta), item, False))
-    _add_directory_items(busy + items)
+    _add_directory_items(items)
     end_directory()

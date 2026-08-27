@@ -47,9 +47,20 @@ for xml in sorted(SKINS.glob("*.xml")):
     print(f"  {xml.name:<20} focusable={sorted(focusable)} orphans={sorted(orphans) or 'none'}")
     assert not orphans, f"{xml.name} has controls nothing navigates to"
 
+    # Buttons pointing at each other satisfies the check above while leaving
+    # them stranded: focus starts on the default control and has to get out.
+    if default is not None and default.text:
+        start = default.text.strip()
+        out = {e.text.strip() for c in root.iter("control") if c.get("id") == start
+               for nav in ("onleft", "onright", "onup", "ondown")
+               for e in [c.find(nav)] if e is not None and e.text} - {start}
+        assert out & focusable, (f"{xml.name}: focus starts on {start} "
+                                 f"and no arrow key reaches a button")
+
 print()
 print("=== window properties: what the skin reads, the python sets ===")
-for skin, module in [("changelog.xml", "changelog"), ("donate.xml", "donate")]:
+for skin, module in [("changelog.xml", "changelog"), ("donate.xml", "donate"),
+                     ("downloads_manager.xml", "downloads_manager")]:
     reads = set(re.findall(r"Window\.Property\((pp\.[a-z]+)\)",
                            (SKINS / skin).read_text(encoding="utf-8")))
     sets = set(re.findall(r'setProperty\("(pp\.[a-z]+)"',

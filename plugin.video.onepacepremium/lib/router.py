@@ -31,6 +31,8 @@ _ACTIONS = {
     "list_in_progress":    "my_lists:list_in_progress",
     "list_next_episodes":  "my_lists:list_next_episodes",
     "list_downloads":      "downloads:list_downloads",
+    "list_on_device":      "downloads:list_on_device",
+    "open_downloads_manager": "downloads_manager:show",
     "download_episode":    "episode_routes:download_episode",
     "download_season":     "episode_routes:download_season",
     "delete_download":     "downloads:delete",
@@ -39,7 +41,6 @@ _ACTIONS = {
     "show_download_report": "downloads:show_report",
     "check_updates":       "downloads:check_updates",
     "rescan_downloads":    "downloads:rescan",
-    "cancel_download":     "downloads:cancel_download",
 }
 
 
