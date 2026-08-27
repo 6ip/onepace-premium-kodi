@@ -86,6 +86,24 @@ hidden = manager.split('<control type="list"')[1].split(">")[0]
 assert default.group(2) != "2500", "the default control is the one that gets hidden"
 
 print()
+print("=== a group's children are what the group actually moves ===")
+# Well-formed XML that nests wrongly still parses and still finds its
+# textures, so nothing above this catches a control left outside its group.
+for xml in sorted(SKINS.glob("*.xml")):
+    for group in ET.parse(xml).getroot().iter("control"):
+        if group.get("type") != "group":
+            continue
+        animation = group.find("animation")
+        if animation is None or not animation.get("condition"):
+            continue
+        moved = group.findall("control")
+        tops = {c.findtext("top") for c in moved if c.findtext("top")}
+        print(f"  {xml.name}: a conditional group moves {len(moved)} control(s) at top {sorted(tops)}")
+        # Everything drawn on one line has to travel together or it comes apart.
+        assert len(moved) > 1 or len(tops) == 1,             f"{xml.name}: only part of the row moves with the group"
+        assert len(tops) == 1,             f"{xml.name}: the group holds controls at different heights: {sorted(tops)}"
+
+print()
 print("=== window properties: what the skin reads, the python sets ===")
 for skin, module in [("changelog.xml", "changelog"), ("donate.xml", "donate"),
                      ("downloads_manager.xml", "downloads_manager")]:

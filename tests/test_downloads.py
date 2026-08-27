@@ -6,6 +6,7 @@ from lib import downloads
 
 SRC = (harness.ADDON / "lib" / "downloads.py").read_text(encoding="utf-8")
 ER_SRC = (harness.ADDON / "lib" / "episode_routes.py").read_text(encoding="utf-8")
+SRC_API = (harness.ADDON / "lib" / "provider_api.py").read_text(encoding="utf-8")
 STREAMS = (harness.ADDON / "lib" / "episode_routes.py").read_text(encoding="utf-8")
 
 print("=== only a stream we can fetch ourselves offers Download ===")
@@ -968,7 +969,33 @@ fallback = [i.label for _, i, _ in kodistub.recorder.directories]
 print(f"  with no catalog: {fallback}")
 assert fallback == ["Muhn Pace", "One Pace", "Zed Pace"], fallback
 _api.series_order = _real_series_order
+
+# On Device has to work with no connection. Reading the order must never
+# reach the network: two twenty-second timeouts and an error toast would
+# land on the one section that is meant to work offline.
+import lib.provider_api as _papi
+body = SRC_API[SRC_API.index("def series_order("):SRC_API.index("def _catalog_priority(")]
+assert "fetch_data" not in body and "_fetch_" not in body,     "the series order fetches, so an offline visit stalls on timeouts"
+assert body.count("_cache.get(") == 2, "it should read both the manifest and the catalog from cache"
+print("  the order is read from cache only, never fetched  OK")
+
 downloads.read_index, downloads._write_index = _real_order
+
+print()
+print("=== rearranging the library waits for the transfers to stop ===")
+# A running download writes to a .part nothing has indexed yet. Moving would
+# leave it behind in the old folder; a rescan would adopt it half-written.
+from lib import download_queue as _busy_q
+for name in ("move_downloads", "rescan"):
+    kodistub._WINDOW_PROPS.clear()
+    kodistub.recorder.reset()
+    _busy_q.acquire("1x01 something big")
+    getattr(downloads, name)()
+    said = [m for m, kind in kodistub.recorder.notifications]
+    print(f"  {name:<16} while downloading -> {said}")
+    assert any("Wait for the downloads" in m for m in said), (name, said)
+kodistub._WINDOW_PROPS.clear()
+print("  both refuse to run mid-transfer  OK")
 
 print()
 print("=== the folder a row opens is the one that holds all of it ===")

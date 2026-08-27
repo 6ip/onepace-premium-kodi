@@ -133,127 +133,127 @@
                         <left>0</left><top>78</top>
                         <width>1120</width><height>10</height>
                         <texture colordiffuse="14FFFFFF" border="5">../media/round_btn.png</texture>
-                </control>
-            </control>
-                <control type="image">
-                    <left>0</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),5)</visible>
-                </control>
-                <control type="image">
-                    <left>56</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),10)</visible>
-                </control>
-                <control type="image">
-                    <left>112</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),15)</visible>
-                </control>
-                <control type="image">
-                    <left>168</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),20)</visible>
-                </control>
-                <control type="image">
-                    <left>224</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),25)</visible>
-                </control>
-                <control type="image">
-                    <left>280</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),30)</visible>
-                </control>
-                <control type="image">
-                    <left>336</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),35)</visible>
-                </control>
-                <control type="image">
-                    <left>392</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),40)</visible>
-                </control>
-                <control type="image">
-                    <left>448</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),45)</visible>
-                </control>
-                <control type="image">
-                    <left>504</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),50)</visible>
-                </control>
-                <control type="image">
-                    <left>560</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),55)</visible>
-                </control>
-                <control type="image">
-                    <left>616</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),60)</visible>
-                </control>
-                <control type="image">
-                    <left>672</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),65)</visible>
-                </control>
-                <control type="image">
-                    <left>728</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),70)</visible>
-                </control>
-                <control type="image">
-                    <left>784</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),75)</visible>
-                </control>
-                <control type="image">
-                    <left>840</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),80)</visible>
-                </control>
-                <control type="image">
-                    <left>896</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),85)</visible>
-                </control>
-                <control type="image">
-                    <left>952</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),90)</visible>
-                </control>
-                <control type="image">
-                    <left>1008</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),95)</visible>
-                </control>
-                <control type="image">
-                    <left>1064</left><top>78</top>
-                    <width>56</width><height>10</height>
-                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
-                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),100)</visible>
+                    </control>
+                    <control type="image">
+                        <left>0</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),5)</visible>
+                    </control>
+                    <control type="image">
+                        <left>56</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),10)</visible>
+                    </control>
+                    <control type="image">
+                        <left>112</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),15)</visible>
+                    </control>
+                    <control type="image">
+                        <left>168</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),20)</visible>
+                    </control>
+                    <control type="image">
+                        <left>224</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),25)</visible>
+                    </control>
+                    <control type="image">
+                        <left>280</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),30)</visible>
+                    </control>
+                    <control type="image">
+                        <left>336</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),35)</visible>
+                    </control>
+                    <control type="image">
+                        <left>392</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),40)</visible>
+                    </control>
+                    <control type="image">
+                        <left>448</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),45)</visible>
+                    </control>
+                    <control type="image">
+                        <left>504</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),50)</visible>
+                    </control>
+                    <control type="image">
+                        <left>560</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),55)</visible>
+                    </control>
+                    <control type="image">
+                        <left>616</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),60)</visible>
+                    </control>
+                    <control type="image">
+                        <left>672</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),65)</visible>
+                    </control>
+                    <control type="image">
+                        <left>728</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),70)</visible>
+                    </control>
+                    <control type="image">
+                        <left>784</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),75)</visible>
+                    </control>
+                    <control type="image">
+                        <left>840</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),80)</visible>
+                    </control>
+                    <control type="image">
+                        <left>896</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),85)</visible>
+                    </control>
+                    <control type="image">
+                        <left>952</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),90)</visible>
+                    </control>
+                    <control type="image">
+                        <left>1008</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),95)</visible>
+                    </control>
+                    <control type="image">
+                        <left>1064</left><top>78</top>
+                        <width>56</width><height>10</height>
+                        <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                        <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),100)</visible>
+                    </control>
                 </control>
             </control>
 

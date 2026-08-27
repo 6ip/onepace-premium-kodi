@@ -182,13 +182,22 @@ def series_order():
 
     Downloads are grouped by name and would otherwise fall alphabetically,
     which puts them in a different order from every other list in the add-on.
+
+    Read from the cache only, never fetched. Browsing fills that cache, and
+    the answer is kept once, so the one place that wants it must not stall
+    for two timeouts and raise a network error when there is no connection.
     """
     try:
-        manifest = _fetch_provider_manifest()
+        manifest_url, _ = _provider_context()
+        manifest = _cache.get(manifest_url)
         specs = _catalog_specs(manifest, "series") if manifest else None
         if not specs:
+            log("[catalog] no manifest cached, so the series order waits for a browse")
             return {}
-        response = _fetch_catalog(_catalog_url("series", specs[0]["id"], "skip=0"))
+        response = _cache.get(_catalog_url("series", specs[0]["id"], "skip=0"))
+        if response is None:
+            log("[catalog] no catalog cached, so the series order waits for a browse")
+            return {}
         return {v["id"]: n for n, v in enumerate(response.get("metas", ()))}
     except Exception as exc:
         log(f"[catalog] could not read the series order: {exc}")

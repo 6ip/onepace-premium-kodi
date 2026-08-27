@@ -565,6 +565,11 @@ def rescan(_params=None):
     provider supplies the rest, so the rebuilt rows are as good as the
     originals apart from the release hash.
     """
+    # A transfer in flight writes to a .part the index knows nothing about,
+    # so a scan running now would adopt a half-written file.
+    if download_queue.busy():
+        _notify_error("Wait for the downloads to finish first")
+        return
     from .provider_api import _fetch_provider_meta
 
     data = _sweep(read_index())
@@ -925,6 +930,11 @@ def move_downloads(_params=None):
     Changing the folder only redirects new downloads — the old files keep
     working where they are. This is for when you actually want them together.
     """
+    # A transfer in flight writes to a .part the index knows nothing about,
+    # so it would finish into the folder we just emptied.
+    if download_queue.busy():
+        _notify_error("Wait for the downloads to finish first")
+        return
     data = read_index()
     planned = []
     for path, meta in data["files"].items():
