@@ -982,6 +982,28 @@ print("  the order is read from cache only, never fetched  OK")
 downloads.read_index, downloads._write_index = _real_order
 
 print()
+print("=== a rescan adopts the subtitles sitting beside the file ===")
+# Our folder is named so Kodi will not scan it, which is what stopped the
+# duplicates. So a rebuilt row that forgets them leaves them unreachable —
+# on the one path meant to recover a library after a reinstall.
+_real_listdir = downloads.xbmcvfs.listdir
+downloads.xbmcvfs.listdir = lambda p: ([], [
+    "1x01 - Romance Dawn.ara.vtt", "1x01 - Romance Dawn.ALT.ara.vtt",
+    "1x01 - Romance Dawn.eng.vtt", "1x02 - Other.eng.vtt", "cover.jpg"])
+found = downloads._sidecars("C:/dl/One Pace/Season 01/1x01 - Romance Dawn.mkv")
+names = [f.rsplit("/", 1)[-1] for f in found]
+print("  " + ", ".join(names))
+assert all(n.startswith("1x01 ") for n in names), "picked up another episode's"
+assert all(n.endswith(".vtt") for n in names), "picked up something that is not a subtitle"
+assert names.index("1x01 - Romance Dawn.ara.vtt") < names.index("1x01 - Romance Dawn.ALT.ara.vtt"),     "ALT came first, which is the ordering Kodi gets wrong on its own"
+downloads.xbmcvfs.listdir = _real_listdir
+
+start = SRC.index("def rescan(")
+rescan_src = SRC[start:SRC.index(chr(10) + "def ", start + 1)]
+assert "_sidecars(" in rescan_src, "the rescan rebuilds rows without their subtitles"
+print("  adopted in the feed's order, nothing else picked up  OK")
+
+print()
 print("=== rearranging the library waits for the transfers to stop ===")
 # A running download writes to a .part nothing has indexed yet. Moving would
 # leave it behind in the old folder; a rescan would adopt it half-written.
@@ -1005,10 +1027,18 @@ for label, paths, want in (
         ("one season",  ["/d/One Pace/Season 01/a.mkv",
                          "/d/One Pace/Season 01/b.mkv"], "/d/One Pace/Season 01"),
         ("one file",    ["/d/One Pace/Season 01/a.mkv"], "/d/One Pace/Season 01"),
+        # Changing the download folder without running Move leaves a series
+        # split across two roots. They share no folder, so open one that exists
+        # rather than splicing the parts that happen to line up.
+        ("two drives",  ["C:/a/One Pace/S1/x.mkv",
+                         "D:/b/One Pace/S1/y.mkv"], "C:/a/One Pace/S1"),
+        ("moved once",  ["C:/old/One Pace/S1/x.mkv",
+                         "C:/new/One Pace/S1/y.mkv"], "C:/old/One Pace/S1"),
         ("none",        [], "")):
     got = downloads._shared_folder(paths)
     print(f"  {label:<12} -> {got!r}")
     assert got == want, (label, got, want)
+    assert not got or ":" in got or got.startswith("/"),         f"{label} produced a path that is not rooted anywhere: {got!r}"
 
 taken = []
 downloads._remove = lambda paths: taken.extend(paths) or len(paths)
@@ -1451,8 +1481,15 @@ shared = changelog_src[changelog_src.index("def show_text("):
                        changelog_src.index("def show_changelog(")]
 assert "dialog.donate" in shared and "show_donate()" in shared,     "the donate button on the report window would do nothing"
 assert "show_text(" in changelog_src[changelog_src.index("def show_changelog("):],     "What's New and the report should open the same way"
-summary = STREAMS[STREAMS.index("    from .downloads import write_report"):]
-assert "Cut used" in summary[:400], "the season summary never records which cut it took"
+summary = STREAMS[STREAMS.index('parts = [f"downloaded {done}"]'):]
+assert "Cut used" in summary[:600], "the season summary never records which cut it took"
+
+# A drive pulled out or a connection gone fails every remaining episode, one
+# timeout and one message at a time. Three in a row is not a blip.
+season_run = STREAMS[STREAMS.index("def download_season("):]
+assert "_GIVE_UP_AFTER" in season_run, "a broken run works through the whole season"
+assert "in_a_row = 0" in season_run, "the counter never resets, so scattered failures stop the run"
+print("  a run that keeps failing gives up instead of grinding on  OK")
 print("  shown in the same window as What's New  OK")
 
 print()

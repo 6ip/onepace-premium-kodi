@@ -605,7 +605,8 @@ def rescan(_params=None):
             unknown += 1
             log(f"[rescan] no provider entry for {entry['path']!r}")
             continue
-        _remember(entry["path"], _rebuilt(entry, video, meta), meta)
+        _remember(entry["path"], _rebuilt(entry, video, meta), meta,
+                  _sidecars(entry["path"]))
         added += 1
     progress.close()
 
@@ -640,6 +641,25 @@ def _match_episode(meta, entry):
                 and (video.get("episode") or video.get("number")) == entry["episode"]):
             return video
     return None
+
+
+def _sidecars(path):
+    """Subtitles already sitting beside a file we are adopting.
+
+    Our folder is named so Kodi does not scan it — that is what stops the
+    duplicates — so a rebuilt row that forgot them would leave the subtitles
+    on disk and unreachable.
+    """
+    directory = _subs_dir(path)
+    stem = os.path.splitext(os.path.basename(path))[0]
+    try:
+        _, names = xbmcvfs.listdir(directory)
+    except Exception:
+        return ()
+    # Plain before tagged, which is the order the feed itself lists them in.
+    found = sorted(n for n in names
+                   if n.startswith(stem + ".") and n.lower().endswith(".vtt"))
+    return tuple(directory + n for n in sorted(found, key=lambda n: n.count(".")))
 
 
 def _rebuilt(entry, video, meta):
@@ -1033,9 +1053,15 @@ def _shared_folder(paths):
         return ""
     shared = folders[0].split("/")
     for folder in folders[1:]:
-        parts = folder.split("/")
-        shared = [a for a, b in zip(shared, parts) if a == b]
-    return "/".join(shared)
+        parts, cut = folder.split("/"), 0
+        # Cut at the first difference. Keeping every part that happens to
+        # match would splice two unrelated paths into one that leads nowhere.
+        while cut < min(len(shared), len(parts)) and shared[cut] == parts[cut]:
+            cut += 1
+        shared = shared[:cut]
+    # Nothing above a drive letter is a folder anyone can open. Files split
+    # across two of them share no folder at all, so open the first one's.
+    return "/".join(shared) if len(shared) > 1 else folders[0]
 
 
 def _empty(message):

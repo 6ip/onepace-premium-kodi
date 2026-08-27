@@ -656,6 +656,10 @@ def _season_episodes(meta, video_id, catalog_type, season):
     return picks
 
 
+# One bad episode is a blip; three in a row is the drive or the connection.
+_GIVE_UP_AFTER = 3
+
+
 def _season_preference(picks, label):
     """Ask at most two questions before a run, or None if cancelled.
 
@@ -706,8 +710,8 @@ def download_season(params):
     and one writer means the download index cannot be raced.
     """
     from . import download_queue
-    from .downloads import (BLOCKED, CANCELLED, OK, download, enabled,
-                            mark as _download_mark, downloaded_ids)
+    from .downloads import (BLOCKED, CANCELLED, OK, download, downloaded_ids,
+                            enabled, mark as _download_mark, write_report)
 
     if not enabled() or not ensure_configured():
         return
@@ -743,7 +747,7 @@ def download_season(params):
     if prefer is None:
         return
 
-    done = skipped = failed = 0
+    done = skipped = failed = in_a_row = 0
     progress = xbmcgui.DialogProgressBG()
     progress.create(f"Downloading {label}")
     # The whole run takes the slot once, so cancelling it stops the season
@@ -780,10 +784,15 @@ def download_season(params):
                 stopped = True
                 break
             if outcome == OK:
-                done += 1
+                done, in_a_row = done + 1, 0
             else:
-                # A blip on one episode is no reason to abandon the rest.
-                failed += 1
+                # A blip on one episode is no reason to abandon the rest, but
+                # a drive pulled out or a connection gone fails every one of
+                # them — slowly, a timeout at a time, with a message each.
+                failed, in_a_row = failed + 1, in_a_row + 1
+                if in_a_row >= _GIVE_UP_AFTER:
+                    log(f"[downloads] {label} gave up after {in_a_row} failures in a row")
+                    break
     finally:
         progress.close()
         download_queue.release(ticket)
@@ -791,6 +800,14 @@ def download_season(params):
     if stopped:
         _notify_info(f"{label}: stopped after {done}")
         log(f"[downloads] {label} cancelled after {done} episode(s)")
+        return
+
+    if in_a_row >= _GIVE_UP_AFTER:
+        left = len(chosen) - done - skipped - failed
+        _notify_error(f"{label}: stopped after {in_a_row} failures")
+        report = [f"Downloaded {done} before it stopped",
+                  f"{in_a_row} in a row failed, so {left} were not tried"]
+        write_report(f"{show_title or 'Downloads'} — {label}", report)
         return
 
     parts = [f"downloaded {done}"]
@@ -801,7 +818,6 @@ def download_season(params):
     _notify_info(f"{label}: " + ", ".join(parts))
     log(f"[downloads] {label}: {done} done, {skipped} skipped, {failed} failed")
 
-    from .downloads import write_report
     report = [f"Downloaded {done} of {len(chosen)} picked"]
     if skipped:
         report.append(f"{skipped} had no stream we could fetch")
