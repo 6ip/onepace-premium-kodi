@@ -1,4 +1,5 @@
 """One transfer at a time: taking the slot, waiting behind it, cancelling."""
+import re
 import time
 import harness
 
@@ -49,6 +50,35 @@ assert two is None, "it should not have taken a slot someone else holds"
 assert q.holder()["label"] == "1x01 Romance Dawn", "the first one was displaced"
 assert q.waiting() == [], "a cancelled waiter stayed in the line"
 print(f"  waited {calls['n']} turns, then cancelled cleanly  OK")
+
+print()
+print("=== cancel all: a waiter must never start, then stop ===")
+fresh()
+first = q.acquire("1x01")
+# Two behind it, both cancelled while the first is still going.
+q._write(q._WAITING, [{"id": "second", "label": "1x02"},
+                      {"id": "third", "label": "1x03"}])
+q.request_cancel([first, "second", "third"])
+q.release(first)
+
+# "second" now reaches the front of an empty queue. Claiming before checking
+# the cancel is what made it download the whole file and only then stop.
+started = []
+for who in ("second", "third"):
+    line = [w for w in q.waiting() if w["id"] != who]
+    q._write(q._WAITING, [{"id": who, "label": who}] + line)
+    if q.cancelled(who):
+        q._leave(who)
+    else:
+        started.append(who)
+print(f"  started anyway: {started or 'none'}")
+assert not started, "a cancelled transfer still took the slot"
+assert q.waiting() == [], q.waiting()
+
+src = (harness.ADDON / "lib" / "download_queue.py").read_text(encoding="utf-8")
+body = src[src.index("def acquire("):src.index("def beat(")]
+assert body.index("if cancelled(ticket):") < body.index("_write(_HOLDER"),     "the slot is claimed before the cancel is noticed, so the download begins"
+print("  the cancel is read before the slot is taken  OK")
 
 print()
 print("=== releasing hands the slot to whoever is next ===")
@@ -129,20 +159,42 @@ print(f"  {row['name']}  |  {row['detail']}  |  {row['pct']}%")
 assert row["name"] == "Season 6", "the episode overwrote the season it belongs to"
 assert "3 of 12" in row["detail"] and "6x03 Arlong Park 03" in row["detail"]
 
-# One episode on its own must not be dressed up as a run of many.
+# One episode on its own must not be dressed up as a run of many, but its
+# filename does not say which series it is, so the band would sit half empty.
 fresh()
-q.acquire("1x01 Romance Dawn")
+q.acquire("1x01 Romance Dawn", detail="One Pace")
 solo = q.snapshot()[0]
-assert solo["detail"] == "", solo
-print("  a single episode carries no run detail  OK")
+print(f"  {solo['name']}  |  {solo['detail']}")
+assert solo["detail"] == "One Pace", solo
+assert "of" not in solo["detail"], "a single download read like a run of many"
+
+# And if there is no series to name, the skin closes the gap itself.
+assert 'condition="String.IsEmpty(Window(Home).Property(pp.dl.detail))"' in (
+    harness.ADDON / "resources" / "skins" / "Default" / "1080i"
+    / "downloads_manager.xml").read_text(encoding="utf-8"),     "an empty detail line would leave the name stranded at the top"
+print("  a single episode names its series instead  OK")
 
 print()
-print("=== the window stops redrawing once the queue empties ===")
+print("=== the manager leaves the moving parts to the skin ===")
 MSRC = (harness.ADDON / "lib" / "downloads_manager.py").read_text(encoding="utf-8")
-watch = MSRC[MSRC.index("def _watch("):]
-assert "while not self.closed and download_queue.busy():" in watch,     "an idle window would redraw forever, holding an interpreter open"
-assert "waitForAbort" in watch, "a raw sleep ignores Kodi shutting down"
-print("  the redraw loop ends when nothing is in flight  OK")
+# A control may only be touched from the thread Kodi calls us on. Doing it
+# from a timer thread corrupts the render, so there is no timer at all.
+assert "threading" not in MSRC, "a background thread must not touch a control"
+assert "setPercent(" not in MSRC, "driving the bar from python needs a thread"
+assert "def _sync(" in MSRC, "nothing would ever catch the list up"
+
+skin = (harness.ADDON / "resources" / "skins" / "Default" / "1080i"
+        / "downloads_manager.xml").read_text(encoding="utf-8")
+assert 'type="progress"' not in skin, "a progress control can only be driven from python"
+steps = skin.count("Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent)")
+assert steps >= 10, f"only {steps} steps, the bar would jump"
+print(f"  the bar is {steps} skin-drawn steps, no control touched from python  OK")
+
+# What the skin reads, the queue has to write.
+reads = set(re.findall(r"Window\(Home\)\.Property\((pp\.dl\.[a-z]+)\)", skin))
+writes = set(re.findall(r'setProperty\("(pp\.dl\.[a-z]+)"', SRC))
+print(f"  skin reads {sorted(reads)}")
+assert reads <= writes, f"the skin reads what nothing sets: {sorted(reads - writes)}"
 
 print()
 print("all assertions passed")

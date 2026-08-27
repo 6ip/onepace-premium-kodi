@@ -909,13 +909,79 @@ kodistub.recorder.reset()
 downloads.list_on_device({"series": "One Pace"})
 _, season_row, _ = kodistub.recorder.directories[0]
 print(f"  season :  {[c[0] for c in season_row.context]}")
-assert "Delete Specials" in season_row.context[0][0], season_row.context
+assert any("Delete Specials" in t for t, _ in season_row.context), season_row.context
+# A season folder holds every episode of it, so that is what the row opens.
+season_browse = next(c for t, c in season_row.context if "Browse Folder" in t)
+assert "dir=" in season_browse and "Season+00" in season_browse, season_browse
 
 kodistub.recorder.reset()
 downloads.list_on_device(None)
 _, series_row, _ = kodistub.recorder.directories[0]
 print(f"  series :  {[c[0] for c in series_row.context]}")
-assert "Delete Series" in series_row.context[0][0], series_row.context
+assert any("Delete Series" in t for t, _ in series_row.context), series_row.context
+# The deepest folder holding everything of that series: with one season
+# that is the season itself, which saves opening a folder to find one folder.
+series_browse = next(c for t, c in series_row.context if "Browse Folder" in t)
+assert "dir=" in series_browse, series_browse
+print(f"  series folder: {series_browse.split('dir=')[1].rstrip(')')}")
+
+print()
+print("=== On Device is ordered the way Browse is, not alphabetically ===")
+_real_order = downloads.read_index, downloads._write_index
+_INDEX = {"files": {
+    "/d/Muhn Pace/S1/a.mkv": {"series_name": "Muhn Pace", "series_id": "mp",
+                              "season": "1", "episode": "1"},
+    "/d/One Pace/S1/b.mkv":  {"series_name": "One Pace", "series_id": "op",
+                              "season": "1", "episode": "1"},
+    "/d/Zed Pace/S1/c.mkv":  {"series_name": "Zed Pace", "series_id": "zp",
+                              "season": "1", "episode": "1"},
+}, "series": {}}
+downloads.read_index = lambda: _INDEX
+saved = []
+downloads._write_index = lambda d: saved.append(d)
+downloads.xbmcvfs.exists = lambda p: True
+
+import lib.provider_api as _api
+_real_series_order = _api.series_order
+# The catalog puts One Pace first; alphabetically it would be second.
+_api.series_order = lambda: {"op": 0, "mp": 1, "zp": 2}
+kodistub.recorder.reset()
+downloads.list_on_device(None)
+shown = [i.label for _, i, _ in kodistub.recorder.directories]
+print(f"  catalog order: {shown}")
+assert shown == ["One Pace", "Muhn Pace", "Zed Pace"], shown
+assert saved, "the order was not kept, so it would be re-fetched every visit"
+
+# Kept, so the next visit does not need the catalog at all.
+_api.series_order = lambda: (_ for _ in ()).throw(AssertionError("asked again"))
+kodistub.recorder.reset()
+downloads.list_on_device(None)
+assert [i.label for _, i, _ in kodistub.recorder.directories] == shown
+print("  held on a second visit without asking the catalog again  OK")
+
+# Offline, or a series the catalog does not carry: fall back, never fail.
+_INDEX["series"] = {}
+_api.series_order = lambda: {}
+kodistub.recorder.reset()
+downloads.list_on_device(None)
+fallback = [i.label for _, i, _ in kodistub.recorder.directories]
+print(f"  with no catalog: {fallback}")
+assert fallback == ["Muhn Pace", "One Pace", "Zed Pace"], fallback
+_api.series_order = _real_series_order
+downloads.read_index, downloads._write_index = _real_order
+
+print()
+print("=== the folder a row opens is the one that holds all of it ===")
+for label, paths, want in (
+        ("two seasons", ["/d/One Pace/Season 01/a.mkv",
+                         "/d/One Pace/Season 02/b.mkv"], "/d/One Pace"),
+        ("one season",  ["/d/One Pace/Season 01/a.mkv",
+                         "/d/One Pace/Season 01/b.mkv"], "/d/One Pace/Season 01"),
+        ("one file",    ["/d/One Pace/Season 01/a.mkv"], "/d/One Pace/Season 01"),
+        ("none",        [], "")):
+    got = downloads._shared_folder(paths)
+    print(f"  {label:<12} -> {got!r}")
+    assert got == want, (label, got, want)
 
 taken = []
 downloads._remove = lambda paths: taken.extend(paths) or len(paths)

@@ -177,6 +177,24 @@ def _catalog_specs(manifest: dict, catalog_type: str):
     return specs
 
 
+def series_order():
+    """Where each series sits in the catalog Browse lists, by id.
+
+    Downloads are grouped by name and would otherwise fall alphabetically,
+    which puts them in a different order from every other list in the add-on.
+    """
+    try:
+        manifest = _fetch_provider_manifest()
+        specs = _catalog_specs(manifest, "series") if manifest else None
+        if not specs:
+            return {}
+        response = _fetch_catalog(_catalog_url("series", specs[0]["id"], "skip=0"))
+        return {v["id"]: n for n, v in enumerate(response.get("metas", ()))}
+    except Exception as exc:
+        log(f"[catalog] could not read the series order: {exc}")
+        return {}
+
+
 def _catalog_priority(name: str):
     return _CATALOG_PRIORITY_MAP.get(name.strip().lower(), 100)
 

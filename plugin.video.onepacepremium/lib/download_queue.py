@@ -40,6 +40,24 @@ def _read(key, empty):
 
 def _write(key, value):
     xbmcgui.Window(_HOME).setProperty(key, json.dumps(value))
+    if key in (_HOLDER, _WAITING):
+        publish()
+
+
+def publish():
+    """Flat properties for the skin to read.
+
+    A window cannot pick apart the JSON above, and Python must not touch a
+    control from a download's own thread, so the skin binds to these and
+    redraws itself.
+    """
+    rows = snapshot()
+    running = rows[0] if rows and rows[0]["status"] == "Downloading" else None
+    window = xbmcgui.Window(_HOME)
+    window.setProperty("pp.dl.name", running["name"] if running else "")
+    window.setProperty("pp.dl.detail", running["detail"] if running else "")
+    window.setProperty("pp.dl.percent", str(running["pct"]) if running else "0")
+    window.setProperty("pp.dl.count", str(len(rows)))
 
 
 def holder():
@@ -63,11 +81,12 @@ def _leave(ticket):
     _write(_CANCEL, [x for x in _read(_CANCEL, []) if x != ticket])
 
 
-def acquire(label, progress=None, total=1):
+def acquire(label, progress=None, total=1, detail=""):
     """Take the download slot, waiting behind anyone already in line.
 
     A season passes its episode count as total, so the row can say what
-    cancelling would actually stop.
+    cancelling would actually stop. A single episode passes the series it
+    belongs to, which is the only context its filename does not carry.
 
     Returns a ticket to pass back to beat() and release(), or None if the
     wait was cancelled.
@@ -80,19 +99,19 @@ def acquire(label, progress=None, total=1):
             line.append({"id": ticket, "label": label})
             _write(_WAITING, line)
             continue
+        if cancelled(ticket):
+            _leave(ticket)
+            log(f"[queue] {label!r} was cancelled before it started")
+            return None
         if not holder() and line[0].get("id") == ticket:
             _write(_HOLDER, {"id": ticket, "label": label, "pct": 0,
-                             "total": total, "index": 1, "now": "",
+                             "total": total, "index": 1, "now": detail,
                              "beat": time.time()})
             monitor.waitForAbort(_SETTLE)
             if _read(_HOLDER, {}).get("id") == ticket:
                 _leave(ticket)
                 return ticket
             continue
-        if cancelled(ticket):
-            _leave(ticket)
-            log(f"[queue] {label!r} was cancelled before it started")
-            return None
         ahead = [w.get("id") for w in line].index(ticket) + 1
         if progress:
             progress.update(0, "Waiting to download",
@@ -152,6 +171,7 @@ def release(ticket):
     if _read(_HOLDER, {}).get("id") == ticket:
         xbmcgui.Window(_HOME).clearProperty(_HOLDER)
     _leave(ticket)
+    publish()
 
 
 def cancelled(ticket):

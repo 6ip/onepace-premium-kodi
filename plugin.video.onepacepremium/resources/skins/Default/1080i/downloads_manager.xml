@@ -68,8 +68,8 @@
                 <textcolor>FF81A6C6</textcolor>
                 <align>right</align>
                 <aligny>center</aligny>
-                <label>[B]$INFO[Window.Property(pp.count)] in flight[/B]</label>
-                <visible>!String.IsEqual(Window.Property(pp.count),0)</visible>
+                <label>[B]$INFO[Window(Home).Property(pp.dl.count)] in flight[/B]</label>
+                <visible>![String.IsEmpty(Window(Home).Property(pp.dl.count)) | String.IsEqual(Window(Home).Property(pp.dl.count),0)]</visible>
             </control>
 
             <!-- Hairline separator -->
@@ -79,69 +79,227 @@
                 <texture colordiffuse="1AFFFFFF">../media/white.png</texture>
             </control>
 
-            <!-- BODY -->
+            <!-- NOTHING IN FLIGHT -->
 
             <control type="label">
-                <left>40</left><top>300</top>
+                <left>40</left><top>330</top>
                 <width>1120</width><height>60</height>
                 <font>font13</font>
                 <textcolor>FF888899</textcolor>
                 <align>center</align>
                 <aligny>center</aligny>
                 <label>Nothing is downloading right now.</label>
-                <visible>String.IsEqual(Window.Property(pp.count),0)</visible>
+                <visible>[String.IsEmpty(Window(Home).Property(pp.dl.count)) | String.IsEqual(Window(Home).Property(pp.dl.count),0)]</visible>
             </control>
 
-            <control type="list" id="2500">
-                <left>40</left><top>102</top>
-                <width>1120</width><height>556</height>
-                <onleft>10</onleft><onright>11</onright>
-                <onup>2500</onup><ondown>2500</ondown>
-                <scrolltime tween="sine">200</scrolltime>
-                <visible>!String.IsEqual(Window.Property(pp.count),0)</visible>
+            <!-- THE TRANSFER RUNNING NOW -->
 
-                <itemlayout height="92" width="1120">
+            <control type="group">
+                <left>40</left><top>110</top>
+                <visible>!String.IsEmpty(Window(Home).Property(pp.dl.name))</visible>
+
+                <control type="label">
+                    <left>0</left><top>0</top>
+                    <width>900</width><height>38</height>
+                    <font>font14</font>
+                    <textcolor>FFFFFFFF</textcolor>
+                    <aligny>center</aligny>
+                    <label>[B]$INFO[Window(Home).Property(pp.dl.name)][/B]</label>
+                </control>
+
+                <control type="label">
+                    <left>920</left><top>0</top>
+                    <width>200</width><height>38</height>
+                    <font>font14</font>
+                    <textcolor>FF81A6C6</textcolor>
+                    <align>right</align>
+                    <aligny>center</aligny>
+                    <label>[B]$INFO[Window(Home).Property(pp.dl.percent)]%[/B]</label>
+                </control>
+
+                <control type="label">
+                    <left>0</left><top>40</top>
+                    <width>1120</width><height>30</height>
+                    <font>font12</font>
+                    <textcolor>FF888899</textcolor>
+                    <aligny>center</aligny>
+                    <label>$INFO[Window(Home).Property(pp.dl.detail)]</label>
+                </control>
+
+                <control type="group">
+                    <!-- Nothing under the name: close the gap it would leave. -->
+                    <animation effect="slide" start="0,0" end="0,-30" time="0" condition="String.IsEmpty(Window(Home).Property(pp.dl.detail))">Conditional</animation>
                     <control type="image">
-                        <left>0</left><top>4</top>
-                        <width>1120</width><height>84</height>
+                        <left>0</left><top>78</top>
+                        <width>1120</width><height>10</height>
+                        <texture colordiffuse="14FFFFFF" border="5">../media/round_btn.png</texture>
+                </control>
+            </control>
+                <control type="image">
+                    <left>0</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),5)</visible>
+                </control>
+                <control type="image">
+                    <left>56</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),10)</visible>
+                </control>
+                <control type="image">
+                    <left>112</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),15)</visible>
+                </control>
+                <control type="image">
+                    <left>168</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),20)</visible>
+                </control>
+                <control type="image">
+                    <left>224</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),25)</visible>
+                </control>
+                <control type="image">
+                    <left>280</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),30)</visible>
+                </control>
+                <control type="image">
+                    <left>336</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),35)</visible>
+                </control>
+                <control type="image">
+                    <left>392</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),40)</visible>
+                </control>
+                <control type="image">
+                    <left>448</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),45)</visible>
+                </control>
+                <control type="image">
+                    <left>504</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),50)</visible>
+                </control>
+                <control type="image">
+                    <left>560</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),55)</visible>
+                </control>
+                <control type="image">
+                    <left>616</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),60)</visible>
+                </control>
+                <control type="image">
+                    <left>672</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),65)</visible>
+                </control>
+                <control type="image">
+                    <left>728</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),70)</visible>
+                </control>
+                <control type="image">
+                    <left>784</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),75)</visible>
+                </control>
+                <control type="image">
+                    <left>840</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),80)</visible>
+                </control>
+                <control type="image">
+                    <left>896</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),85)</visible>
+                </control>
+                <control type="image">
+                    <left>952</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),90)</visible>
+                </control>
+                <control type="image">
+                    <left>1008</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),95)</visible>
+                </control>
+                <control type="image">
+                    <left>1064</left><top>78</top>
+                    <width>56</width><height>10</height>
+                    <texture colordiffuse="FF81A6C6">../media/white.png</texture>
+                    <visible>Integer.IsGreaterOrEqual(Window(Home).Property(pp.dl.percent),100)</visible>
+                </control>
+            </control>
+
+            <!-- Hairline above the queue -->
+            <control type="image">
+                <left>0</left><top>226</top>
+                <width>1200</width><height>1</height>
+                <texture colordiffuse="1AFFFFFF">../media/white.png</texture>
+                <visible>![String.IsEmpty(Window(Home).Property(pp.dl.count)) | String.IsEqual(Window(Home).Property(pp.dl.count),0)]</visible>
+            </control>
+
+            <!-- THE QUEUE -->
+
+            <control type="list" id="2500">
+                <left>40</left><top>246</top>
+                <width>1120</width><height>416</height>
+                <onleft>10</onleft><onright>11</onright>
+                <onup>2500</onup><ondown>10</ondown>
+                <scrolltime tween="sine">200</scrolltime>
+                <visible>![String.IsEmpty(Window(Home).Property(pp.dl.count)) | String.IsEqual(Window(Home).Property(pp.dl.count),0)]</visible>
+
+                <itemlayout height="68" width="1120">
+                    <control type="image">
+                        <left>0</left><top>3</top>
+                        <width>1120</width><height>62</height>
                         <texture colordiffuse="0DFFFFFF" border="14">../media/round_btn.png</texture>
                     </control>
                     <control type="label">
-                        <left>24</left><top>10</top>
-                        <width>860</width><height>32</height>
+                        <left>24</left><top>3</top>
+                        <width>820</width><height>34</height>
                         <font>font13</font>
                         <textcolor>FFCCCCCC</textcolor>
                         <aligny>center</aligny>
                         <label>$INFO[ListItem.Property(name)]</label>
                     </control>
                     <control type="label">
-                        <left>24</left><top>44</top>
-                        <width>860</width><height>28</height>
+                        <left>24</left><top>33</top>
+                        <width>820</width><height>30</height>
                         <font>font12</font>
                         <textcolor>FF888899</textcolor>
                         <aligny>center</aligny>
                         <label>$INFO[ListItem.Property(detail)]</label>
                     </control>
-                    <control type="progress">
-                        <left>24</left><top>72</top>
-                        <width>860</width><height>6</height>
-                        <midtexture colordiffuse="FF81A6C6" border="3">../media/round_btn.png</midtexture>
-                        <lefttexture colordiffuse="14FFFFFF" border="3">../media/round_btn.png</lefttexture>
-                        <righttexture colordiffuse="14FFFFFF" border="3">../media/round_btn.png</righttexture>
-                        <info>ListItem.Property(percent)</info>
-                    </control>
                     <control type="label">
-                        <left>908</left><top>10</top>
-                        <width>188</width><height>32</height>
-                        <font>font13</font>
-                        <textcolor>FF81A6C6</textcolor>
-                        <align>right</align>
-                        <aligny>center</aligny>
-                        <label>[B]$INFO[ListItem.Property(percent)]%[/B]</label>
-                    </control>
-                    <control type="label">
-                        <left>908</left><top>44</top>
-                        <width>188</width><height>28</height>
+                        <left>868</left><top>3</top>
+                        <width>228</width><height>62</height>
                         <font>font12</font>
                         <textcolor>FF888899</textcolor>
                         <align>right</align>
@@ -150,55 +308,38 @@
                     </control>
                 </itemlayout>
 
-                <focusedlayout height="92" width="1120">
+                <focusedlayout height="68" width="1120">
                     <control type="image">
-                        <left>0</left><top>4</top>
-                        <width>1120</width><height>84</height>
+                        <left>0</left><top>3</top>
+                        <width>1120</width><height>62</height>
                         <texture colordiffuse="26FFFFFF" border="14">../media/round_btn.png</texture>
                         <visible>Control.HasFocus(2500)</visible>
                     </control>
                     <control type="image">
-                        <left>0</left><top>4</top>
-                        <width>1120</width><height>84</height>
+                        <left>0</left><top>3</top>
+                        <width>1120</width><height>62</height>
                         <texture colordiffuse="0DFFFFFF" border="14">../media/round_btn.png</texture>
                         <visible>!Control.HasFocus(2500)</visible>
                     </control>
                     <control type="label">
-                        <left>24</left><top>10</top>
-                        <width>860</width><height>32</height>
+                        <left>24</left><top>3</top>
+                        <width>820</width><height>34</height>
                         <font>font13</font>
                         <textcolor>FFFFFFFF</textcolor>
                         <aligny>center</aligny>
                         <label>$INFO[ListItem.Property(name)]</label>
                     </control>
                     <control type="label">
-                        <left>24</left><top>44</top>
-                        <width>860</width><height>28</height>
+                        <left>24</left><top>33</top>
+                        <width>820</width><height>30</height>
                         <font>font12</font>
                         <textcolor>FFAAAAAA</textcolor>
                         <aligny>center</aligny>
                         <label>$INFO[ListItem.Property(detail)]</label>
                     </control>
-                    <control type="progress">
-                        <left>24</left><top>72</top>
-                        <width>860</width><height>6</height>
-                        <midtexture colordiffuse="FF81A6C6" border="3">../media/round_btn.png</midtexture>
-                        <lefttexture colordiffuse="20FFFFFF" border="3">../media/round_btn.png</lefttexture>
-                        <righttexture colordiffuse="20FFFFFF" border="3">../media/round_btn.png</righttexture>
-                        <info>ListItem.Property(percent)</info>
-                    </control>
                     <control type="label">
-                        <left>908</left><top>10</top>
-                        <width>188</width><height>32</height>
-                        <font>font13</font>
-                        <textcolor>FF81A6C6</textcolor>
-                        <align>right</align>
-                        <aligny>center</aligny>
-                        <label>[B]$INFO[ListItem.Property(percent)]%[/B]</label>
-                    </control>
-                    <control type="label">
-                        <left>908</left><top>44</top>
-                        <width>188</width><height>28</height>
+                        <left>868</left><top>3</top>
+                        <width>228</width><height>62</height>
                         <font>font12</font>
                         <textcolor>FFAAAAAA</textcolor>
                         <align>right</align>
@@ -230,7 +371,7 @@
                 <texturenofocus colordiffuse="18FFFFFF" border="14">../media/round_btn.png</texturenofocus>
                 <align>center</align>
                 <aligny>center</aligny>
-                <visible>String.IsEqual(Window.Property(pp.many),true)</visible>
+                <visible>Integer.IsGreater(Window(Home).Property(pp.dl.count),1)</visible>
             </control>
 
             <control type="button" id="10">

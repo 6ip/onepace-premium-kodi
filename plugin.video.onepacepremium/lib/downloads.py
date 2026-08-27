@@ -328,7 +328,8 @@ def download(params, meta=None, ticket=None):
 
     progress = xbmcgui.DialogProgressBG()
     progress.create("Downloading", name)
-    mine = ticket or download_queue.acquire(name, progress)
+    mine = ticket or download_queue.acquire(
+        name, progress, detail=params.get("series_name") or "")
     if mine is None:
         progress.close()
         return CANCELLED
@@ -752,10 +753,13 @@ _FILE_MANAGERS = (
 def browse(params):
     """Open the folder in the desktop's file manager, or Kodi's if there is none.
 
-    Takes a path, or an episode id for the lists that only know that much.
+    Takes a folder outright, a path to a file in one, or an episode id for
+    the lists that only know that much.
     """
-    path = params.get("path") or path_for(params.get("episode_id", ""))
-    directory = os.path.dirname(_normalised(path)) if path else ""
+    directory = _normalised(params.get("dir", "")).rstrip("/")
+    if not directory:
+        path = params.get("path") or path_for(params.get("episode_id", ""))
+        directory = os.path.dirname(_normalised(path)) if path else ""
     if not directory or not xbmcvfs.exists(directory + "/"):
         _notify_error("That folder is not there any more")
         return
@@ -979,6 +983,49 @@ def _sweep(data):
         _write_index(data)
         log(f"[downloads] dropped {len(gone)} entries with no file left")
     return data
+
+
+def _series_order(data):
+    """Name to catalog position, so On Device reads like every other list.
+
+    Filled in on the first visit that finds the catalog, then kept, so the
+    order holds when the connection is gone.
+    """
+    known = {name: meta["order"] for name, meta in data["series"].items()
+             if isinstance(meta.get("order"), int)}
+    # Only rows that name a series can be looked up, so only they can make
+    # us go and ask.
+    named = {(m.get("series_name") or "Downloads"): m.get("series_id")
+             for m in data["files"].values() if m.get("series_id")}
+    if all(name in known for name in named):
+        return known
+    from .provider_api import series_order
+    ranks = series_order()
+    if not ranks:
+        return known
+    changed = False
+    for name, series_id in named.items():
+        if name in known or series_id not in ranks:
+            continue
+        known[name] = ranks[series_id]
+        data["series"].setdefault(name, {})["order"] = ranks[series_id]
+        changed = True
+    if changed:
+        _write_index(data)
+        log(f"[downloads] noted where {len(known)} series sit in the catalog")
+    return known
+
+
+def _shared_folder(paths):
+    """The deepest folder holding all of them, so a row can open its own."""
+    folders = [_normalised(p).rsplit("/", 1)[0] for p in paths if p]
+    if not folders:
+        return ""
+    shared = folders[0].split("/")
+    for folder in folders[1:]:
+        parts = folder.split("/")
+        shared = [a for a, b in zip(shared, parts) if a == b]
+    return "/".join(shared)
 
 
 def _empty(message):
@@ -1246,16 +1293,22 @@ def list_on_device(params=None):
     season = params.get("season")
 
     if series is None:
-        by_series = {}
+        by_series, paths = {}, {}
         for path, meta in files.items():
-            by_series.setdefault(meta.get("series_name") or "Downloads", []).append(meta)
+            name = meta.get("series_name") or "Downloads"
+            by_series.setdefault(name, []).append(meta)
+            paths.setdefault(name, []).append(path)
+        # Anything the catalog does not name falls to the back, by name.
+        rank = _series_order(data)
+        order = sorted(by_series, key=lambda n: (rank.get(n, 10 ** 6), n.lower()))
         if len(by_series) == 1:
-            series = next(iter(by_series))
+            series = order[0]
         else:
             xbmcplugin.setContent(ADDON_HANDLE, "tvshows")
             xbmcplugin.setPluginCategory(ADDON_HANDLE, "Downloads")
             items = []
-            for name, metas in sorted(by_series.items()):
+            for name in order:
+                metas = by_series[name]
                 show = series_meta.get(name, {})
                 item = xbmcgui.ListItem(label=name, offscreen=True)
                 tags = item.getVideoInfoTag()
@@ -1265,10 +1318,12 @@ def list_on_device(params=None):
                 _set_show_tags(tags, show, actors=_cast_list(show))
                 _set_art(item, show)
                 _counts(item, metas)
-                item.addContextMenuItems([(
-                    "[B]Delete Series[/B]",
-                    f"RunPlugin({build_url('delete_download', series=name)})",
-                )])
+                item.addContextMenuItems([
+                    ("[B]Browse Folder[/B]",
+                     f"RunPlugin({build_url('browse_download', dir=_shared_folder(paths[name]))})"),
+                    ("[B]Delete Series[/B]",
+                     f"RunPlugin({build_url('delete_download', series=name)})"),
+                ])
                 items.append((build_url("list_on_device", series=name), item, True))
             _add_directory_items(items)
             end_directory()
@@ -1283,9 +1338,11 @@ def list_on_device(params=None):
     actors = _cast_list(show)
 
     if season is None:
-        seasons = {}
+        seasons, paths = {}, {}
         for path, meta in mine.items():
-            seasons.setdefault(_season_of(meta), []).append(meta)
+            number = _season_of(meta)
+            seasons.setdefault(number, []).append(meta)
+            paths.setdefault(number, []).append(path)
         if len(seasons) > 1:
             xbmcplugin.setContent(ADDON_HANDLE, "seasons")
             xbmcplugin.setPluginCategory(ADDON_HANDLE, series)
@@ -1302,10 +1359,12 @@ def list_on_device(params=None):
                 _set_show_tags(tags, show, premiered=False, trailer=False, actors=actors)
                 _set_season_art(item, show, _season_art(show, metas))
                 _counts(item, metas)
-                item.addContextMenuItems([(
-                    f"[B]Delete {label}[/B]",
-                    f"RunPlugin({build_url('delete_download', series=series, season=number)})",
-                )])
+                item.addContextMenuItems([
+                    ("[B]Browse Folder[/B]",
+                     f"RunPlugin({build_url('browse_download', dir=_shared_folder(paths[number]))})"),
+                    (f"[B]Delete {label}[/B]",
+                     f"RunPlugin({build_url('delete_download', series=series, season=number)})"),
+                ])
                 items.append((build_url("list_on_device", series=series, season=number),
                               item, True))
             _add_directory_items(items)
