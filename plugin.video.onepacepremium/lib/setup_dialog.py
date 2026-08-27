@@ -12,7 +12,18 @@ import xbmcgui
 import xbmcvfs
 
 ADDON_ID = "plugin.video.onepacepremium"
-_POLL_INTERVAL = 3  # seconds between server checks
+# Most people who finish do it in the first half minute, so ask often then and
+# ease off. A code nobody claims costs a third of what a flat interval did.
+_BACKOFF = ((30, 2), (90, 5))
+_BACKOFF_TAIL = 10
+
+
+def poll_interval(elapsed):
+    """How long to wait before asking again, this far into a setup."""
+    for until, seconds in _BACKOFF:
+        if elapsed < until:
+            return seconds
+    return _BACKOFF_TAIL
 
 _VENDOR = os.path.join(os.path.dirname(__file__), "vendor")
 if _VENDOR not in sys.path:
@@ -166,19 +177,27 @@ class SetupDialog(xbmcgui.WindowXMLDialog):
             t.start()
 
     def _poll_loop(self):
-        deadline = time.time() + self._expires_in
+        started = time.time()
+        deadline = started + self._expires_in
         while not self._stop and time.time() < deadline:
-            time.sleep(_POLL_INTERVAL)
+            time.sleep(poll_interval(time.time() - started))
             if self._stop:
                 break
             try:
                 resp = requests.get(self._poll_url, timeout=10)
+                # Gone from the server: there is nothing left to wait for.
+                if resp.status_code == 404:
+                    break
                 resp.raise_for_status()
                 data = resp.json()
             except Exception:
                 continue
 
             if data.get("status") == "pending":
+                # The server owns the clock, so let it correct ours.
+                left = data.get("expires_in")
+                if isinstance(left, (int, float)) and left >= 0:
+                    deadline = min(deadline, time.time() + left)
                 continue
 
             if "secret_string" in data:

@@ -12,11 +12,10 @@ import xbmcaddon
 import xbmcgui
 import xbmcvfs
 
-from setup_dialog import show_setup_dialog
+from setup_dialog import poll_interval, show_setup_dialog
 
 ADDON_ID = "plugin.video.onepacepremium"
 REQUEST_TIMEOUT = 20
-POLL_INTERVAL_SECONDS = 3
 HTTP_SESSION = requests.Session()
 PENDING_SETUP_FILE = "pending_setup.json"
 CODE_COLORS = [
@@ -103,6 +102,7 @@ def _save_pending_setup(addon, code, configure_url, expires_at, base_url, color)
                 "code": code,
                 "configure_url": configure_url,
                 "expires_at": expires_at,
+                "started_at": time.time(),
                 "base_url": base_url,
                 "color": color,
             },
@@ -222,7 +222,9 @@ def configure_addon():
             xbmcgui.NOTIFICATION_INFO, 5000, False,
         )
 
-        deadline = time.time() + expires_in
+        pending = _load_pending_setup(addon) or {}
+        deadline = pending.get("expires_at") or (time.time() + expires_in)
+        started = pending.get("started_at") or time.time()
         while time.time() < deadline:
             current_pending = _load_pending_setup(addon)
             if not current_pending or current_pending.get("code") != code:
@@ -235,13 +237,19 @@ def configure_addon():
                 )
             except requests.HTTPError as exc:
                 response = exc.response
-                if response is None or response.status_code not in (404, 202):
+                if response is not None and response.status_code == 404:
+                    # Gone from the server: nothing is coming.
+                    break
+                if response is None or response.status_code != 202:
                     xbmc.log(f"Polling setup status failed: {exc}", xbmc.LOGWARNING)
             except requests.RequestException as exc:
                 xbmc.log(f"Polling setup status failed: {exc}", xbmc.LOGWARNING)
             else:
                 if manifest_data.get("status") == "pending":
-                    pass  # still waiting
+                    # The server owns the clock, so let it correct ours.
+                    left = manifest_data.get("expires_in")
+                    if isinstance(left, (int, float)) and left >= 0:
+                        deadline = min(deadline, time.time() + left)
                 elif "secret_string" in manifest_data:
                     addon.setSetting("secret_string", manifest_data["secret_string"])
                     if "stremio_api_prefix" in manifest_data:
@@ -257,7 +265,7 @@ def configure_addon():
                     xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
                     return
 
-            if monitor.waitForAbort(POLL_INTERVAL_SECONDS):
+            if monitor.waitForAbort(poll_interval(time.time() - started)):
                 return
 
         pending = _load_pending_setup(addon)
