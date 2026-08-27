@@ -362,7 +362,15 @@ for k in sorted(saved["files"]):
     print(f"  {k}")
 assert all(k.startswith(HOME) for k in saved["files"]), saved["files"]
 assert len(saved["files"]) == 2, "a row was lost in the move"
-assert kodistub.recorder.notifications[-1] == ("Moved 1 file", "INFO"),     "the file already in place should not be moved again"
+# A dialog, not a notification: Kodi draws no notification over the settings
+# window these are launched from, so the move happened and nothing said so.
+assert kodistub.recorder.notifications[-1] == ("Moved 1 file", "OK"),     "the file already in place should not be moved again"
+
+for name in ("def rescan(", "def check_updates(", "def move_downloads("):
+    start = SRC.index(name)
+    body = SRC[start:SRC.index(chr(10) + "def ", start + 1)]
+    assert "_notify_" not in body,         f"{name} still reports where nothing can be seen"
+print("  what settings launches is reported in a dialog  OK")
 downloads.xbmcvfs.exists = lambda p: True
 store["download_folder"] = ""
 print("  only what was outside the folder moves, and the index follows  OK")
@@ -610,6 +618,17 @@ kodistub.recorder.reset()
 downloads._prune(HOME + "loose.mkv")
 assert kodistub.recorder.rmdirs == [], "the download root itself must never go"
 
+# Moving a library out of the old folder leaves its shells behind, which is
+# the one job Move exists for. The default folder counts as ours too.
+kodistub.recorder.reset()
+was = downloads._roots()[-1]
+downloads._prune(was + "One Pace/Season 01/1x01 - A.mkv")
+print(f"  the folder downloads used to go in: {kodistub.recorder.rmdirs}")
+assert kodistub.recorder.rmdirs == [was + "One Pace/Season 01", was.rstrip("/") + "/One Pace"],     kodistub.recorder.rmdirs
+kodistub.recorder.reset()
+downloads._prune(was + "loose.mkv")
+assert kodistub.recorder.rmdirs == [], "the old root itself must never go either"
+
 # translatePath hands back backslashes, the rest of the path is built with
 # slashes; rmdir must be given one shape or Windows keeps the folder.
 store["download_folder"] = "D:" + chr(92) + "Downloads"
@@ -624,7 +643,8 @@ assert kodistub.recorder.rmdirs == ["D:/Downloads/One Pace Premium/One Pace/Seas
 print(f"  and prunes: {kodistub.recorder.rmdirs[0]}")
 pr = SRC[SRC.index("def _prune("):SRC.index("def _remove(")]
 assert "for _ in range(2)" in pr, "an unbounded walk can spin on a drive root"
-assert 'startswith(root + "/")' in pr, "it could climb above the download folder"
+assert 'startswith(r + "/")' in pr, "it could climb above a download folder"
+assert "directory in roots" in pr, "a root itself could be removed"
 assert "_prune(path)" in SRC[SRC.index("def _remove("):SRC.index("def delete(")], "delete leaves shells"
 assert "_prune(path)" in SRC[SRC.index("def move_downloads("):], "moving leaves the old shells"
 store["download_folder"] = ""

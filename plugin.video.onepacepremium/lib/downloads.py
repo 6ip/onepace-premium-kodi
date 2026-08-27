@@ -288,6 +288,15 @@ def _remove_rows(paths):
 OK, FAILED, CANCELLED, BLOCKED = "ok", "failed", "cancelled", "blocked"
 
 
+def _said(title, message):
+    """Say it in a dialog, not a notification.
+
+    These run from the settings window, and Kodi draws no notification while
+    that is open — so the work happened and nothing on screen said so.
+    """
+    xbmcgui.Dialog().ok(title, message)
+
+
 def _blocked(response):
     """Say what the provider refused, and stop. Nothing has been written yet."""
     code = error_code(response.url)
@@ -585,7 +594,7 @@ def rescan(_params=None):
     # A transfer in flight writes to a .part the index knows nothing about,
     # so a scan running now would adopt a half-written file.
     if download_queue.busy():
-        _notify_error("Wait for the downloads to finish first")
+        _said("Rescan", "Wait for the downloads to finish first")
         return
     from .provider_api import _fetch_provider_meta
 
@@ -595,12 +604,12 @@ def rescan(_params=None):
         on_disk = _walk_downloads()
     except Exception as exc:
         log(f"[rescan] could not read the download folder: {exc}")
-        _notify_error("Could not read the download folder")
+        _said("Rescan", "Could not read the download folder")
         return
 
     missing = [f for f in on_disk if f["path"] not in known]
     if not missing:
-        _notify_info(f"All {len(on_disk)} file(s) already listed")
+        _said("Rescan", f"All {len(on_disk)} file(s) already listed")
         return
     if not xbmcgui.Dialog().yesno(
             "Rescan", f"{len(missing)} file(s) here are not in the list."
@@ -631,7 +640,7 @@ def rescan(_params=None):
     if unknown:
         lines.append(f"{unknown} could not be matched to an episode")
     write_report("Rescanned downloads", lines)
-    _notify_info(f"Added {added} download(s)" if added else "Nothing could be added")
+    _said("Rescan", f"Added {added} download(s)" if added else "Nothing could be added")
     refresh_container()
 
 
@@ -715,7 +724,7 @@ def check_updates(_params=None):
     held = [(path, meta) for path, meta in data["files"].items()
             if meta.get("episode_id")]
     if not held:
-        _notify_info("Nothing downloaded yet")
+        _said("Check for Updates", "Nothing downloaded yet")
         return
 
     progress = xbmcgui.DialogProgressBG()
@@ -726,7 +735,7 @@ def check_updates(_params=None):
     except Exception as exc:
         progress.close()
         log(f"[updates] could not read the file list: {exc}")
-        _notify_error("Could not check for updates")
+        _said("Check for Updates", "Could not check for updates")
         return
 
     for index, (path, meta) in enumerate(held, 1):
@@ -770,7 +779,7 @@ def check_updates(_params=None):
     if failed:
         lines.append(f"{failed} could not be checked")
     write_report("Checked downloads", lines)
-    _notify_info(f"{changed} update(s) found" if changed else "Everything is current")
+    _said("Check for Updates", f"{changed} update(s) found" if changed else "Everything is current")
     refresh_container()
 
 
@@ -780,11 +789,14 @@ def _prune(path):
     rmdir without force refuses a folder that still holds anything, so this
     can only ever remove the shells we made. The download root itself stays.
     """
-    root = folder().rstrip("/")
+    # Both roots: moving a library out of the old folder leaves its shells
+    # behind, and that is the very thing Move is for.
+    roots = [r.rstrip("/") for r in _roots()]
     directory = os.path.dirname(_normalised(path)).rstrip("/")
     # Series and season, and nothing above them, however the paths compare.
     for _ in range(2):
-        if not directory or directory == root or not directory.startswith(root + "/"):
+        if not directory or directory in roots or not any(
+                directory.startswith(r + "/") for r in roots):
             return
         if not xbmcvfs.rmdir(directory):
             return
@@ -979,7 +991,7 @@ def move_downloads(_params=None):
     # A transfer in flight writes to a .part the index knows nothing about,
     # so it would finish into the folder we just emptied.
     if download_queue.busy():
-        _notify_error("Wait for the downloads to finish first")
+        _said("Move Downloads", "Wait for the downloads to finish first")
         return
     data = read_index()
     planned = []
@@ -989,7 +1001,7 @@ def move_downloads(_params=None):
             planned.append((path, directory, name))
 
     if not planned:
-        _notify_info("Everything is already in the download folder")
+        _said("Move Downloads", "Everything is already in the download folder")
         return
     if not xbmcgui.Dialog().yesno(
             "Move Downloads",
@@ -1024,9 +1036,9 @@ def move_downloads(_params=None):
         _write_index(data)
     log(f"[downloads] moved {moved}, failed {failed}")
     if failed:
-        _notify_error(f"Moved {moved}, could not move {failed}")
+        _said("Move Downloads", f"Moved {moved}, could not move {failed}")
     else:
-        _notify_info(f"Moved {moved} file{'s' if moved != 1 else ''}")
+        _said("Move Downloads", f"Moved {moved} file{'s' if moved != 1 else ''}")
     refresh_container()
 
 
@@ -1238,10 +1250,18 @@ def path_for(episode_id):
 
 def local_playback(episode_id):
     """play_video params for the copy on disk, when we should prefer it."""
+    if not enabled():
+        return None
     if get_setting("prefer_downloads") == "false":
+        # Says which of the two reasons it is, so a stream request that fails
+        # with no connection reads as the setting rather than a fault.
+        log("[downloads] streaming instead: Play the Downloaded Copy is off")
         return None
     held = copies_of(episode_id)
     if not held:
+        if any(m.get("episode_id") == episode_id
+               for m in read_index()["files"].values()):
+            log(f"[downloads] the list has {episode_id!r} but its file is gone")
         return None
     # Holding both cuts, honour the same preference the stream picker uses.
     wanted = _PREFERRED_VARIANT.get(get_setting("preferred_version"))
