@@ -705,8 +705,9 @@ def download_season(params):
     Sequential on purpose: a debrid account rate-limits parallel connections,
     and one writer means the download index cannot be raced.
     """
-    from .downloads import (BLOCKED, OK, download, enabled, mark as _download_mark,
-                            downloaded_ids)
+    from . import download_queue
+    from .downloads import (BLOCKED, CANCELLED, OK, download, enabled,
+                            mark as _download_mark, downloaded_ids)
 
     if not enabled() or not ensure_configured():
         return
@@ -745,31 +746,52 @@ def download_season(params):
     done = skipped = failed = 0
     progress = xbmcgui.DialogProgressBG()
     progress.create(f"Downloading {label}")
+    # The whole run takes the slot once, so cancelling it stops the season
+    # rather than one episode of it.
+    ticket = download_queue.acquire(label, progress, total=len(chosen))
+    if ticket is None:
+        progress.close()
+        return
     kodi_monitor = xbmc.Monitor()
-    for index, pick in enumerate(chosen, 1):
-        if kodi_monitor.abortRequested():
-            break
-        episode_id, title, episode = episodes[pick]
-        progress.update(int((index - 1) * 100 / len(chosen)),
-                        f"{label} — {index} of {len(chosen)}", title)
-        stream = _choose_stream(episode, downloadable_only=True, quiet=True,
-                                prefer=prefer)
-        if stream is None:
-            skipped += 1
-            log(f"[downloads] no stream to download for {episode_id!r}")
-            continue
-        outcome = download(dict(stream, in_season=True), meta)
-        if outcome == BLOCKED:
-            # One message beats the same one for every episode left.
-            progress.close()
-            log(f"[downloads] season download stopped at {episode_id!r}")
-            return
-        if outcome == OK:
-            done += 1
-        else:
-            # A blip on one episode is no reason to abandon the rest.
-            failed += 1
-    progress.close()
+    stopped = False
+    try:
+        for index, pick in enumerate(chosen, 1):
+            if kodi_monitor.abortRequested():
+                break
+            if download_queue.cancelled(ticket):
+                stopped = True
+                break
+            episode_id, title, episode = episodes[pick]
+            download_queue.on_item(ticket, title, index)
+            progress.update(int((index - 1) * 100 / len(chosen)),
+                            f"{label} — {index} of {len(chosen)}", title)
+            stream = _choose_stream(episode, downloadable_only=True, quiet=True,
+                                    prefer=prefer)
+            if stream is None:
+                skipped += 1
+                log(f"[downloads] no stream to download for {episode_id!r}")
+                continue
+            outcome = download(dict(stream, in_season=True), meta, ticket=ticket)
+            if outcome == BLOCKED:
+                # One message beats the same one for every episode left.
+                log(f"[downloads] season download stopped at {episode_id!r}")
+                return
+            if outcome == CANCELLED and download_queue.cancelled(ticket):
+                stopped = True
+                break
+            if outcome == OK:
+                done += 1
+            else:
+                # A blip on one episode is no reason to abandon the rest.
+                failed += 1
+    finally:
+        progress.close()
+        download_queue.release(ticket)
+
+    if stopped:
+        _notify_info(f"{label}: stopped after {done}")
+        log(f"[downloads] {label} cancelled after {done} episode(s)")
+        return
 
     parts = [f"downloaded {done}"]
     if skipped:

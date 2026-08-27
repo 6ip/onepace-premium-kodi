@@ -10,6 +10,11 @@ ADDON_ROOT = None       # set by install(); the add-on directory
 FIXTURES = None         # set by install(); tests/fixtures
 
 
+# Kodi keeps window properties on the window itself, so every invocation
+# that asks for the same id sees the same ones. They die with the session.
+_WINDOW_PROPS = {}
+
+
 class Recorder:
     """Collects what the add-on did, so a test can assert on it."""
 
@@ -26,6 +31,7 @@ class Recorder:
         self.infolabels = {}       # Container.* and friends
         self.progress = []         # DialogProgressBG calls
         self.rmdirs = []           # folders we asked Kodi to remove
+        _WINDOW_PROPS.clear()
 
 
 recorder = Recorder()
@@ -123,8 +129,8 @@ class Dialog:
 
 
 class Window:
-    def __init__(self, *a):
-        self.props = {}
+    def __init__(self, window_id=0):
+        self.props = _WINDOW_PROPS.setdefault(window_id, {})
 
     def setProperty(self, k, v):
         self.props[k] = v

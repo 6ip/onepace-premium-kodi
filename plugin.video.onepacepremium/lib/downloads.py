@@ -9,6 +9,7 @@ import xbmcgui
 import xbmcplugin
 import xbmcvfs
 
+from . import download_queue
 from .route_common import _add_directory_items, _notify_error, _notify_info, end_directory
 from .utils import (ADDON_HANDLE, ADDON_ID, build_url, get_setting, log,
                     refresh_container, session)
@@ -298,8 +299,12 @@ def _blocked(response):
     return BLOCKED
 
 
-def download(params, meta=None):
-    """Fetch one episode to disk. Runs for as long as the transfer takes."""
+def download(params, meta=None, ticket=None):
+    """Fetch one episode to disk, waiting its turn if another is running.
+
+    A season passes its own ticket: the whole run holds the slot once, so
+    cancelling it stops the season rather than one episode of it.
+    """
     url = params.get("video_url", "")
     if not is_downloadable(url):
         _notify_error("This stream cannot be downloaded")
@@ -321,14 +326,29 @@ def download(params, meta=None):
         _notify_error("Could not create the download folder")
         return FAILED
 
+    progress = xbmcgui.DialogProgressBG()
+    progress.create("Downloading", name)
+    mine = ticket or download_queue.acquire(name, progress)
+    if mine is None:
+        progress.close()
+        return CANCELLED
+    try:
+        return _fetch(params, meta, directory, name, already, progress, mine)
+    finally:
+        progress.close()
+        if not ticket:
+            download_queue.release(mine)
+
+
+def _fetch(params, meta, directory, name, already, progress, ticket):
+    """The transfer itself, with the download slot already held."""
+    url = params.get("video_url", "")
+    destination = directory + name
     # Written beside the real name, so a failed replacement cannot destroy
     # the copy that already worked.
     partial = destination + ".part"
-
-    progress = xbmcgui.DialogProgressBG()
-    progress.create("Downloading", name)
     monitor = xbmc.Monitor()
-    written, total = 0, 0
+    written, total, stopped = 0, 0, False
     try:
         response = session().get(url, stream=True, timeout=30)
         response.raise_for_status()
@@ -342,6 +362,11 @@ def download(params, meta=None):
             for chunk in response.iter_content(chunk_size=_CHUNK):
                 if monitor.abortRequested():
                     raise InterruptedError("Kodi is shutting down")
+                if download_queue.cancelled(ticket):
+                    # Out of the loop, not straight out of the function: the
+                    # part file cannot be deleted while it is still open.
+                    stopped = True
+                    break
                 if not chunk:
                     continue
                 handle.write(bytearray(chunk))
@@ -349,8 +374,9 @@ def download(params, meta=None):
                 if total:
                     # A server that undercounts Content-Length would push this
                     # past 100 and Kodi refuses that.
-                    progress.update(min(100, int(written * 100 / total)),
-                                    "Downloading", name)
+                    pct = min(100, int(written * 100 / total))
+                    progress.update(pct, "Downloading", name)
+                    download_queue.beat(ticket, pct)
     except Exception as exc:
         progress.close()
         log(f"[downloads] {name!r} failed after {written} bytes: {exc}")
@@ -359,6 +385,11 @@ def download(params, meta=None):
         return FAILED
 
     progress.close()
+    if stopped:
+        log(f"[downloads] {name!r} cancelled after {written} bytes")
+        xbmcvfs.delete(partial)
+        _notify_info(f"Cancelled {name}")
+        return CANCELLED
     if total and written < total:
         log(f"[downloads] {name!r} stopped short: {written} of {total} bytes")
         xbmcvfs.delete(partial)
@@ -950,6 +981,70 @@ def _sweep(data):
     return data
 
 
+# Blue, and moving: this one is not on disk yet.
+_BUSY = "[COLOR FF81A6C6][B][»][/B][/COLOR]"
+
+
+def _active_rows():
+    """A row for the transfer running now, and one for anything behind it."""
+    running, queued = download_queue.holder(), download_queue.waiting()
+    if not running and not queued:
+        return []
+    rows = []
+    if running:
+        name = running.get("label", "Downloading")
+        total = running.get("total") or 1
+        plot = "Downloading now. Select this row to update it."
+        if total > 1:
+            # Say what a cancel would stop: the season, not this episode.
+            name = f"{name} — {running.get('index') or 1} of {total}"
+            plot = f"{running.get('now', '')}{chr(10)}{chr(10)}{plot}"
+        rows.append((running.get("id"), f"{name}  ({running.get('pct') or 0}%)",
+                     plot, running.get("label", ""), total))
+    for entry in queued:
+        rows.append((entry.get("id"), f"{entry.get('label', '')}  (waiting)",
+                     "Waiting for the transfer above to finish.",
+                     entry.get("label", ""), 1))
+
+    media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
+    icon = f"{media}/info.png"
+    items = []
+    for ticket, label, plot, job, total in rows:
+        item = xbmcgui.ListItem(label=f"{_BUSY} {label}", offscreen=True)
+        item.setArt({"icon": icon, "thumb": icon, "poster": icon,
+                     "banner": icon, "landscape": icon})
+        item.getVideoInfoTag().setPlot(plot)
+        stop = f"Cancel {job}" if total > 1 else "Cancel"
+        menu = [(f"[B]{stop}[/B]",
+                 f"RunPlugin({build_url('cancel_download', ticket=ticket)})")]
+        if len(rows) > 1:
+            menu.append(("[B]Cancel All[/B]",
+                         f"RunPlugin({build_url('cancel_download', all='1')})"))
+        item.addContextMenuItems(menu)
+        # A folder back to this same list: selecting it redraws the row with
+        # the percentage it is on now. Anything else would have Kodi try to
+        # play the row.
+        items.append((build_url("list_downloads"), item, True))
+    return items
+
+
+def cancel_download(params=None):
+    """Stop one transfer, or everything in flight."""
+    params = params or {}
+    running, queued = download_queue.holder(), download_queue.waiting()
+    if params.get("all"):
+        tickets = [e.get("id") for e in ([running] if running else []) + list(queued)]
+    else:
+        tickets = [params.get("ticket")]
+    tickets = [t for t in tickets if t]
+    if not tickets:
+        _notify_info("Nothing is downloading")
+        return
+    download_queue.request_cancel(tickets)
+    _notify_info("Stopping" if len(tickets) == 1 else f"Stopping {len(tickets)}")
+    refresh_container()
+
+
 def _empty(message):
     """Dressed like the root menu, since that is what an empty section is.
 
@@ -1174,11 +1269,18 @@ def list_downloads(params=None):
     params = params or {}
     data = _sweep(read_index())
     files, series_meta = data["files"], data["series"]
+    series = params.get("series")
+    # Only at the top level: the rows underneath are one series' episodes.
+    busy = _active_rows() if series is None else []
     if not files:
+        if busy:
+            xbmcplugin.setContent(ADDON_HANDLE, "")
+            _add_directory_items(busy)
+            end_directory()
+            return
         _empty("Pick an episode, then choose Download from its menu.")
         return
 
-    series = params.get("series")
     season = params.get("season")
 
     if series is None:
@@ -1206,7 +1308,7 @@ def list_downloads(params=None):
                     f"RunPlugin({build_url('delete_download', series=name)})",
                 )])
                 items.append((build_url("list_downloads", series=name), item, True))
-            _add_directory_items(items)
+            _add_directory_items(busy + items)
             end_directory()
             return
 
@@ -1244,7 +1346,7 @@ def list_downloads(params=None):
                 )])
                 items.append((build_url("list_downloads", series=series, season=number),
                               item, True))
-            _add_directory_items(items)
+            _add_directory_items(busy + items)
             end_directory()
             return
         season = next(iter(seasons))
@@ -1338,5 +1440,5 @@ def list_downloads(params=None):
                      "RunPlugin(%s)" % build_url("delete_download", path=path)))
         item.addContextMenuItems(menu)
         items.append((play_url(path, meta), item, False))
-    _add_directory_items(items)
+    _add_directory_items(busy + items)
     end_directory()

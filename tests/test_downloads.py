@@ -5,6 +5,7 @@ store = harness.setup()
 from lib import downloads
 
 SRC = (harness.ADDON / "lib" / "downloads.py").read_text(encoding="utf-8")
+ER_SRC = (harness.ADDON / "lib" / "episode_routes.py").read_text(encoding="utf-8")
 STREAMS = (harness.ADDON / "lib" / "episode_routes.py").read_text(encoding="utf-8")
 
 print("=== only a stream we can fetch ourselves offers Download ===")
@@ -196,6 +197,51 @@ assert any("OpenSettings" in c for c in ran), "a rejected key should open settin
 status, _, ran = _attempt(ERR, 388832, 0)
 assert not any("OpenSettings" in c for c in ran),     "settings cannot fix a plan limit, so opening them just misleads"
 print("  settings open for a rejected key, and only then  OK")
+
+print()
+print("=== cancelling mid-transfer keeps nothing and frees the slot ===")
+from lib import download_queue as _q
+kodistub._WINDOW_PROPS.clear()
+
+
+class _Slow:
+    """Ten chunks, with the cancel arriving on the third."""
+
+    url, headers = "https://srv/real.mkv", {"Content-Length": "10"}
+
+    def raise_for_status(self):
+        pass
+
+    def iter_content(self, chunk_size=0):
+        for n in range(10):
+            if n == 3:
+                _q.request_cancel([_q.holder()["id"]])
+            yield b"x"
+
+
+downloads.read_index = lambda: {"files": {}, "series": {}}
+downloads.folder = lambda: "C:/dl/"
+downloads.xbmcvfs.File = lambda p, mode="r": _Handle()
+downloads.xbmcvfs.exists = lambda p: False
+downloads.xbmcvfs.mkdirs = lambda p: True
+kept = []
+downloads._write_index = lambda data: kept.append(data)
+gone = []
+downloads.xbmcvfs.delete = lambda p: gone.append(p) or True
+downloads.session = lambda: type("S", (), {"get": lambda s, *a, **k: _Slow()})()
+outcome = downloads.download({
+    "video_url": "https://srv/play/k/h/1/realdebrid/DI_9", "episode_id": "DI_9",
+    "series_name": "One Pace", "episode_title": "T", "season": "1",
+    "episode": "9", "filename": "x.mkv", "video_size": 10})
+print(f"  outcome: {outcome}, deleted: {[p.rsplit('/', 1)[-1] for p in gone]}")
+assert outcome == downloads.CANCELLED, outcome
+assert any(p.endswith(".part") for p in gone), "the half-written file was left behind"
+assert not kept, "a cancelled download was written into the index"
+assert _q.holder() == {}, "the slot is still held, so nothing else can download"
+assert not _q.busy()
+print("  nothing kept, slot released  OK")
+kodistub._WINDOW_PROPS.clear()
+
 downloads.folder = _REAL_FOLDER          # the rest of the suite needs the real one
 downloads.xbmcvfs.exists = lambda p: True
 
@@ -203,13 +249,29 @@ print()
 print("=== a half-written file is never kept ===")
 dl = SRC[SRC.index("def download("):SRC.index("def _remove(")]
 assert 'xbmcvfs.File(partial, "w")' in dl, "a failed replacement would truncate the good copy"
-assert dl.count("xbmcvfs.delete(partial)") == 4, "errors, short reads, a blocked swap and a failed swap"
+assert dl.count("xbmcvfs.delete(partial)") == 5, "errors, short reads, a cancel, a blocked swap and a failed swap"
+
+# Deleting it inside the write loop would mean deleting a file still open.
+cancel = dl.index("stopped = True")
+assert dl.index('with xbmcvfs.File(partial, "w")') < cancel < dl.index("if stopped:"),     "a cancelled transfer deletes its part file while the handle is still open"
 assert dl.index("xbmcvfs.rename(partial, destination)") < dl.index("_remember(destination"), "partial indexed"
 
 # Deleting the file already there before the swap would mean a rename that
 # fails leaves neither the old copy nor the new one.
 assert dl.index("xbmcvfs.rename(destination, backup)") < dl.index("xbmcvfs.rename(partial, destination)"),     "the old copy is destroyed before the new one is safely in place"
 assert "xbmcvfs.rename(backup, destination)" in dl, "a failed swap would not put the old copy back"
+
+# Every way out of a transfer has to hand the slot back, or the next download
+# waits behind something that finished long ago.
+outer = SRC[SRC.index("def download("):SRC.index("def _fetch(")]
+assert "finally:" in outer and "download_queue.release(mine)" in outer,     "an early return would leave the slot held forever"
+assert "if not ticket:" in outer, "a season owns its slot across many episodes"
+
+season = ER_SRC[ER_SRC.index("def download_season("):]
+season = season[:season.index("def download_episode(")]
+assert season.count("download_queue.acquire(") == 1, "a season should take the slot once, not per episode"
+assert "ticket=ticket" in season, "each episode would queue behind the season itself"
+assert "finally:" in season and "download_queue.release(ticket)" in season
 assert dl.index("xbmcvfs.rename(partial, destination)") < dl.index("xbmcvfs.delete(backup)"),     "the backup goes before the swap is known to have worked"
 assert dl.index("xbmcvfs.delete(backup)") < dl.index("xbmcvfs.delete(already)"),     "a differently named old cut goes before the new file is in place"
 assert "raise_for_status()" in dl, "a 404 body would be written to disk"
@@ -1090,7 +1152,7 @@ kodistub.Dialog.select = lambda self, heading, items, **k: (
 attempts, verdicts = [], {}
 
 
-def _fake_download(stream, meta=None):
+def _fake_download(stream, meta=None, ticket=None):
     attempts.append(stream["video_id"])
     return verdicts.get(stream["video_id"], downloads.OK)
 

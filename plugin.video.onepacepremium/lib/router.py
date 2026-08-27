@@ -39,6 +39,7 @@ _ACTIONS = {
     "show_download_report": "downloads:show_report",
     "check_updates":       "downloads:check_updates",
     "rescan_downloads":    "downloads:rescan",
+    "cancel_download":     "downloads:cancel_download",
 }
 
 
