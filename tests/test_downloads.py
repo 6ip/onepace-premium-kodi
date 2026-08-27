@@ -1068,18 +1068,21 @@ for label, paths, want in (
                          "D:/b/One Pace/S1/y.mkv"], "C:/a/One Pace/S1"),
         ("moved once",  ["C:/old/One Pace/S1/x.mkv",
                          "C:/new/One Pace/S1/y.mkv"], "C:/old/One Pace/S1"),
-        # Reported from a real library: half in Downloads, half in the profile.
-        # These share C:/Users/hheb5, which exists and is no use at all.
-        ("real split",  ["C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01/a.mkv",
-                         "C:/Users/hheb5/AppData/Roaming/Kodi/userdata/addon_data/"
-                         "plugin.video.onepacepremium/downloads/One Pace/Season 01/b.mkv"],
+        # Reported from a real library: most in Downloads, one in the profile.
+        # These share C:/Users/hheb5, which exists and is no use at all, and a
+        # rescan walks the current folder first so "the first one" is the wrong
+        # answer too. Where most of it lives is the one that helps.
+        ("real split",  ["C:/Users/hheb5/AppData/Roaming/Kodi/userdata/addon_data/"
+                         "plugin.video.onepacepremium/downloads/One Pace/Season 01/new.mkv",
+                         "C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01/a.mkv",
+                         "C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01/b.mkv"],
                         "C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01"),
         ("none",        [], "")):
     got = downloads._shared_folder(paths)
     print(f"  {label:<12} -> {got!r}")
     assert got == want, (label, got, want)
     assert not got or ":" in got or got.startswith("/"),         f"{label} produced a path that is not rooted anywhere: {got!r}"
-    # Never an ancestor of the library itself: a home folder is not an answer.
+    # Never above the series folder: a home folder is not an answer.
     assert not got or got in {f.rsplit("/", 1)[0] for f in paths if f} or any(
         f.startswith(got + "/") and f[len(got) + 1:].count("/") == 1 for f in paths if f),         f"{label} climbed above the library: {got!r}"
 

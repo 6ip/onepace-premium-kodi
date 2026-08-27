@@ -1073,27 +1073,23 @@ def _series_order(data):
 
 
 def _shared_folder(paths):
-    """The deepest folder holding all of them, so a row can open its own."""
+    """The folder to open for a row, which is where most of it lives.
+
+    Our layout is <root>/<series>/Season NN/file, so the only answers worth
+    giving are a season folder or the series folder above it. A library split
+    between two roots — what changing the download folder leaves behind —
+    shares nothing above the user's home folder, which is no answer at all.
+    """
     folders = [_normalised(p).rsplit("/", 1)[0] for p in paths if p]
     if not folders:
         return ""
-    shared = folders[0].split("/")
-    for folder in folders[1:]:
-        parts, cut = folder.split("/"), 0
-        # Cut at the first difference. Keeping every part that happens to
-        # match would splice two unrelated paths into one that leads nowhere.
-        while cut < min(len(shared), len(parts)) and shared[cut] == parts[cut]:
-            cut += 1
-        shared = shared[:cut]
-    # Our layout is <root>/<series>/Season NN/file, so the only answers that
-    # mean anything are a season folder or the series folder above it. Files
-    # under two different roots share something like C:/Users/<name> — a real
-    # folder, and no use to anyone — so fall back to where the first one is.
-    first = folders[0].split("/")
-    library = {"/".join(first), "/".join(first[:-1])}
-    joined = "/".join(shared)
-    return joined if joined in library else folders[0]
-
+    tally = {}
+    for f in folders:
+        tally["/".join(f.split("/")[:-1])] = tally.get("/".join(f.split("/")[:-1]), 0) + 1
+    home = max(tally, key=lambda k: (tally[k], -list(tally).index(k)))
+    seasons = {f for f in folders if f == home or f.startswith(home + "/")}
+    # All of it in one season: open that. Spread over several: open the series.
+    return seasons.pop() if len(seasons) == 1 else home
 
 def _empty(message):
     """Dressed like the root menu, since that is what an empty section is.
