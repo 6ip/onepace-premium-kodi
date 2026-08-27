@@ -1,3 +1,20 @@
+[B]v2.4.0[/B]  [COLOR FF888899]27 August 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Downloads[/B][/COLOR]
+  •  Keep episodes on your device and watch them with no connection.
+  •  Off to start with. Turn it on in Settings, under Downloads.
+  •  Download one episode from its menu, or a whole season at once.
+  •  Downloaded episodes are marked in your lists and play from disk.
+  •  Subtitles are saved alongside, in the languages you have chosen.
+
+[COLOR FF81A6C6][B]Managing Them[/B][/COLOR]
+  •  A Downloads section showing what is transferring and what you already have.
+  •  One at a time, so a second download waits its turn instead of competing.
+  •  Cancel a single episode or a whole season while it is going.
+  •  Check for Updates tells you which episodes have been released again.
+  •  Move your library to another folder, or rebuild the list from the files.
+
+
 [B]v2.3.2[/B]  [COLOR FF888899]23 August 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Backup[/B][/COLOR]
