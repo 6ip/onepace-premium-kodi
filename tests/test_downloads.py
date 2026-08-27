@@ -513,7 +513,9 @@ found = downloads._walk_downloads()
 for f in found:
     print(f"  s{f['season']:02d}e{f['episode']:02d} {f['variant']:<9} {f['path'].rsplit('/', 1)[-1]}")
 assert len(found) == 3, "a .txt, an unparseable name and the subs folder should be skipped"
-assert [f["variant"] for f in found] == ["standard", "standard", "extended"], found
+# Empty, not "standard": that is what a download writes, and _existing
+# compares the two raw.
+assert [f["variant"] for f in found] == ["", "", "extended"], found
 assert all(f["series_name"] == "One Pace" for f in found), found
 assert not any("weird name" in f["path"] for f in found), "it guessed at a name it cannot read"
 assert not any(downloads.SUBS_DIR in f["path"] for f in found), "it walked into the subtitles"
@@ -1000,6 +1002,30 @@ assert body.count("_cache.get(") == 2, "it should read both the manifest and the
 print("  the order is read from cache only, never fetched  OK")
 
 downloads.read_index, downloads._write_index = _real_order
+
+print()
+print("=== a title that ends in a bracket is not a cut ===")
+# Real: "Farewell (Filler)" is episode 4 of Oni Pace season 2 and episode 94
+# of Muhn Pace season 32. Read off disk it parses as the cut "Filler".
+NAMED = downloads._NAMED
+for stem, title, cut in (("2x04 - Farewell (Filler)", "Farewell", "Filler"),
+                         ("6x05 - Arlong Park (Extended)", "Arlong Park", "Extended")):
+    m = NAMED.match(stem)
+    assert (m.group(3), m.group(4)) == (title, cut), m.groups()
+print("  the filename alone cannot tell them apart")
+
+rescan_body = SRC[SRC.index("def rescan("):]
+rescan_body = rescan_body[:rescan_body.index(chr(10) + "def ")]
+assert 'f"{entry[' in rescan_body and "entry[\"variant\"] = \"\"" in rescan_body,     "nothing checks the parsed cut against the name the provider gave"
+
+# What the check does, on both cases.
+for real_title, stem_title, cut, want in (("Farewell (Filler)", "Farewell", "Filler", ""),
+                                          ("Arlong Park", "Arlong Park", "Extended", "extended")):
+    variant = cut.lower()
+    if cut and f"{stem_title} ({cut})" == downloads.safe_name(real_title):
+        variant = ""
+    print(f"  provider says {real_title!r:<22} -> variant {variant!r}")
+    assert variant == want, (real_title, variant)
 
 print()
 print("=== a rescan adopts the subtitles sitting beside the file ===")

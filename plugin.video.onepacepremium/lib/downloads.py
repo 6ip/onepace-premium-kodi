@@ -576,10 +576,11 @@ def _walk_one(root):
                 if not match:
                     log(f"[rescan] cannot read a season and episode from {name!r}")
                     continue
-                season, episode, _title, cut = match.groups()
+                season, episode, title, cut = match.groups()
                 found.append({"path": here + name, "series_name": series,
                               "season": int(season), "episode": int(episode),
-                              "variant": (cut or "standard").lower()})
+                              "title": title, "cut": cut or "",
+                              "variant": (cut or "").lower()})
     return found
 
 
@@ -631,6 +632,13 @@ def rescan(_params=None):
             unknown += 1
             log(f"[rescan] no provider entry for {entry['path']!r}")
             continue
+        # "Farewell (Filler)" is the episode's name, not a cut of it. The
+        # provider knows what it called the thing, so ask before believing
+        # the brackets in a filename.
+        real = safe_name(video.get("name") or video.get("title") or "")
+        if entry["cut"] and f"{entry['title']} ({entry['cut']})" == real:
+            log(f"[rescan] {real!r} is the title, not a cut")
+            entry["variant"] = ""
         _remember(entry["path"], _rebuilt(entry, video, meta), meta,
                   _sidecars(entry["path"]))
         added += 1
