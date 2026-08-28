@@ -627,6 +627,11 @@ def check_resume(params):
     if chosen is None:
         xbmcplugin.setResolvedUrl(ADDON_HANDLE, False, xbmcgui.ListItem())
         return
+    # The copy on disk is built from the download index, which knows nothing
+    # about how playback was reached. Without this a run of downloaded
+    # episodes looks like somebody pressing play on each one.
+    if params.get("autoplay"):
+        chosen["autoplay"] = "1"
     from .playback import play_video as _play_video
     _play_video(chosen)
 

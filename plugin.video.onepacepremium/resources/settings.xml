@@ -22,8 +22,10 @@
         <setting type="sep" />
         <setting type="lsep" label="Next Episode" />
         <setting label="Play Next Episode" id="autoplay_next" type="bool" default="false" />
-        <setting label="Show Card Before End (secs)" id="autoplay_prompt_secs" type="slider" default="20" range="5,5,90" option="int" subsetting="true" enable="eq(-1,true)" />
+        <setting label="Show Card Before End (secs)" id="autoplay_prompt_secs" type="slider" default="20" range="5,5,300" option="int" subsetting="true" enable="eq(-1,true)" />
         <setting label="Continue To Next Season" id="autoplay_next_season" type="bool" default="true" subsetting="true" enable="eq(-2,true)" />
+        <setting label="Ask If Still Watching After" id="autoplay_still_watching" type="slider" default="3" range="0,1,10" option="int" subsetting="true" enable="eq(-3,true)" />
+        <setting label="Lift Card Over Player Controls" id="autoplay_card_lift" type="slider" default="100" range="0,20,240" option="int" subsetting="true" enable="eq(-4,true)" />
         <setting type="sep" />
         <setting type="lsep" label="Torrent" />
         <setting label="Check Availability" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />

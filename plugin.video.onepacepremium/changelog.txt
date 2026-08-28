@@ -1,3 +1,17 @@
+[B]v2.4.1[/B]  [COLOR FF888899]28 August 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Next Episode[/B][/COLOR]
+  •  The card is a bar now, with no buttons. Kodi's own controls keep working while it is up.
+  •  The next episode follows on its own when this one ends. Press Back to stay where you are.
+  •  Show it up to five minutes early, and it steps aside when the player's controls appear.
+  •  Move it higher or lower to suit your skin, under Playback.
+
+[COLOR FF81A6C6][B]Still Watching[/B][/COLOR]
+  •  After a few episodes nobody has touched, it asks before starting another.
+  •  Say nothing and it stops, so falling asleep no longer costs you a season.
+  •  Choose how many episodes first, or turn it off, under Playback.
+
+
 [B]v2.4.0[/B]  [COLOR FF888899]27 August 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Downloads[/B][/COLOR]

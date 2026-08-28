@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import threading
 
 import xbmc
 import xbmcgui
@@ -111,12 +112,48 @@ def _next_episode(series_id, episode_id):
     }
 
 
-def _prompt_next_episode(up_next, player, monitor):
-    """Ask via the corner card. Nothing happens unless the viewer says so."""
-    from .next_episode_card import ask_next_episode
-    return ask_next_episode(
-        up_next["series"], up_next["episode"], up_next["thumb"], player, monitor
+# A setting longer than the episode itself would leave the bar up for most of
+# it, so it never covers more than this share of a short one.
+_SHORTEST_SHARE = 4
+# How playback finished, straight from Kodi rather than inferred.
+ENDED, STOPPED, ERROR, UNKNOWN = "ended", "stopped", "error", "unknown"
+# The callback is queued, so it lands shortly after playback actually stops.
+# Long enough to be sure, short enough that nothing hangs on a missing one.
+_ENDED_WAIT = 5.0
+_ENDED_TICK = 0.1
+
+
+def _announce_next_episode(up_next, player, monitor, window):
+    """Show the corner bar. Returns (cancelled, anyone was there, left the range).
+
+    The bar getting out of the way is not the same as being turned down: it
+    steps aside for anything it cannot hand back, and the next episode still
+    follows unless somebody actually said no.
+    """
+    from .next_episode_card import show_next_episode
+    dismissed, touched, left_range = show_next_episode(
+        up_next["series"], up_next["episode"], up_next["thumb"], player, monitor,
+        window,
     )
+    log("[autoplay] left on this episode" if dismissed
+        else "[autoplay] the bar is out of the way, still queued")
+    return dismissed, touched, left_range
+
+
+def _may_start_next(up_next, monitor, touched):
+    """Count the run, and ask whether anyone is there once it gets long."""
+    from . import still_watching
+    limit = _int_setting("autoplay_still_watching", 3, 0, 10)
+    count = still_watching.note_episode(touched)
+    log(f"[autoplay] {count} episode(s) in a row, asking at {limit or 'never'}"
+        + (" (somebody was here, so the run restarted)" if touched else ""))
+    if not limit or count < limit:
+        return True
+    if still_watching.ask(count, up_next["episode"], monitor):
+        still_watching.reset()
+        return True
+    still_watching.reset()
+    return False
 
 
 def _watched_threshold():
@@ -129,13 +166,54 @@ def _watched_threshold():
 
 
 class _WatchMonitor(xbmc.Player):
-    """xbmc.Player subclass that records whether playback ended naturally."""
+    """Records how playback finished, and lets us wait for it to say so.
+
+    The callbacks are queued for Python rather than run where Kodi raises
+    them, so isPlaying() goes false first. Waiting on the event instead of
+    the predicate is what makes the answer trustworthy.
+    """
+
     def __init__(self):
         super().__init__()
-        self.ended_naturally = False
+        self.finished = threading.Event()
+        self.outcome = None
+
+    def _done(self, outcome):
+        if self.outcome is None:
+            self.outcome = outcome
+        self.finished.set()
 
     def onPlayBackEnded(self):
-        self.ended_naturally = True
+        self._done(ENDED)
+
+    def onPlayBackStopped(self):
+        self._done(STOPPED)
+
+    def onPlayBackError(self):
+        self._done(ERROR)
+
+    @property
+    def ended_naturally(self):
+        return self.outcome == ENDED
+
+    def why_it_finished(self, monitor, seconds):
+        """ENDED, STOPPED, ERROR — or UNKNOWN if nothing ever said.
+
+        Waited for through Kodi rather than on the event alone: the callbacks
+        are queued to the add-on's own machinery, and a thread blocked in
+        Event.wait() never lets it deliver them.
+
+        Not knowing is not the same as finishing, so it is its own answer
+        rather than being folded into either of them.
+        """
+        waited = 0.0
+        while waited < seconds:
+            if self.finished.is_set():
+                return self.outcome or UNKNOWN
+            if monitor.waitForAbort(_ENDED_TICK):
+                break
+            waited += _ENDED_TICK
+        return self.outcome or UNKNOWN
 
 
 # Which monitor session is current, and for which episode. Lists avoid needing
@@ -206,8 +284,18 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
     if series_id and episode_id and get_setting("autoplay_next") == "true":
         up_next = _next_episode(series_id, episode_id)
         log(f"[autoplay] up next: {up_next['title']!r}" if up_next else "[autoplay] no next episode")
-    prompt_at = _int_setting("autoplay_prompt_secs", 20, 5, 90)
+    prompt_at = _int_setting("autoplay_prompt_secs", 20, 5, 300)
     play_next_url = None
+    queued_next = None
+    was_touched = False
+    may_show = True
+    if not autoplay:
+        # Picked by hand, so whatever ran unattended before this is history.
+        from . import still_watching as _sw
+        if _sw.episodes_in_a_row():
+            log(f"[autoplay] {episode_id!r} was picked by hand, "
+                "so the run starts over")
+        _sw.reset()
 
     # Poll every 1 s; mark as soon as the threshold is reached during playback
     marked = False
@@ -233,20 +321,23 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
         # getTime/getTotalTime can still report the previous file for a moment
         # after Kodi switches, which would fire the card at the start.
         # Never before halfway, or a 2-minute episode opens with the card up.
-        if (up_next and polls >= _SETTLE_POLLS and total_time > 0
-                and (total_time - last_time) <= min(prompt_at, total_time / 2)):
+        window = min(prompt_at, total_time / _SHORTEST_SHARE) if total_time else 0
+        in_range = bool(window) and (total_time - last_time) <= window
+        if not in_range:
+            # Out of the range again, so it may come back on the way in.
+            may_show = True
+        if up_next and may_show and in_range and polls >= _SETTLE_POLLS:
             card = up_next
-            up_next = None  # ask once per playback
-            if _prompt_next_episode(card, player, kodi_monitor):
-                # Accepting counts as finishing this one, whatever the threshold.
-                play_next_url = card["url"]
-                if not marked and series_id and episode_id:
-                    marked = True
-                    _watched.set_episodes_watched(series_id, [episode_id], True)
-                    _bookmarks.clear(episode_id)
-                log(f"[autoplay] starting {card['title']!r}")
-                break
-            log("[autoplay] cancelled")
+            dismissed, touched, left_range = _announce_next_episode(
+                card, player, kodi_monitor, window)
+            was_touched = was_touched or touched
+            if dismissed:
+                up_next = None          # they said no, so stop offering
+            else:
+                queued_next = card
+                # Only leaving the range re-arms it; stepping aside means it
+                # was in the way, and popping straight back would be worse.
+                may_show = left_range
 
     # A newer session for the *same* episode owns its state, so stand aside. One
     # for a different episode (playing the next one) leaves ours to finish.
@@ -254,6 +345,28 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
         log(f"[monitor] superseded by gen={_MONITOR_GEN[0]} for the same episode, "
             f"skipping {episode_id!r}")
         return
+
+    if queued_next:
+        why = player.why_it_finished(kodi_monitor, _ENDED_WAIT)
+        left = (total_time - last_time) if total_time else None
+        if why != ENDED:
+            # Anything but a clean end fails closed. Guessing from how near
+            # the end it was would call a stop at eight seconds a finish.
+            log(f"[autoplay] playback {why}"
+                + (f" with {left:.0f}s left" if left is not None else "")
+                + ", so nothing follows it")
+        elif _may_start_next(queued_next, kodi_monitor, was_touched):
+            # Running on counts as finishing this one, whatever the threshold.
+            play_next_url = queued_next["url"]
+            if not marked and series_id and episode_id:
+                marked = True
+                _watched.set_episodes_watched(series_id, [episode_id], True)
+                _bookmarks.clear(episode_id)
+            log(f"[autoplay] starting {queued_next['title']!r}")
+    elif was_touched:
+        # Somebody was here, so the run starts over.
+        from . import still_watching as _sw
+        _sw.note_episode(touched=True)
 
     # Replaying something already finished must not put it back in progress.
     was_watched = bool(episode_id) and episode_id in _watched.get_watched(series_id)
