@@ -504,10 +504,15 @@ _STREAM_URL = "https://6ip.github.io/onepace-streams/stream/{path}.json"
 
 # A few arcs sit in subfolders; the rest are at the root of /stream.
 _STREAM_DIRS = (("MUHN_", "Muhn"), ("ONIG_", "ONIG"),
-                ("KUMA_SHAVED_", "KUMA_SHAVED"), ("fan_", "Specials"))
+                ("KUMA_SHAVED_", "KUMA_SHAVED"),
+                ("special_", "Specials"), ("fools", "Specials"))
 
 
 def stream_path(episode_id):
+    # The meta prefixes some catalogs with "pp_" and leaves Muhn and ONIG bare.
+    # The files never carry it, so strip it before matching.
+    if episode_id.startswith("pp_"):
+        episode_id = episode_id[3:]
     for prefix, directory in _STREAM_DIRS:
         if episode_id.startswith(prefix):
             return f"{directory}/{episode_id}"

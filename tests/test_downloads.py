@@ -435,9 +435,13 @@ print("  plain track untagged, feed order handed to Kodi  OK")
 
 print()
 print("=== a re-release is spotted without touching the add-on's server ===")
+# Ids exactly as the meta hands them over, each naming a file that really exists.
 for eid, want in (("RO_1", "RO_1"), ("MUHN_WC_15", "Muhn/MUHN_WC_15"),
-                  ("ONIG_1", "ONIG/ONIG_1"), ("KUMA_SHAVED_3", "KUMA_SHAVED/KUMA_SHAVED_3"),
-                  ("fan_2", "Specials/fan_2")):
+                  ("ONIG_1", "ONIG/ONIG_1"),
+                  ("pp_KUMA_SHAVED_3", "KUMA_SHAVED/KUMA_SHAVED_3"),
+                  ("pp_special_fan_1", "Specials/special_fan_1"),
+                  ("pp_fools17", "Specials/fools17"),
+                  ("special_wapol", "Specials/special_wapol")):
     got = downloads.stream_path(eid)
     print(f"  {eid:<16} -> stream/{got}.json")
     assert got == want, (eid, got)
