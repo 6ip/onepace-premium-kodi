@@ -95,6 +95,16 @@ assert "may_show = left_range" in loop, "stepping aside would pop it straight ba
 print("  hides when you seek away, returns when you come back, and only Back stops it  OK")
 
 print()
+print("=== the bar lets go of the player when it closes ===")
+# Seeking happens on the callback thread, so the bar has to hold a player to
+# do it. Kodi decides when a window object is really gone, so the reference is
+# handed back explicitly rather than left for the window to carry off with it.
+run_src = CARD_SRC[CARD_SRC.index("    def run(self, player, monitor):"):]
+assert "self._player = None" in run_src, "the bar keeps hold of the player"
+assert run_src.index("self._player = None") < run_src.index("self.close()"),     "let go after the window goes, rather than before"
+print("  dropped in the finally, ahead of the close  OK")
+
+print()
 print("=== the run only counts episodes nobody touched ===")
 kodistub._WINDOW_PROPS.clear()
 assert still_watching.episodes_in_a_row() == 0

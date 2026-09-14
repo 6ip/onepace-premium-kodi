@@ -198,6 +198,9 @@ class NextEpisodeCard(xbmcgui.WindowXMLDialog):
                 if not player.isPlaying() or monitor.waitForAbort(0.2):
                     break
         finally:
+            # Dropped before the window goes, so nothing of Kodi's holds the
+            # player once the bar is done with it.
+            self._player = None
             self.close()
         return self
 

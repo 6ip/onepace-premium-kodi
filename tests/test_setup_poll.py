@@ -53,6 +53,30 @@ assert "status_code == 404" in SETTINGS and "# Gone from the server" in SETTINGS
 print("  both loops stop on 404  OK")
 
 print()
+print("=== nothing of ours is left running once the dialog goes ===")
+# daemon=True is not cleanup — it only says Python need not wait for the thread
+# at exit. Sleeping between polls meant the thread ran on for up to 10s after
+# the dialog closed, still asking the server about a pairing nobody awaits.
+body = loop[:loop.index(chr(10) + "    def ")]
+assert "time.sleep(" not in body, "the wait between polls cannot be interrupted"
+assert "self._stop.wait(" in body, "closing the dialog does not wake the poller"
+assert "threading.Event()" in DIALOG, "_stop is still a flag nothing can wait on"
+runner = DIALOG[DIALOG.index("    def run(self)"):]
+assert "_join_poller()" in runner, "the dialog returns without waiting for its thread"
+join = DIALOG[DIALOG.index("def _join_poller("):]
+assert "self._thread.join(_JOIN_WAIT)" in join, "the join is unbounded or absent"
+assert runner.index("self.close()") < runner.index("_join_poller()"),     "the window should already be gone before anything waits"
+print("  woken by the close, joined, and bounded  OK")
+
+print()
+print("=== the wait that outlives the dialog is not a thread at all ===")
+# It runs on the invocation itself and waits through Kodi, so shutting Kodi
+# down ends it. Nothing to join, and nothing to leave behind.
+assert "threading" not in SETTINGS, "the second wait grew a thread of its own"
+assert "monitor.waitForAbort(poll_interval(" in SETTINGS,     "it sleeps instead of waiting through Kodi"
+print("  inline, on waitForAbort  OK")
+
+print()
 print("=== the deadline belongs to the server, not to whenever we started ===")
 # It used to be time.time() + expires_in, recomputed when the second loop
 # began — so closing the dialog after a minute bought five more minutes of

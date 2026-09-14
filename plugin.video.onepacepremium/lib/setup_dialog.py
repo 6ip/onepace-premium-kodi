@@ -16,6 +16,9 @@ ADDON_ID = "plugin.video.onepacepremium"
 # ease off. A code nobody claims costs a third of what a flat interval did.
 _BACKOFF = ((30, 2), (90, 5))
 _BACKOFF_TAIL = 10
+# Long enough to swallow a poll already in flight, short enough that nothing
+# waits on it. The window is closed before this, so it is never felt.
+_JOIN_WAIT = 2.0
 
 
 def poll_interval(elapsed):
@@ -161,7 +164,10 @@ class SetupDialog(xbmcgui.WindowXMLDialog):
         self._expires_in = kwargs.get("expires_in", 0)
 
         self.result = DialogResult()
-        self._stop = False
+        # An event rather than a flag, so closing the dialog interrupts the
+        # wait between polls instead of leaving the thread running behind it.
+        self._stop = threading.Event()
+        self._thread = None
 
     def onInit(self):
         self.setProperty("pp.code", self._code)
@@ -173,15 +179,14 @@ class SetupDialog(xbmcgui.WindowXMLDialog):
 
         # Start background polling so the dialog auto-closes when setup finishes
         if self._poll_url and self._expires_in > 0:
-            t = threading.Thread(target=self._poll_loop, daemon=True)
-            t.start()
+            self._thread = threading.Thread(target=self._poll_loop, daemon=True)
+            self._thread.start()
 
     def _poll_loop(self):
         started = time.time()
         deadline = started + self._expires_in
-        while not self._stop and time.time() < deadline:
-            time.sleep(poll_interval(time.time() - started))
-            if self._stop:
+        while not self._stop.is_set() and time.time() < deadline:
+            if self._stop.wait(poll_interval(time.time() - started)):
                 break
             try:
                 resp = requests.get(self._poll_url, timeout=10)
@@ -203,18 +208,18 @@ class SetupDialog(xbmcgui.WindowXMLDialog):
             if "secret_string" in data:
                 self.result.setup_complete = True
                 self.result.manifest_data = data
-                self._stop = True
+                self._stop.set()
                 return  # run() loop on main thread calls close()
 
         # Only mark expired if the dialog wasn't closed by the user
-        if not self._stop:
+        if not self._stop.is_set():
             self.result.expired = True
-            self._stop = True
+            self._stop.set()
             # run() loop on main thread calls close()
 
     def _user_close(self):
         """Called by Kodi's event dispatch — safe to call close() here directly."""
-        self._stop = True
+        self._stop.set()
         self.close()
 
     def onClick(self, control_id):
@@ -232,10 +237,21 @@ class SetupDialog(xbmcgui.WindowXMLDialog):
         # Calling close() from a background thread via doModal() is unreliable in Kodi;
         # this pattern lets the background thread set _stop and the main thread closes.
         self.show()
-        while not self._stop:
+        while not self._stop.is_set():
             xbmc.sleep(100)
         self.close()
+        self._join_poller()
         return self.result
+
+    def _join_poller(self):
+        """Wait for the polling thread, so nothing of ours outlives the dialog."""
+        if self._thread is None:
+            return
+        self._thread.join(_JOIN_WAIT)
+        if self._thread.is_alive():
+            xbmc.log(f"[OnePace] setup poller still running after {_JOIN_WAIT}s",
+                     xbmc.LOGWARNING)
+        self._thread = None
 
 
 # ── Public entry point ───────────────────────────────────────────────────────
