@@ -296,6 +296,18 @@ assert len(covered) == (len(_card._FORWARD) + len(_card._GLOBAL)
                         + len(_card._SEEK) + len(_card._CLOSE_ACTIONS)),     "an action id is in two groups at once"
 assert 101 in _card._CLOSE_ACTIONS, "right click is Back everywhere else in Kodi"
 assert set(_card._MOUSE_QUIET) == {106, 107, 108, 109},     "a gesture ending should not be read as an instruction"
+# A touchscreen sends its own actions, so without these a tap fell through to
+# "not ours" and the bar closed instead of opening the player's controls. The
+# ids are the same on Kodi 21 and 22, checked against ActionIDs.h.
+assert _card._FORWARD.get(401) == "osd", "a tap does not reach the player"
+assert _card._FORWARD.get(410) == "osd", "a ten-finger tap is still a tap"
+for label, action_id in (("long press", 411), ("gesture notify", 500),
+                         ("pan", 504), ("gesture abort", 505)):
+    assert action_id in _card._TOUCH_QUIET, f"{label} would close the bar"
+    assert action_id not in _card._FORWARD, f"{label} is not an instruction"
+# A swipe is a deliberate press, so it steps aside like any unknown action.
+assert 511 not in _card._TOUCH_QUIET and 511 not in _card._FORWARD,     "a swipe should reach the player the same way any other key does"
+assert not set(_card._MOUSE_QUIET) & set(_card._TOUCH_QUIET)
 # Kodi's keyboard map handles these in its <global> section, so they reach the
 # player anyway. Acting on them too meant it paused, we saw it paused, and we
 # resumed it — a pause that lasted milliseconds.

@@ -21,6 +21,9 @@ _PROGRESS = 300
 # The keys on the left are what a *dialog* receives, which is why the arrows
 # are plain moves rather than the step actions fullscreen video would get.
 _FORWARD = {24: "osd", 7: "osd", 100: "osd", 103: "osd", 11: "info"}
+# A tap is the finger's left click, so it does what 100 does. 401 is one
+# finger and 410 is ten. Same ids on Kodi 21 and 22.
+_FORWARD.update({a: "osd" for a in range(401, 411)})
 # Kodi's keyboard map handles these in its <global> section, so they reach the
 # player whether or not this bar is in the way. Touching them ourselves means
 # two handlers: it pauses, we see it paused, and we helpfully resume it.
@@ -42,7 +45,10 @@ _SETTLE = 1.0
 # Drag, move, long click and the end-of-gesture marker. None of them are an
 # instruction, and 109 was closing the bar on the way out of a click.
 _MOUSE_QUIET = (106, 107, 108, 109)
-_MOUSE = range(100, 110)
+# The same again for fingers: a long press (411-420), and the gestures that are
+# a hand moving rather than an instruction — notify, begin, zoom, rotate, pan
+# and abort. Swipes are left out, so they close the bar like any other press.
+_TOUCH_QUIET = (*range(411, 421), *range(500, 506))
 
 
 def _publish_lift():
@@ -117,7 +123,7 @@ class NextEpisodeCard(xbmcgui.WindowXMLDialog):
         — only Back does that.
         """
         action_id = action.getId()
-        if action_id == _NOOP or action_id in _MOUSE_QUIET:
+        if action_id == _NOOP or action_id in _MOUSE_QUIET + _TOUCH_QUIET:
             return
         if time.monotonic() - self._opened < _SETTLE:
             log(f"[autoplay] ignoring action {action_id} as the bar opens")
