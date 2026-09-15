@@ -1,3 +1,14 @@
+[B]v2.4.2[/B]  [COLOR FF888899]15 September 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Fixes[/B][/COLOR]
+  •  Specials and the Kuma cuts play again.
+  •  After an episode, the list shows its watched tick instead of its thumbnail.
+
+[COLOR FF81A6C6][B]Touchscreens[/B][/COLOR]
+  •  Tap the next episode bar to bring up the player's controls.
+  •  Scrolling or a long press no longer closes it.
+
+
 [B]v2.4.1[/B]  [COLOR FF888899]28 August 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Next Episode[/B][/COLOR]
