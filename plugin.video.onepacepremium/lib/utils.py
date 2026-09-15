@@ -152,10 +152,13 @@ def refresh_container():
     Shelves need the nudge either way, since a change made in our own list
     still leaves them stale. Container.Refresh only reaches a container we
     own, so it is worth adding when we are standing in one.
+
+    Ours first: the nudge starts a library scan, and Kodi drops a refresh that
+    arrives while one is running.
     """
-    ping_widgets()
     if not is_widget():
         xbmc.executebuiltin("Container.Refresh")
+    ping_widgets()
 
 
 # Climbs past 1 only when Kodi reuses the interpreter.

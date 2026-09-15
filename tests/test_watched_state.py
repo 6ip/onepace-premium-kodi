@@ -81,7 +81,7 @@ from lib.utils import refresh_container
 from kodistub import recorder
 
 for plugin_name, expected in (
-        ("plugin.video.onepacepremium", ["UpdateLibrary(video,special://skin/foo)", "Container.Refresh"]),
+        ("plugin.video.onepacepremium", ["Container.Refresh", "UpdateLibrary(video,special://skin/foo)"]),
         ("", ["UpdateLibrary(video,special://skin/foo)"]),
         ("skin.arctic.fuse.3", ["UpdateLibrary(video,special://skin/foo)"])):
     recorder.reset()
@@ -100,7 +100,13 @@ print("  mark_watched and clear_progress both go through it  OK")
 # Stopping an episode moves the resume point, so shelves are stale too.
 mon = PLAY[PLAY.index("def _monitor_playback"):]
 assert "ping_widgets()" in mon, "shelves stay stale after playback"
-assert mon.index("ping_widgets()") < mon.index('executebuiltin("Container.Refresh")'),     "the shelves are nudged before our own container redraws"
+# The nudge is a library scan, and Kodi silently drops a Container.Refresh that
+# lands while one is running — "OnMessage - updating in progress". Ours went
+# first in the log and was thrown away, so the row we had just played kept the
+# player's art instead of its watched tick. Our container redraws first now,
+# and the nudge waits for it.
+assert mon.index('executebuiltin("Container.Refresh")') < mon.index("ping_widgets()"),     "the shelves are nudged first, so our own refresh gets dropped"
+assert "_REDRAW_SETTLE" in mon, "the nudge follows too closely to let the listing land"
 handoff = "if not play_next_url:" + chr(10) + "            # The resume point moved"
 assert handoff in mon, "autoplay would ping between every episode"
 print("  stopping an episode nudges the shelves too, but a handoff does not")

@@ -23,6 +23,10 @@ _START_CAP_HANDOFF = 900
 
 # Polls to wait before trusting the player's clock after a file switch.
 _SETTLE_POLLS = 5
+# Long enough for a refreshed listing to be built and taken, before the widget
+# nudge starts a scan that would make Kodi drop it. The listing takes about
+# 300ms; nobody is looking at the shelves this soon after an episode.
+_REDRAW_SETTLE = 2.0
 
 
 def _keep_resume_cleared(episode_id, monitor, attempts=6, delay=0.5):
@@ -427,12 +431,10 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
                 path = xbmc.getInfoLabel("Container.FolderPath")
                 if ADDON_ID in path or kodi_monitor.waitForAbort(0.2):
                     break
-        if not play_next_url:
-            # The resume point moved, so every shelf showing it is now stale.
-            ping_widgets()
         # A widget's FolderPath is our plugin too, so it has to be asked who
         # owns the container before anything redraws it.
-        if ADDON_ID in path and not is_widget():
+        ours = ADDON_ID in path and not is_widget()
+        if ours:
             if season and _showing_other_season(path, season):
                 # Plain Update only. The replace flag crashes Kodi here, and
                 # ActivateWindow leaves Back with nowhere to go.
@@ -443,6 +445,15 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
             else:
                 xbmc.executebuiltin("Container.Refresh")
                 log(f"[monitor] refreshed list for {episode_id!r}")
+        if not play_next_url:
+            # The resume point moved, so every shelf showing it is now stale.
+            # Last, and after a pause: the nudge starts a library scan, and a
+            # scan running when our refresh arrives makes Kodi drop it —
+            # "OnMessage - updating in progress" — leaving the row we just
+            # played holding the player's art instead of its watched tick.
+            if ours and kodi_monitor.waitForAbort(_REDRAW_SETTLE):
+                return
+            ping_widgets()
         if marked or was_watched:
             _keep_resume_cleared(episode_id, kodi_monitor)
 
