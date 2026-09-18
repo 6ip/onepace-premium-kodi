@@ -27,6 +27,32 @@ _SETTLE_POLLS = 5
 # nudge starts a scan that would make Kodi drop it. The listing takes about
 # 300ms; nobody is looking at the shelves this soon after an episode.
 _REDRAW_SETTLE = 2.0
+# Kodi 21 exits outright when two busy dialogs overlap, and it reloads the list
+# behind one the moment an episode ends. That dialog only shows after ~200ms, so
+# "clear" has to hold for a moment before the hand-off may go.
+_BUSY = "Window.IsActive(busydialog) | Window.IsActive(busydialognocancel)"
+_BUSY_CLEAR = 0.5
+_BUSY_CAP = 10.0
+_BUSY_TICK = 0.1
+
+
+def _wait_for_busy_dialog(monitor):
+    """Hold the hand-off until Kodi's own busy dialog is gone. False on abort."""
+    # Whole ticks, not summed seconds, so the cap cannot drift by float error.
+    need, clear = round(_BUSY_CLEAR / _BUSY_TICK), 0
+    for tick in range(round(_BUSY_CAP / _BUSY_TICK)):
+        if xbmc.getCondVisibility(_BUSY):
+            clear = 0
+        else:
+            clear += 1
+            if clear >= need:
+                if tick >= need:
+                    log(f"[autoplay] waited {tick * _BUSY_TICK:.1f}s for Kodi's busy dialog")
+                return True
+        if monitor.waitForAbort(_BUSY_TICK):
+            return False
+    log(f"[autoplay] busy dialog still up after {_BUSY_CAP:.0f}s, going anyway")
+    return True
 
 
 def _keep_resume_cleared(episode_id, monitor, attempts=6, delay=0.5):
@@ -402,6 +428,10 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
                 break
             if kodi_monitor.waitForAbort(0.1):
                 break
+        # Kodi is reloading the list behind a busy dialog by now, and PlayMedia
+        # on a plugin brings up a second one. Kodi 21 quits when they overlap.
+        if not _wait_for_busy_dialog(kodi_monitor):
+            return
         # noresume: we position playback ourselves, so Kodi must not also ask.
         xbmc.executebuiltin(f"PlayMedia({play_next_url},noresume)")
 

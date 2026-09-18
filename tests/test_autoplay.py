@@ -189,6 +189,66 @@ playback._int_setting, still_watching.ask = _real_int, _real_ask
 kodistub._WINDOW_PROPS.clear()
 
 print()
+print("=== the hand-off waits for Kodi's busy dialog ===")
+# Kodi reloads the list behind a busy dialog when an episode ends, and PlayMedia
+# on a plugin brings up a second. Kodi 21 exits when they overlap: the phone
+# log showed the reload's dialog open at .652, our hand-off at .805, and
+# "two concurrent busydialogs" at 51.043.
+
+
+class Ticks:
+    """A monitor whose every wait is one tick, so a script of busy states plays out."""
+    def __init__(self, abort_at=None):
+        self.n, self.abort_at = 0, abort_at
+
+    def waitForAbort(self, secs=0):
+        self.n += 1
+        return self.abort_at is not None and self.n >= self.abort_at
+
+
+def fire_after(busy_script, abort_at=None):
+    """Ticks waited before the hand-off goes, and whether it went at all."""
+    mon = Ticks(abort_at)
+    playback.xbmc.getCondVisibility = (
+        lambda cond: busy_script[mon.n] if mon.n < len(busy_script) else False)
+    went = playback._wait_for_busy_dialog(mon)
+    return mon.n, went
+
+
+_real_cond = playback.xbmc.getCondVisibility
+need = round(playback._BUSY_CLEAR / playback._BUSY_TICK)
+
+ticks, went = fire_after([])
+print(f"  nothing on screen           -> goes after {ticks} ticks")
+assert went and ticks == need - 1, ticks
+
+# The crash: the reload's dialog is already up when we arrive.
+ticks, went = fire_after([True] * 6)
+print(f"  reload still busy (6 ticks) -> goes after {ticks} ticks")
+assert went and ticks >= 6 + need - 1, "fired over the top of Kodi's own dialog"
+
+# The dialog only shows ~200ms in, so a quick look can see nothing yet.
+ticks, went = fire_after([False, False, True, True, True])
+print(f"  dialog shows up late        -> goes after {ticks} ticks")
+assert went and ticks >= 5 + need - 1, "a clear first glance was taken as clear"
+
+ticks, went = fire_after([True] * 1000)
+print(f"  stuck for good              -> gives up after {ticks} ticks and goes")
+assert went and ticks == round(playback._BUSY_CAP / playback._BUSY_TICK), ticks
+
+ticks, went = fire_after([True] * 1000, abort_at=3)
+print(f"  Kodi shutting down          -> went={went}")
+assert not went
+
+playback.xbmc.getCondVisibility = _real_cond
+
+handoff = SRC[SRC.index("if play_next_url:"):]
+handoff = handoff[:handoff.index("PlayMedia(")]
+assert "_wait_for_busy_dialog(kodi_monitor)" in handoff,     "PlayMedia fires without waiting for Kodi's busy dialog"
+assert "busydialognocancel" in playback._BUSY, "the no-cancel busy dialog collides too"
+print("  waited on before every PlayMedia  OK")
+
+print()
 print("=== the settings behind it ===")
 assert 'id="autoplay_prompt_secs"' in SETTINGS and 'range="5,5,300"' in SETTINGS,     "the slider still stops at 90"
 # A slider the code then clamps lower is a slider that lies.
