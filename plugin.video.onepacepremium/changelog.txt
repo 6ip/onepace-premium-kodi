@@ -1,3 +1,9 @@
+[B]v2.4.3[/B]  [COLOR FF888899]18 September 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Fixes[/B][/COLOR]
+  •  Starting the next episode automatically no longer makes Kodi close on some devices.
+
+
 [B]v2.4.2[/B]  [COLOR FF888899]15 September 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Fixes[/B][/COLOR]
