@@ -11,7 +11,6 @@ _HOME = 10000
 _COUNT = "pp.binge.count"
 
 _KEEP_GOING = 11
-_STOP_BUTTON = 10
 _CLOSE_ACTIONS = (9, 10, 92)
 # Long enough to pick up a remote, short enough not to sit there all night.
 _COUNTDOWN = 30

@@ -19,7 +19,6 @@ from .utils import (ADDON_DIR, build_url,
 _CATALOG_TYPE = "series"
 _SKIN_MEDIA  = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media")
 
-_LISTS_ICON  = os.path.join(_SKIN_MEDIA, "lists2.png")
 _PLAYER_ICON = os.path.join(_SKIN_MEDIA, "player2.png")
 _NEXT_ICON   = os.path.join(_SKIN_MEDIA, "next_episodes2.png")
 _FANART      = os.path.join(ADDON_DIR, "resources", "fanart.png")
