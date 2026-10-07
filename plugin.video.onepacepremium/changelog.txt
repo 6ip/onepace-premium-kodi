@@ -1,3 +1,10 @@
+[B]v2.4.4[/B]  [COLOR FF888899]7 October 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Fixes[/B][/COLOR]
+  •  Works on Kodi 22 again. Every list opened to an error before.
+  •  Kodi's video database is no longer left locked if something goes wrong.
+
+
 [B]v2.4.3[/B]  [COLOR FF888899]18 September 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Fixes[/B][/COLOR]

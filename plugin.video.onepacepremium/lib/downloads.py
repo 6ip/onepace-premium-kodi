@@ -6,12 +6,12 @@ import re
 import xbmc
 import xbmcaddon
 import xbmcgui
-import xbmcplugin
 import xbmcvfs
 
 from . import download_queue
-from .route_common import _add_directory_items, _notify_error, _notify_info, end_directory
-from .utils import (ADDON_HANDLE, ADDON_ID, build_url, get_setting, log,
+from .route_common import (_add_directory_items, _notify_error, _notify_info,
+                           end_directory, set_category, set_content)
+from .utils import (ADDON_ID, build_url, get_setting, log,
                     refresh_container, session)
 
 # Only ever asked for the profile path, which never changes between calls.
@@ -1124,7 +1124,7 @@ def _empty(message):
     """
     media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
     icon = f"{media}/info.png"
-    xbmcplugin.setContent(ADDON_HANDLE, "")
+    set_content("")
     item = xbmcgui.ListItem(label="Nothing downloaded yet", offscreen=True)
     item.setArt({"icon": icon, "thumb": icon, "poster": icon, "banner": icon,
                  "landscape": icon,
@@ -1357,8 +1357,8 @@ def list_downloads(params=None):
         return item
 
     running = len(download_queue.snapshot())
-    xbmcplugin.setContent(ADDON_HANDLE, "")
-    xbmcplugin.setPluginCategory(ADDON_HANDLE, "Downloads")
+    set_content("")
+    set_category("Downloads")
     _add_directory_items([
         # Not a folder: it opens a window rather than navigating.
         (build_url("open_downloads_manager"),
@@ -1400,8 +1400,8 @@ def list_on_device(params=None):
         if len(by_series) == 1:
             series = order[0]
         else:
-            xbmcplugin.setContent(ADDON_HANDLE, "tvshows")
-            xbmcplugin.setPluginCategory(ADDON_HANDLE, "Downloads")
+            set_content("tvshows")
+            set_category("Downloads")
             items = []
             for name in order:
                 metas = by_series[name]
@@ -1440,8 +1440,8 @@ def list_on_device(params=None):
             seasons.setdefault(number, []).append(meta)
             paths.setdefault(number, []).append(path)
         if len(seasons) > 1:
-            xbmcplugin.setContent(ADDON_HANDLE, "seasons")
-            xbmcplugin.setPluginCategory(ADDON_HANDLE, series)
+            set_content("seasons")
+            set_category(series)
             items = []
             for number in sorted(seasons):
                 metas = seasons[number]
@@ -1476,9 +1476,9 @@ def list_on_device(params=None):
         next((m.get("series_id") for m in mine.values() if m.get("series_id")), ""))
 
     chosen = {p: m for p, m in mine.items() if _season_of(m) == int(season)}
-    xbmcplugin.setContent(ADDON_HANDLE, "episodes")
+    set_content("episodes")
     label = "Specials" if int(season) == 0 else f"Season {season}"
-    xbmcplugin.setPluginCategory(ADDON_HANDLE, f"{series} - {label}")
+    set_category(f"{series} - {label}")
     items = []
     for path, meta in sorted(chosen.items(),
                              key=lambda kv: (_season_of(kv[1]),

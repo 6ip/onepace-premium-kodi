@@ -1,7 +1,6 @@
 import os
 
 import xbmcgui
-import xbmcplugin
 
 from . import bookmarks as _bookmarks
 from . import watched as _watched
@@ -11,9 +10,10 @@ from .provider_api import (_fetch_provider_meta,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds, _prefetch_metas,
                             episode_params, episode_play_url)
-from .route_common import _add_directory_items, end_directory
+from .route_common import (_add_directory_items, end_directory,
+                           set_category, set_content)
 
-from .utils import (ADDON_DIR, ADDON_HANDLE, build_url,
+from .utils import (ADDON_DIR, build_url,
                     get_setting, log)
 
 _CATALOG_TYPE = "series"
@@ -151,17 +151,17 @@ def _get_series_meta(series_id):
         return None, {}, {}, ""
     video_map = {v.get("id"): v for v in meta.get("videos", []) if v.get("id")}
     season_poster_map = {
-        s["season"]: s["poster"]
+        int(s["season"]): s["poster"]
         for s in meta.get("seasons", [])
-        if s.get("season") is not None and s.get("poster")
+        if str(s.get("season")).lstrip("-").isdigit() and s.get("poster")
     }
     show_title = meta.get("name") or ""
     return meta, video_map, season_poster_map, show_title
 
 
 def list_my_lists(params):
-    xbmcplugin.setContent(ADDON_HANDLE, "")
-    xbmcplugin.setPluginCategory(ADDON_HANDLE, "My Lists")
+    set_content("")
+    set_category("My Lists")
     items = [
         (build_url("list_in_progress"),   _folder_item("In Progress",   _PLAYER_ICON), True),
         (build_url("list_next_episodes"),  _folder_item("Next Episodes", _NEXT_ICON),   True),
@@ -184,8 +184,8 @@ def list_in_progress(params):
         end_directory()
         return
 
-    xbmcplugin.setContent(ADDON_HANDLE, "episodes")
-    xbmcplugin.setPluginCategory(ADDON_HANDLE, "In Progress")
+    set_content("episodes")
+    set_category("In Progress")
     _prefetch_metas(_CATALOG_TYPE, by_series)
     built = []
 
@@ -233,8 +233,8 @@ def list_next_episodes(params):
         end_directory()
         return
 
-    xbmcplugin.setContent(ADDON_HANDLE, "episodes")
-    xbmcplugin.setPluginCategory(ADDON_HANDLE, "Next Episodes")
+    set_content("episodes")
+    set_category("Next Episodes")
     _prefetch_metas(_CATALOG_TYPE, all_series)
     built = []
 

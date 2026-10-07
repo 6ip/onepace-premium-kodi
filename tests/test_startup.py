@@ -96,4 +96,33 @@ assert "<reuselanguageinvoker>false</reuselanguageinvoker>" in meta[:400], \
 print("  declared false, inside xbmc.addon.metadata  OK")
 
 print()
+print("=== Kodi 22 takes only a real int ===")
+# 22 regenerated its bindings straight from SWIG and left cast mode off, so an
+# object that merely knows how to become an int is refused outright:
+#   TypeError: in method 'setContent', argument 1 of type 'int'
+# A webOS user hit that on every listing, root menu included. The handle stays
+# lazy above, and becomes an int at the one place it crosses into Kodi.
+from lib import route_common
+
+sys.argv = ["plugin://plugin.video.onepacepremium/", "9", "?"]
+got = route_common._handle()
+print(f"  _handle() -> {got!r} ({type(got).__name__})")
+assert type(got) is int, f"Kodi 22 would refuse a {type(got).__name__}"
+sys.argv[1] = "11"
+assert route_common._handle() == 11, "wrapping it must not freeze it"
+print("  a real int, and still follows argv  OK")
+
+# One missed call site is a crash on a page nobody thought to test, so none of
+# them may hand Kodi the handle directly.
+HANDLE_FNS = ("setContent", "setPluginCategory", "setResolvedUrl",
+              "addDirectoryItems", "endOfDirectory")
+direct = [f"{py.name}: xbmcplugin.{fn}("
+          for py in sorted((harness.ADDON / "lib").glob("*.py"))
+          if py.name != "route_common.py"
+          for fn in HANDLE_FNS
+          if f"xbmcplugin.{fn}(" in py.read_text(encoding="utf-8")]
+assert not direct, direct
+print(f"  all {len(HANDLE_FNS)} handle-taking calls go through route_common  OK")
+
+print()
 print("all assertions passed")

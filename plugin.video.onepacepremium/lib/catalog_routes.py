@@ -1,7 +1,6 @@
 from urllib import parse
 
 import xbmcgui
-import xbmcplugin
 
 from . import watched as _watched
 from .art import _set_art, _set_ids, _set_show_tags, _set_video_tags
@@ -9,17 +8,16 @@ from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
                             _fetch_catalog, _fetch_provider_manifest,
                             _fetch_provider_meta, _prefetch_metas,
                             countable_episode_ids)
-from .route_common import _add_directory_items, _notify_error, end_directory
-from .utils import ADDON_ID, ADDON_HANDLE, build_url, ensure_configured, fetch_data
+from .route_common import (_add_directory_items, _notify_error, end_directory,
+                           set_category, set_content)
+from .utils import ADDON_ID, build_url, ensure_configured, fetch_data
 
 CATALOG_PAGE_SIZE = 25
 SUPPORTED_CATALOG_TYPES = {"movie", "series", "anime"}
 
 
 def _process_catalog_items(videos: list, catalog_type: str):
-    xbmcplugin.setContent(
-        ADDON_HANDLE, "movies" if catalog_type == "movie" else "tvshows"
-    )
+    set_content("movies" if catalog_type == "movie" else "tvshows")
 
     action = "list_seasons" if catalog_type == "series" else "get_streams"
     items = []
@@ -62,7 +60,7 @@ def list_root():
 
     from .downloads import enabled as _downloads_enabled
 
-    xbmcplugin.setContent(ADDON_HANDLE, "")
+    set_content("")
     items = [
         (build_url("list_my_lists"), _nav_item("My Lists", f"{_skin_media}/lists2.png"),  True),
         (build_url("list_browse"),   _nav_item("Browse",   f"{_skin_media}/hat.png"),     True),
@@ -101,8 +99,8 @@ def list_browse(params):
     catalog_type = "series"
     catalog_id = spec["id"]
 
-    xbmcplugin.setContent(ADDON_HANDLE, "tvshows")
-    xbmcplugin.setPluginCategory(ADDON_HANDLE, "Browse")
+    set_content("tvshows")
+    set_category("Browse")
 
     response = _fetch_catalog(_catalog_url(catalog_type, catalog_id, "skip=0"))
     if not response:

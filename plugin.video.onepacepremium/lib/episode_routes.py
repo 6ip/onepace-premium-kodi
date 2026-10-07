@@ -2,7 +2,6 @@ from urllib import parse
 
 import xbmc
 import xbmcgui
-import xbmcplugin
 
 from . import bookmarks as _bookmarks
 from . import cache as _cache
@@ -17,8 +16,9 @@ from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
 from .route_common import (_add_directory_items, _notify_error, _notify_info,
-                            end_directory)
-from .utils import (ADDON_HANDLE, ALERT_ICON, build_url,
+                            end_directory, set_category, set_content,
+                            set_resolved)
+from .utils import (ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
                      fetch_data, get_base_url, get_config_prefix,
                      get_secret_string,
@@ -103,15 +103,15 @@ def list_seasons(params):
         end_directory(succeeded=False)
         return
 
-    xbmcplugin.setContent(ADDON_HANDLE, "seasons")
+    set_content("seasons")
 
     season_thumbnails = _season_thumbnails(videos)
 
     # Use dedicated season posters from meta["seasons"] if available
     season_poster_map = {
-        s["season"]: s["poster"]
+        int(s["season"]): s["poster"]
         for s in meta.get("seasons", [])
-        if s.get("season") is not None and s.get("poster")
+        if str(s.get("season")).lstrip("-").isdigit() and s.get("poster")
     }
 
     seasons = sorted(
@@ -166,7 +166,7 @@ def list_seasons(params):
         seasons = [s for s in seasons if s in with_unwatched]
 
     if show_title:
-        xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
+        set_category(show_title)
 
     series_actors = _cast_list(meta)
     from .downloads import enabled as _downloads_enabled
@@ -249,7 +249,7 @@ def list_episodes(params):
         end_directory(succeeded=False)
         return
 
-    xbmcplugin.setContent(ADDON_HANDLE, "episodes")
+    set_content("episodes")
     season_videos = sorted(
         (video for video in videos if video.get("season") == selected_season),
         key=lambda video: _episode_number(video) or 0,
@@ -261,14 +261,14 @@ def list_episodes(params):
     meta_release_info = meta.get("releaseInfo")
     series_watched = _watched.get_watched(video_id)
     season_poster_map = {
-        s["season"]: s["poster"]
+        int(s["season"]): s["poster"]
         for s in meta.get("seasons", [])
-        if s.get("season") is not None and s.get("poster")
+        if str(s.get("season")).lstrip("-").isdigit() and s.get("poster")
     }
     season_poster = season_poster_map.get(selected_season) or ""
 
     if show_title:
-        xbmcplugin.setPluginCategory(ADDON_HANDLE, show_title)
+        set_category(show_title)
     series_actors = _cast_list(meta)
     hide_watched = get_setting("hide_watched") == "true"
     from .downloads import (downloaded_ids, enabled, mark as _download_mark,
@@ -625,7 +625,7 @@ def check_resume(params):
     else:
         chosen = _choose_stream(params)
     if chosen is None:
-        xbmcplugin.setResolvedUrl(ADDON_HANDLE, False, xbmcgui.ListItem())
+        set_resolved(xbmcgui.ListItem(), False)
         return
     # The copy on disk is built from the download index, which knows nothing
     # about how playback was reached. Without this a run of downloaded
@@ -852,7 +852,7 @@ def get_streams(params):
         return
 
     if not get_secret_string():
-        xbmcplugin.setContent(ADDON_HANDLE, "files")
+        set_content("files")
         list_item = xbmcgui.ListItem(label="Add-on Not Configured - Click to Set Up", offscreen=True)
         list_item.setArt({"icon": ALERT_ICON, "thumb": ALERT_ICON})
         tags = list_item.getVideoInfoTag()
@@ -893,7 +893,7 @@ def get_streams(params):
         end_directory(succeeded=False)
         return
 
-    xbmcplugin.setContent(ADDON_HANDLE, "files")
+    set_content("files")
 
     id_parts = video_id.split(":", 2)
     if len(id_parts) == 3:
@@ -1055,6 +1055,10 @@ def _bulk_kodi_update(episode_ids, marking_watched):
     """
     if not episode_ids:
         return
+    # Closed in every case: this is a handle on Kodi's own database, and a
+    # playback invocation lives for the whole episode, so one left open by an
+    # error would block Kodi's writes until the episode ended.
+    con = None
     try:
         con = _kodi_db_connect()
         if not con:
@@ -1083,15 +1087,16 @@ def _bulk_kodi_update(episode_ids, marking_watched):
             cur.execute(f"DELETE FROM streamdetails WHERE idFile IN ({ph})")
             con.commit()
             log(f"[watched] bulk Kodi update playCount={playcount} for {len(file_ids)} file(s)")
-
-        cur.close()
-        con.close()
     except Exception as e:
         log(f"[watched] bulk Kodi update error: {e}")
+    finally:
+        if con is not None:
+            con.close()
 
 
 def _update_kodi_episode_playcount(episode_id, playcount):
     """Sync Kodi's own watched state for this episode (files.playCount in MyVideos.db)."""
+    con = None
     try:
         con = _kodi_db_connect()
         if not con:
@@ -1103,10 +1108,11 @@ def _update_kodi_episode_playcount(episode_id, playcount):
             cur.execute(f"UPDATE files SET playCount=? WHERE idFile IN ({ph})", (playcount,))
             con.commit()
             log(f"[watched] set Kodi playCount={playcount} for {episode_id!r} ({cur.rowcount} rows)")
-        cur.close()
-        con.close()
     except Exception as e:
         log(f"[watched] Kodi playCount update error: {e}")
+    finally:
+        if con is not None:
+            con.close()
 
 
 def _clear_kodi_episode_state(episode_id, tables=("bookmark", "streamdetails")):
@@ -1116,6 +1122,7 @@ def _clear_kodi_episode_state(episode_id, tables=("bookmark", "streamdetails")):
     playback is what keeps the codec badges current. The files row holds
     playCount, so only the full reset in clear_progress includes it.
     """
+    con = None
     try:
         con = _kodi_db_connect()
         if not con:
@@ -1128,10 +1135,11 @@ def _clear_kodi_episode_state(episode_id, tables=("bookmark", "streamdetails")):
                 cur.execute(f"DELETE FROM {table} WHERE idFile IN ({ph})")
             con.commit()
             log(f"[watched] cleared {'+'.join(tables)} for {episode_id!r}")
-        cur.close()
-        con.close()
     except Exception as e:
         log(f"[watched] Kodi state clear error: {e}")
+    finally:
+        if con is not None:
+            con.close()
 
 
 def episode_has_stream(catalog_type, video_id):
@@ -1155,6 +1163,7 @@ def episode_has_stream(catalog_type, video_id):
 
 def kodi_episode_has_bookmark(episode_id):
     """True if Kodi still holds a resume point for this episode."""
+    con = None
     try:
         con = _kodi_db_connect()
         if not con:
@@ -1166,11 +1175,12 @@ def kodi_episode_has_bookmark(episode_id):
             ph = ",".join(file_ids)
             cur.execute(f"SELECT 1 FROM bookmark WHERE idFile IN ({ph}) LIMIT 1")
             found = cur.fetchone() is not None
-        cur.close()
-        con.close()
         return found
     except Exception:
         return False
+    finally:
+        if con is not None:
+            con.close()
 
 
 def mark_watched(params):

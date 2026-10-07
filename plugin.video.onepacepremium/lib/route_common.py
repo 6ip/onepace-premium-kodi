@@ -7,11 +7,32 @@ import xbmcplugin
 from .utils import ADDON_HANDLE, ADDON_ID, get_setting
 
 
+def _handle():
+    """The handle as a real int, which is the only thing Kodi 22 accepts.
+
+    It stays lazy in utils so a reused interpreter cannot serve a stale one,
+    and is resolved here, at the one place it crosses into Kodi.
+    """
+    return int(ADDON_HANDLE)
+
+
+def set_content(content: str):
+    xbmcplugin.setContent(_handle(), content)
+
+
+def set_category(label: str):
+    xbmcplugin.setPluginCategory(_handle(), label)
+
+
+def set_resolved(item, succeeded: bool = True):
+    xbmcplugin.setResolvedUrl(_handle(), succeeded, item)
+
+
 def _add_directory_items(items: list, total_items: Optional[int] = None):
     if not items:
         return
     xbmcplugin.addDirectoryItems(
-        ADDON_HANDLE,
+        _handle(),
         items,
         len(items) if total_items is None else total_items,
     )
@@ -36,7 +57,7 @@ def end_directory(cache: bool = False, succeeded: bool = True):
     """
     if cache and get_setting("menu_cache") == "false":
         cache = False
-    xbmcplugin.endOfDirectory(ADDON_HANDLE, cacheToDisc=cache, succeeded=succeeded)
+    xbmcplugin.endOfDirectory(_handle(), cacheToDisc=cache, succeeded=succeeded)
 
 
 def play_trailer(params):
@@ -46,10 +67,10 @@ def play_trailer(params):
         item = xbmcgui.ListItem(
             path=f"plugin://plugin.video.youtube/play/?video_id={ytid}"
         )
-        xbmcplugin.setResolvedUrl(ADDON_HANDLE, True, item)
+        set_resolved(item)
         return
     _notify_error("YouTube add-on is required to play trailers")
-    xbmcplugin.setResolvedUrl(ADDON_HANDLE, False, xbmcgui.ListItem())
+    set_resolved(xbmcgui.ListItem(), False)
 
 
 def open_addon_settings(_params):

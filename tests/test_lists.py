@@ -118,4 +118,30 @@ assert not any(e in set(off) for e in specials), "a special survived the filter"
 S["show_specials"] = "true"
 
 print()
+print("=== a season number that arrives as a string still finds its poster ===")
+# The feed has sent season: '1' before — one cached copy of KUMA_SHAVED still
+# carries it. The map was keyed exactly as it arrived but looked up with an
+# int, so every lookup missed and all seasons quietly shared the show poster.
+import copy
+import re as _re
+
+strung = copy.deepcopy(ONEPACE)
+for s in strung["seasons"]:
+    s["season"] = str(s["season"])
+META[0] = strung
+WATCHED[0] = set()
+S["hide_watched"] = "false"
+rec = harness.recorder()
+er.list_seasons({"catalog_type": "series", "video_id": "pp_onepacee"})
+posters = {}
+for url, li, _ in rec.directories:
+    found = _re.search(r"season=(\d+)", url)
+    if found:
+        posters[int(found.group(1))] = li.art.get("poster")
+distinct = len({p for p in posters.values() if p})
+print(f"  {len(posters)} seasons listed, {distinct} distinct posters")
+assert distinct > 1, "every season fell back to the same art"
+META[0] = ONEPACE
+
+print()
 print("all assertions passed")

@@ -125,4 +125,43 @@ assert "cancel_futures=True" in subs[:subs.index(chr(10) * 3)], "left running"
 print("  cancelled, not left running")
 
 print()
+print("=== Kodi's own database is never left open ===")
+# These are handles on Kodi's MyVideos*.db. A playback invocation lives for the
+# whole episode, so a connection left open by an error would sit on Kodi's
+# database until the episode ended and make its own writes fail.
+from lib import episode_routes
+
+
+class FakeCon:
+    """Fails the moment it is used, the way a locked database does."""
+
+    def __init__(self):
+        self.closed = False
+
+    def cursor(self):
+        raise Exception("database is locked")
+
+    def close(self):
+        self.closed = True
+
+
+real_connect = episode_routes._kodi_db_connect
+for name, call in (
+        ("_update_kodi_episode_playcount",
+         lambda: episode_routes._update_kodi_episode_playcount("RO_1", 1)),
+        ("_clear_kodi_episode_state",
+         lambda: episode_routes._clear_kodi_episode_state("RO_1")),
+        ("_bulk_kodi_update",
+         lambda: episode_routes._bulk_kodi_update(["RO_1"], True)),
+        ("kodi_episode_has_bookmark",
+         lambda: episode_routes.kodi_episode_has_bookmark("RO_1"))):
+    con = FakeCon()
+    episode_routes._kodi_db_connect = lambda c=con: c
+    call()                      # the error is still swallowed, as before
+    print(f"  {name:32} threw -> closed={con.closed}")
+    assert con.closed, f"{name} leaks a handle on Kodi's database"
+episode_routes._kodi_db_connect = real_connect
+print("  all four close on the error path  OK")
+
+print()
 print("all assertions passed")

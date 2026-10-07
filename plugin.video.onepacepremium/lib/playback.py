@@ -5,13 +5,13 @@ import threading
 
 import xbmc
 import xbmcgui
-import xbmcplugin
 import xbmcvfs
 
 from . import bookmarks as _bookmarks
 from . import elementum as _elementum
 from . import watched as _watched
-from .utils import (ADDON_HANDLE, ADDON_ID, build_url, get_setting, is_widget,
+from .route_common import set_resolved
+from .utils import (ADDON_ID, build_url, get_setting, is_widget,
                     log, ping_widgets, session)
 
 _SUBS_URL = "https://6ip.github.io/onepace-premium-subs/meta/subtitles.json"
@@ -722,7 +722,7 @@ def play_video(params):
         except Exception as e:
             log(f"Subtitles error: {e}")
 
-    xbmcplugin.setResolvedUrl(ADDON_HANDLE, True, list_item)
+    set_resolved(list_item)
 
     if series_id and episode_id:
         _monitor_playback(series_id, episode_id, video_url,
