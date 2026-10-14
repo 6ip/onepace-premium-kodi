@@ -11,7 +11,6 @@ from .utils import log, reset_for_invocation
 # until one is asked for, so a listing never pays for playback or backup.
 _ACTIONS = {
     "show_changelog":      "changelog:show_changelog",
-    "show_donate":         "donate:show_donate",
     "export_settings":     "backup:export_settings",
     "import_settings":     "backup:import_settings",
     "open_addon_settings": "route_common:open_addon_settings",

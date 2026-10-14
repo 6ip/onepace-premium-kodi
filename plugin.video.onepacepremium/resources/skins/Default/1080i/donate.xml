@@ -93,7 +93,7 @@
                 <textcolor>FFCCCCCC</textcolor>
                 <align>left</align>
                 <autoscroll time="3000" delay="4000" repeat="5000">true</autoscroll>
-                <label>One Pace Addon is a solo project, built and maintained in my free time.[CR][CR]If you find it useful, a donation helps keep it alive and improving.</label>
+                <label>One Pace Addon is built and maintained in my free time.[CR][CR]If you find it useful, a donation helps cover the server and seedbox costs and keeps it improving.</label>
             </control>
 
             <control type="image">
