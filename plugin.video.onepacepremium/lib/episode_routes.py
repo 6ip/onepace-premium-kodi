@@ -18,8 +18,9 @@ from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode
 from .route_common import (_add_directory_items, _notify_error, _notify_info,
                             end_directory, set_category, set_content,
                             set_resolved)
-from .utils import (ADDON_NAME, ALERT_ICON, build_url,
+from .utils import (ADDON_NAME, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
+                     ensure_p2p_ready,
                      fetch_data, get_base_url, get_config_prefix,
                      get_secret_string,
                      get_setting, is_elementum_installed_and_enabled, log,
@@ -419,12 +420,10 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
         return None
 
     if not get_secret_string():
-        xbmcgui.Dialog().ok(
-            ADDON_NAME,
-            "Add-on is not configured.\nPlease set up your configuration first."
-        )
-        xbmc.executebuiltin("Addon.OpenSettings(plugin.video.onepacepremium)")
-        return None
+        # No debrid key: the server answers these with peer-to-peer streams.
+        if not ensure_p2p_ready(
+                silent=quiet or survey or bool(params.get("autoplay"))):
+            return None
 
     catalog_type = params["catalog_type"]
     video_id     = params["video_id"]
@@ -851,18 +850,8 @@ def get_streams(params):
         end_directory(succeeded=False)
         return
 
-    if not get_secret_string():
-        set_content("files")
-        list_item = xbmcgui.ListItem(label="Add-on Not Configured - Click to Set Up", offscreen=True)
-        list_item.setArt({"icon": ALERT_ICON, "thumb": ALERT_ICON})
-        tags = list_item.getVideoInfoTag()
-        tags.setMediaType("video")
-        tags.setPlot(
-            f"Your {ADDON_NAME} hasn't been configured yet. "
-            "Click here to open Add-on Settings and complete setup."
-        )
-        _add_directory_items([(build_url("open_addon_settings"), list_item, True)])
-        end_directory()
+    if not get_secret_string() and not ensure_p2p_ready():
+        end_directory(succeeded=False)
         return
 
     catalog_type = params["catalog_type"]

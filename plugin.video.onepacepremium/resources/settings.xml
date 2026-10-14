@@ -29,6 +29,7 @@
         <setting type="lsep" label="Torrent" />
         <setting label="Check Availability" id="setup_elementum" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/setup_elementum.py)" />
         <setting label="Direct Playback (experimental)" id="elementum_direct" type="bool" default="false" />
+        <setting id="p2p_ack" type="bool" default="false" visible="false" />
     </category>
     <category label="Lists">
         <setting type="lsep" label="Episodes" />

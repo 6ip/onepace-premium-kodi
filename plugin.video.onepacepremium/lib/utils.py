@@ -134,6 +134,10 @@ def get_setting(key):
     return ADDON.getSetting(key)
 
 
+def set_setting(key, value):
+    ADDON.setSetting(key, value)
+
+
 def background():
     """The picture behind our own menus: the viewer's choice, or the one we ship.
 
@@ -236,3 +240,58 @@ def ensure_configured():
         f"RunScript(special://home/addons/{ADDON_ID}/lib/custom_settings_window.py)"
     )
     return False
+
+
+def _offer_elementum():
+    """Torrents are played by Elementum, so its absence is the first thing to say."""
+    choice = xbmcgui.Dialog().yesnocustom(
+        ADDON_NAME,
+        "No debrid service is set up, so episodes play over peer-to-peer, "
+        "which needs the Elementum add-on.\n\n"
+        "Look for Elementum now, or set up a debrid service instead?",
+        "Configure", "Not now", "Find Elementum",
+    )
+    if choice == 1:
+        xbmc.executebuiltin(
+            f"RunScript(special://home/addons/{ADDON_ID}/lib/setup_elementum.py)"
+        )
+    elif choice == 2:
+        xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+    return False
+
+
+def _ask_p2p():
+    """The one-time question. True only when they choose to go ahead."""
+    choice = xbmcgui.Dialog().yesnocustom(
+        ADDON_NAME,
+        "This add-on is not configured, so this episode plays over "
+        "peer-to-peer.\n\n"
+        "It takes longer to start than a debrid service, and your own "
+        "connection joins in sharing the file.",
+        "Configure", "Not now", "Play anyway",
+    )
+    if choice == 1:
+        set_setting("p2p_ack", "true")
+        return True
+    if choice == 2:
+        xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+    # "Not now", Back and Esc all leave it for later. Nothing is stored, so
+    # the next episode asks again.
+    return False
+
+
+def ensure_p2p_ready(silent=False):
+    """Whether a viewer with no debrid key may go ahead over peer-to-peer.
+
+    The server answers an unconfigured request with torrents, so this asks for
+    consent rather than reporting a missing setup. silent is for the paths that
+    must not raise a dialog: a season queue, the preference survey, and the
+    hand-off into the next episode.
+    """
+    if silent:
+        return get_setting("p2p_ack") == "true"
+    if not is_elementum_installed_and_enabled():
+        return _offer_elementum()
+    if get_setting("p2p_ack") == "true":
+        return True
+    return _ask_p2p()
