@@ -34,6 +34,12 @@ build-zip:
 	cp $(ASSETS)/background.png $(DIST)/$(ID)/fanart.png; \
 	cp $(ASSETS)/icon.png $(DIST)/$(ID)/$${IMG_DIR}icon.png; \
 	cp $(ASSETS)/background.png $(DIST)/$(ID)/$${IMG_DIR}fanart.png
+	@SS=$(if $(IS_ADDON),$(ASSETS)/screenshots,); \
+	if [ -n "$$SS" ] && [ -d "$$SS" ]; then \
+	mkdir -p $(BUILD)/$(ID)/resources/screenshots $(DIST)/$(ID)/resources/screenshots; \
+	cp $$SS/*.jpg $(BUILD)/$(ID)/resources/screenshots/; \
+	cp $$SS/*.jpg $(DIST)/$(ID)/resources/screenshots/; \
+	fi
 	@$(if $(IS_ADDON),find $(BUILD)/$(ID) -name "__pycache__" -exec rm -rf {} +)
 	@cp $(ID)/addon.xml $(DIST)/$(ID)/
 	@cd $(BUILD) && zip -r9q ../$(DIST)/$(ID)/$(ID)-$(VER).zip $(ID)
