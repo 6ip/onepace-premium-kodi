@@ -4,6 +4,8 @@ import xbmc
 import xbmcaddon
 import xbmcvfs
 
+from .utils import log
+
 _ADDON = xbmcaddon.Addon()
 
 # Read once per plugin call — episode lists ask for this in a loop.
@@ -46,7 +48,7 @@ def _save(data):
         with xbmcvfs.File(_path(), "w") as f:
             f.write(json.dumps(data))
     except Exception as e:
-        xbmc.log(f"[One Pace Premium] bookmarks save error: {e}", xbmc.LOGERROR)
+        log(f"bookmarks save error: {e}", xbmc.LOGERROR)
     _CACHED = data
 
 

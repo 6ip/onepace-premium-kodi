@@ -34,6 +34,8 @@ DEFAULT_FOLDER = f"special://profile/addon_data/{ADDON_ID}/downloads/"
 
 # A folder of our own inside whatever the viewer picked, so pointing this at
 # an existing media drive does not scatter show folders through it.
+# Never rename: it is a real folder on disk, so a new name hides every
+# episode already downloaded by anyone using a custom folder.
 CONTAINER = "One Pace Premium"
 
 

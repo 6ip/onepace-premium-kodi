@@ -35,6 +35,8 @@ class _Handle:
 ADDON_HANDLE = _Handle()
 ADDON = xbmcaddon.Addon()
 ADDON_ID = ADDON.getAddonInfo("id")
+# What a viewer sees. The id above is what Kodi matches on, and never changes.
+ADDON_NAME = "One Pace Addon"
 ADDON_PATH = f"plugin://{ADDON_ID}/"
 ADDON_DIR = xbmcvfs.translatePath(ADDON.getAddonInfo("path"))
 ALERT_ICON = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media", "alert.png")
@@ -63,7 +65,7 @@ def log(message: str, level=xbmc.LOGINFO):
             _DEBUG = ADDON.getSetting("debug_logging") == "true"
         if not _DEBUG:
             return
-    xbmc.log(f"[One Pace Premium] {message}", level)
+    xbmc.log(f"[{ADDON_NAME}] {message}", level)
 
 
 def build_url(action: str, **params):
@@ -87,7 +89,7 @@ def fetch_data(url: str):
         target = parse.urlparse(url).netloc or url
         log(f"Request failed for {url}: {exc}", xbmc.LOGERROR)
         xbmcgui.Dialog().notification(
-            "One Pace Premium",
+            ADDON_NAME,
             f"Request failed ({status_code}) on {target}"
             if status_code
             else f"Request failed on {target}",
@@ -197,7 +199,7 @@ def get_config_prefix():
 
 
 def get_catalog_provider_url():
-    # One Pace Premium serves its own catalog — always use the base URL
+    # The add-on serves its own catalog — always use the base URL
     return get_base_url()
 
 
@@ -214,7 +216,7 @@ def ensure_configured():
         return True
 
     xbmcgui.Dialog().notification(
-        "One Pace Premium",
+        ADDON_NAME,
         "Not configured. Open add-on settings.",
         xbmcgui.NOTIFICATION_INFO, 5000, True,
     )

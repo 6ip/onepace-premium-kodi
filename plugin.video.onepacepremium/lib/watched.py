@@ -4,6 +4,8 @@ import xbmc
 import xbmcaddon
 import xbmcvfs
 
+from .utils import log
+
 _ADDON = xbmcaddon.Addon()
 _TOTALS_KEY = "__totals__"
 
@@ -47,7 +49,7 @@ def _save(data):
         with xbmcvfs.File(_path(), "w") as f:
             f.write(json.dumps(data))
     except Exception as e:
-        xbmc.log(f"[One Pace Premium] watched save error: {e}", xbmc.LOGERROR)
+        log(f"watched save error: {e}", xbmc.LOGERROR)
     _CACHED = data
 
 

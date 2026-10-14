@@ -685,7 +685,8 @@ assert _tools_default == downloads.DEFAULT_FOLDER, "the script and the module di
 assert "browseSingle" in chooser, "Custom would have nothing to browse with"
 assert '"download_folder_display"' in chooser, "the Showing row would go stale"
 print("  Default or Custom, and the stored path is never typed by hand  OK")
-_front = next(c for c in _root.iter("category") if c.get("label") == "One Pace Premium")
+from lib import utils
+_front = next(c for c in _root.iter("category") if c.get("label") == utils.ADDON_NAME)
 _groups = [x.get("label") for x in _front if x.get("type") == "lsep"]
 print(f"  front page groups: {_groups}")
 assert _groups == ["About", "Connection"], _groups

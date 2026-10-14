@@ -8,7 +8,7 @@ V_ADDON := $(shell sed -n 's/^<addon.*version="\([^"]*\)".*/\1/p' $(ADDON)/addon
 V_REPO  := $(shell sed -n 's/^<addon.*version="\([^"]*\)".*/\1/p' $(REPO)/addon.xml)
 
 all: clean
-	@echo "🚀 Building One Pace Premium Kodi Repository (Plugin v$(V_ADDON) / Repo v$(V_REPO))..."
+	@echo "🚀 Building One Pace Addon Kodi Repository (Plugin v$(V_ADDON) / Repo v$(V_REPO))..."
 	@$(MAKE) build-zip ID=$(ADDON) VER=$(V_ADDON) IS_ADDON=1 --no-print-directory
 	@$(MAKE) build-zip ID=$(REPO)  VER=$(V_REPO) --no-print-directory
 	@echo "🔗 Fetching third-party add-ons..."

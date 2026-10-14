@@ -125,4 +125,38 @@ assert not direct, direct
 print(f"  all {len(HANDLE_FNS)} handle-taking calls go through route_common  OK")
 
 print()
+print("=== one name, in one place ===")
+# The name a viewer reads lives in utils. tools, setup_elementum and
+# custom_settings_window are launched with RunScript, so they are __main__ and
+# cannot import it — they keep their own copy, exactly as they already keep
+# their own ADDON_ID. Copies drift, so they are checked against each other.
+LIB = harness.ADDON / "lib"
+defs = {}
+for py in sorted(LIB.glob("*.py")):
+    for line in py.read_text(encoding="utf-8").split("\n"):
+        if line.startswith("ADDON_NAME = "):
+            defs[py.name] = line.split("=", 1)[1].strip().strip('"')
+print(f"  {len(defs)} definitions: {sorted(defs)}")
+assert defs, "the name is not defined anywhere"
+assert len(set(defs.values())) == 1, f"the copies disagree: {defs}"
+assert defs["utils.py"] == utils.ADDON_NAME
+
+# The manifest is what Kodi shows in the add-on browser; it must agree too.
+x = (harness.ADDON / "addon.xml").read_text(encoding="utf-8")
+shown = re.search(r'<addon\b[^>]*?\sname="([^"]*)"', x).group(1)
+print(f"  addon.xml name: {shown!r}")
+assert shown == utils.ADDON_NAME, f"addon.xml says {shown!r}, code says {utils.ADDON_NAME!r}"
+
+# The old name may only survive as the download folder: it is a real path, and
+# renaming it would hide every episode already downloaded to a custom folder.
+OLD = "One Pace Premium"
+stale = []
+for py in sorted(LIB.glob("*.py")):
+    for n, line in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+        if OLD in line and not line.startswith("CONTAINER = "):
+            stale.append(f"{py.name}:{n}")
+assert not stale, f"the old name is still shown to viewers: {stale}"
+print("  the old name survives only as CONTAINER, the download folder  OK")
+
+print()
 print("all assertions passed")

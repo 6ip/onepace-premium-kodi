@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One Pace Premium - Kodi Repository</title>
+    <title>One Pace Addon - Kodi Repository</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -152,23 +152,23 @@
     <div class="container">
         <div class="logo-wrapper">
             <div class="logo-glow"></div>
-            <img src="https://cdn.jsdelivr.net/gh/6ip/onepace-assets-prm@main/public/logo_o.png" alt="One Pace Premium" class="logo">
+            <img src="https://cdn.jsdelivr.net/gh/6ip/onepace-assets-prm@main/public/logo_o.png" alt="One Pace Addon" class="logo">
         </div>
 
-        <h1>One Pace Premium</h1>
+        <h1>One Pace Addon</h1>
         <p class="tagline">Kodi Repository & Add-on</p>
 
         <div class="grid">
             <a href="REPO_URL" class="card">
                 <div class="card-info">
-                    <span class="card-name">One Pace Premium Repository</span>
+                    <span class="card-name">One Pace Addon Repository</span>
                     <span class="card-desc">Install this one &mdash; updates arrive automatically</span>
                 </div>
                 <div class="badge">vV_REPO</div>
             </a>
         </div>
 
-        <p class="includes">Includes the One Pace Premium add-on <strong>vV_ADDON</strong></p>
+        <p class="includes">Includes the One Pace add-on <strong>vV_ADDON</strong></p>
 
         <div class="footer">Designed for Kodi</div>
     </div>

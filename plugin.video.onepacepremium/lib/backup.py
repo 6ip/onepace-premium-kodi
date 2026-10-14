@@ -8,7 +8,7 @@ import xbmcaddon
 import xbmcgui
 import xbmcvfs
 
-from .utils import ADDON_ID, log
+from .utils import ADDON_ID, ADDON_NAME, log
 
 # Your configuration key unlocks the debrid account behind it.
 SENSITIVE = {"secret_string", "base_url", "stremio_api_prefix"}
@@ -164,7 +164,7 @@ def import_settings(_params=None):
         return
 
     if data.get("addon") != ADDON_ID:
-        dialog.ok("Restore", "That is not a One Pace Premium backup.")
+        dialog.ok("Restore", f"That is not a {ADDON_NAME} backup.")
         return
 
     stored = data.get("settings") or {}

@@ -1,5 +1,5 @@
 <settings>
-    <category label="One Pace Premium">
+    <category label="One Pace Addon">
         <setting type="lsep" label="About" />
         <setting label="What's New" id="show_changelog" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_changelog)" />
         <setting label="Support the Project" id="show_donate" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_donate)" />

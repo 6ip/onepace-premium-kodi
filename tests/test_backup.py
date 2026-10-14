@@ -133,7 +133,8 @@ D.browse_answers = ["C:/in/bad.json"]
 rec = harness.recorder()
 backup.import_settings()
 print(f"  {rec.notifications[-1][0]}")
-assert "not a One Pace Premium backup" in rec.notifications[-1][0]
+from lib.utils import ADDON_NAME
+assert f"not a {ADDON_NAME} backup" in rec.notifications[-1][0]
 
 print()
 print("all assertions passed")

@@ -10,6 +10,8 @@ import xbmcgui
 import xbmcvfs
 
 ADDON_ID = "plugin.video.onepacepremium"
+# Launched with RunScript, so it carries its own copy of the name.
+ADDON_NAME = "One Pace Addon"
 
 # This file is launched with RunScript, so it is __main__ and cannot import
 # anything from the package. Built the same way downloads.py builds it, and
@@ -60,7 +62,7 @@ def clear_cache():
         if f.startswith("cache_") and f.endswith(".json") and xbmcvfs.delete(profile + f)
     )
     dialog.notification(
-        "One Pace Premium",
+        ADDON_NAME,
         f"API cache cleared ({count} file{'s' if count != 1 else ''} removed).",
         xbmcgui.NOTIFICATION_INFO, 5000, False,
     )
@@ -88,7 +90,7 @@ def clear_subs_cache():
             xbmcvfs.rmdir(path)
 
     dialog.notification(
-        "One Pace Premium",
+        ADDON_NAME,
         f"Subtitle cache cleared ({count} file{'s' if count != 1 else ''} removed).",
         xbmcgui.NOTIFICATION_INFO, 5000, False,
     )
@@ -136,7 +138,7 @@ def clear_bookmarks():
         xbmcvfs.delete(path)
     _clear_kodi_bookmarks()
     dialog.notification(
-        "One Pace Premium",
+        ADDON_NAME,
         "All resume bookmarks cleared.",
         xbmcgui.NOTIFICATION_INFO, 5000, False,
     )
@@ -177,7 +179,7 @@ def clear_watched():
         xbmcvfs.delete(path)
     _reset_kodi_playcounts()
     dialog.notification(
-        "One Pace Premium",
+        ADDON_NAME,
         "Watched history cleared.",
         xbmcgui.NOTIFICATION_INFO, 5000, False,
     )

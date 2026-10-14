@@ -15,6 +15,8 @@ import xbmcvfs
 from setup_dialog import poll_interval, show_setup_dialog
 
 ADDON_ID = "plugin.video.onepacepremium"
+# Launched with RunScript, so it carries its own copy of the name.
+ADDON_NAME = "One Pace Addon"
 REQUEST_TIMEOUT = 20
 HTTP_SESSION = requests.Session()
 PENDING_SETUP_FILE = "pending_setup.json"
@@ -141,7 +143,7 @@ def configure_addon():
 
         if code is None:
             # No valid pending code — ask for URL and generate a new one
-            entered_url = dialog.input("One Pace Premium server URL", base_url)
+            entered_url = dialog.input(f"{ADDON_NAME} server URL", base_url)
             if not entered_url:
                 xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
                 return
@@ -155,7 +157,7 @@ def configure_addon():
                 )
             except requests.RequestException as exc:
                 dialog.notification(
-                    "One Pace Premium",
+                    ADDON_NAME,
                     "Failed to generate setup code",
                     xbmcgui.NOTIFICATION_ERROR, 5000, True,
                 )
@@ -194,7 +196,7 @@ def configure_addon():
                 addon.setSetting("stremio_api_prefix", manifest_data["stremio_api_prefix"])
             _clear_pending_setup(addon)
             dialog.notification(
-                "One Pace Premium",
+                ADDON_NAME,
                 "Setup complete!",
                 xbmcgui.NOTIFICATION_INFO, 5000, True,
             )
@@ -205,7 +207,7 @@ def configure_addon():
         if result.expired:
             _clear_pending_setup(addon)
             dialog.notification(
-                "One Pace Premium",
+                ADDON_NAME,
                 "Setup code expired. Run setup again.",
                 xbmcgui.NOTIFICATION_ERROR, 5000, True,
             )
@@ -217,7 +219,7 @@ def configure_addon():
             open_configuration_page(configure_url)
 
         dialog.notification(
-            "One Pace Premium",
+            ADDON_NAME,
             f"Waiting for setup code {code}...",
             xbmcgui.NOTIFICATION_INFO, 5000, False,
         )
@@ -258,7 +260,7 @@ def configure_addon():
                         )
                     _clear_pending_setup(addon)
                     dialog.notification(
-                        "One Pace Premium",
+                        ADDON_NAME,
                         "Setup complete!",
                         xbmcgui.NOTIFICATION_INFO, 5000, True,
                     )
@@ -272,18 +274,18 @@ def configure_addon():
         if pending and pending.get("code") == code:
             _clear_pending_setup(addon)
             dialog.notification(
-                "One Pace Premium",
+                ADDON_NAME,
                 "Setup code expired. Run setup again.",
                 xbmcgui.NOTIFICATION_ERROR, 5000, True,
             )
             xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
     except Exception:
         xbmc.log(
-            "One Pace Premium Kodi setup crashed:\n" + traceback.format_exc(),
+            f"{ADDON_NAME} setup crashed:\n" + traceback.format_exc(),
             xbmc.LOGERROR,
         )
         xbmcgui.Dialog().notification(
-            "One Pace Premium",
+            ADDON_NAME,
             "Setup failed (check Kodi log)",
             xbmcgui.NOTIFICATION_ERROR, 5000, True,
         )

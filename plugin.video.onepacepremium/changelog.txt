@@ -1,3 +1,11 @@
+[B]v2.4.5[/B]  [COLOR FF888899]14 October 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Renamed[/B][/COLOR]
+  •  The add-on is now called One Pace Addon. "Premium" is gone — nothing
+     about it was ever paid for.
+  •  Your settings, downloads and watched history are untouched.
+
+
 [B]v2.4.4[/B]  [COLOR FF888899]7 October 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Fixes[/B][/COLOR]

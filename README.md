@@ -1,4 +1,4 @@
-# 🎌 One Pace Premium — Kodi Add-on
+# 🎌 One Pace Addon — Kodi Add-on
 
 Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`repository.onepacepremium`). Watch the complete One Pace catalog with your debrid service directly inside Kodi.
 
@@ -7,13 +7,13 @@ Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`reposito
 Using the repository ensures you receive automatic updates.
 
 1. **Add Source**: Go to **Settings** ➔ **File manager** ➔ **Add source**.
-2. **Enter URL**: Enter the URL below and name it `One Pace Premium`.
+2. **Enter URL**: Enter the URL below and name it `One Pace Addon`.
 
    ```
    https://6ip.github.io/onepace-premium-kodi
    ```
-3. **Install Repository**: Go to **Add-ons** ➔ **Install from zip file** ➔ select `One Pace Premium` ➔ install `repository.onepacepremium-X.Y.Z.zip`.
-4. **Install Add-on**: Go to **Install from repository** ➔ **One Pace Premium Repository** ➔ **Video add-ons** ➔ **One Pace Premium** ➔ **Install**.
+3. **Install Repository**: Go to **Add-ons** ➔ **Install from zip file** ➔ select `One Pace Addon` ➔ install `repository.onepacepremium-X.Y.Z.zip`.
+4. **Install Add-on**: Go to **Install from repository** ➔ **One Pace Addon Repository** ➔ **Video add-ons** ➔ **One Pace Addon** ➔ **Install**.
 
 > If step 4 fails right after installing the repository, restart Kodi and try again.
 
@@ -38,7 +38,7 @@ Using the repository ensures you receive automatic updates.
 
 <img src="assets/steps-guide/screenshot00003.jpg" width="900">
 
-Now that we've added the source, let's use it to install the One Pace Premium repository.
+Now that we've added the source, let's use it to install the One Pace Addon repository.
 
 **5.** Go back to the System menu and this time select **Add-ons**.
 
@@ -65,13 +65,13 @@ However, if **Unknown Sources** is **disabled**, you'll see a "Disabled" notific
 
 <img src="assets/steps-guide/screenshot00007.jpg" width="900">
 
-The repository is now installed. Next, we'll use it to download and install the One Pace Premium add-on and its dependencies.
+The repository is now installed. Next, we'll use it to download and install the One Pace Addon add-on and its dependencies.
 
 **9.** Select **Install from repository**.
 
 <img src="assets/steps-guide/screenshot00008.jpg" width="900">
 
-**10.** Click **One Pace Premium Repository**.
+**10.** Click **One Pace Addon Repository**.
 
 <img src="assets/steps-guide/screenshot00009.jpg" width="900">
 
@@ -79,7 +79,7 @@ The repository is now installed. Next, we'll use it to download and install the 
 
 <img src="assets/steps-guide/screenshot00010.jpg" width="900">
 
-**12.** Now select **One Pace Premium**.
+**12.** Now select **One Pace Addon**.
 
 <img src="assets/steps-guide/screenshot00011.jpg" width="900">
 
@@ -89,13 +89,13 @@ The repository is now installed. Next, we'll use it to download and install the 
 
 <img src="assets/steps-guide/screenshot00012.jpg" width="900">
 
-**14.** Press **OK** to install One Pace Premium and its dependencies.
+**14.** Press **OK** to install One Pace Addon and its dependencies.
 
 <img src="assets/steps-guide/screenshot00013.jpg" width="900">
 
 Wait a few seconds for the add-on to download — you'll see a notification when installation is complete.
 
-We've now installed One Pace Premium on Kodi, but we still need to authorize a debrid account, or the add-on won't be able to find video sources.
+We've now installed One Pace Addon on Kodi, but we still need to authorize a debrid account, or the add-on won't be able to find video sources.
 
 **15.** Press the **Configure** button.
 
@@ -109,7 +109,7 @@ We've now installed One Pace Premium on Kodi, but we still need to authorize a d
 
 <img src="assets/steps-guide/screenshot00016.jpg" width="900">
 
-**All done!** You are now ready to stream content with the One Pace Premium Kodi add-on.
+**All done!** You are now ready to stream content with the One Pace Addon Kodi add-on.
 
 </details>
 
@@ -117,7 +117,7 @@ We've now installed One Pace Premium on Kodi, but we still need to authorize a d
 
 Once installed, link the add-on to your account:
 
-1. Go to **Add-ons** ➔ **My add-ons** ➔ **Video add-ons** ➔ **One Pace Premium** ➔ **Configure**.
+1. Go to **Add-ons** ➔ **My add-ons** ➔ **Video add-ons** ➔ **One Pace Addon** ➔ **Configure**.
 2. Click **Configure/Reconfigure**.
 3. An **8-character hex setup code** will appear (e.g., `1a2b3c4d`).
 4. Open the configuration page on your phone or browser — the URL is shown on screen.

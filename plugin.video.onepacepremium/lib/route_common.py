@@ -4,7 +4,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from .utils import ADDON_HANDLE, ADDON_ID, get_setting
+from .utils import ADDON_HANDLE, ADDON_ID, ADDON_NAME, get_setting
 
 
 def _handle():
@@ -40,12 +40,12 @@ def _add_directory_items(items: list, total_items: Optional[int] = None):
 
 def _notify_error(message: str):
     # The trailing False is the sound flag, which defaults to on.
-    xbmcgui.Dialog().notification("One Pace Premium", message,
+    xbmcgui.Dialog().notification(ADDON_NAME, message,
                                   xbmcgui.NOTIFICATION_ERROR, 5000, True)
 
 
 def _notify_info(message: str):
-    xbmcgui.Dialog().notification("One Pace Premium", message,
+    xbmcgui.Dialog().notification(ADDON_NAME, message,
                                   xbmcgui.NOTIFICATION_INFO, 4000, False)
 
 

@@ -5,7 +5,7 @@ import xbmcaddon
 import xbmcgui
 import xbmcvfs
 
-from .utils import ADDON_ID, log
+from .utils import ADDON_ID, ADDON_NAME, log
 
 _CLOSE_ACTIONS = (9, 10, 92)
 _SELECT_ACTIONS = (7, 100)
@@ -80,7 +80,7 @@ def show_changelog(_params=None):
     text = _read_changelog(xbmcvfs.translatePath(addon.getAddonInfo("path")))
     if not text:
         xbmcgui.Dialog().notification(
-            "One Pace Premium", "No changelog found",
+            ADDON_NAME, "No changelog found",
             xbmcgui.NOTIFICATION_ERROR, 4000, False,
         )
         return

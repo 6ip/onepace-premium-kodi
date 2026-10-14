@@ -6,6 +6,8 @@ import xbmc
 import xbmcaddon
 import xbmcvfs
 
+from .utils import log
+
 _ADDON = xbmcaddon.Addon()
 _mem: dict = {}  # in-process memory tier (persists across navigations in same Kodi session)
 
@@ -53,4 +55,4 @@ def set(key: str, data, ttl: int) -> None:
         with xbmcvfs.File(_path(key), "w") as f:
             f.write(json.dumps(entry, ensure_ascii=False))
     except Exception as e:
-        xbmc.log(f"[One Pace Premium] cache.set error: {e}", xbmc.LOGWARNING)
+        log(f"cache.set error: {e}", xbmc.LOGWARNING)

@@ -18,7 +18,7 @@ from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode
 from .route_common import (_add_directory_items, _notify_error, _notify_info,
                             end_directory, set_category, set_content,
                             set_resolved)
-from .utils import (ALERT_ICON, build_url,
+from .utils import (ADDON_NAME, ALERT_ICON, build_url,
                      convert_info_hash_to_magnet, ensure_configured,
                      fetch_data, get_base_url, get_config_prefix,
                      get_secret_string,
@@ -420,7 +420,7 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
 
     if not get_secret_string():
         xbmcgui.Dialog().ok(
-            "One Pace Premium",
+            ADDON_NAME,
             "Add-on is not configured.\nPlease set up your configuration first."
         )
         xbmc.executebuiltin("Addon.OpenSettings(plugin.video.onepacepremium)")
@@ -459,7 +459,7 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
     )
     if config_error:
         xbmcgui.Dialog().ok(
-            "One Pace Premium",
+            ADDON_NAME,
             "Your configuration key is invalid or not recognized by the server.\n\n"
             "Add-on settings will now open — please enter a valid configuration key."
         )
@@ -858,7 +858,7 @@ def get_streams(params):
         tags = list_item.getVideoInfoTag()
         tags.setMediaType("video")
         tags.setPlot(
-            "Your One Pace Premium add-on hasn't been configured yet. "
+            f"Your {ADDON_NAME} hasn't been configured yet. "
             "Click here to open Add-on Settings and complete setup."
         )
         _add_directory_items([(build_url("open_addon_settings"), list_item, True)])
