@@ -5,6 +5,16 @@
      about it was ever paid for.
   •  Your settings, downloads and watched history are untouched.
 
+[COLOR FF81A6C6][B]New[/B][/COLOR]
+  •  Not configured? Episodes now play over peer-to-peer. You are asked once
+     before the first one, and you can set up a debrid service instead.
+  •  Choose your own picture for the menu background, in Settings under Lists.
+
+[COLOR FF81A6C6][B]Changed[/B][/COLOR]
+  •  New home: onepace.e6ip.com. The donation link moved with it.
+  •  The donate button now opens from What's New, instead of having its own
+     row in Settings.
+
 
 [B]v2.4.4[/B]  [COLOR FF888899]7 October 2026[/COLOR]
 

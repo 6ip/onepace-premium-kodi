@@ -591,7 +591,11 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
                    if is_downloadable(valid_streams[i]["video_url"])]
         if not choices:
             if not quiet:
-                _notify_error("No stream here can be downloaded")
+                # Peer-to-peer is a magnet, not a file to fetch, so for a
+                # viewer with no key the reason is worth saying.
+                _notify_error("Downloads need a debrid service"
+                              if not get_secret_string()
+                              else "No stream here can be downloaded")
             return None
     log(f"[streams] {len(valid_streams)} available, {len(choices)} after preferences")
     if len(choices) == 1 or quiet:

@@ -137,4 +137,26 @@ for label, kwargs, extra, want in cases:
     assert SILENT == [want], (label, SILENT)
 
 print()
+print("=== a magnet is not a file to fetch, and the reason is worth saying ===")
+# "No stream here can be downloaded" is true but sounds like a glitch to the
+# one viewer who can never download anything.
+er.ensure_p2p_ready = lambda silent=False: True
+er.is_elementum_installed_and_enabled = lambda: True
+er._cache.get = lambda url: {"streams": [
+    {"name": "One Pace", "description": "1080p", "infoHash": "abc123",
+     "sources": [], "behaviorHints": {}}]}
+
+for secret, expect in [("", "Downloads need a debrid service"),
+                       ("rdkey=X", "No stream here can be downloaded")]:
+    S["secret_string"] = secret
+    rec = harness.recorder()
+    got = er._choose_stream({"catalog_type": "series", "video_id": "pp_onepacee"},
+                            downloadable_only=True)
+    said = rec.notifications[0][0] if rec.notifications else None
+    print(f"  key={secret or 'none':<9} -> {said!r}")
+    assert got is None and said == expect, (secret, said)
+
+S["secret_string"] = ""
+
+print()
 print("all assertions passed")
