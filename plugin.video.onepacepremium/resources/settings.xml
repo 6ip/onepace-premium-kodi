@@ -44,6 +44,9 @@
         <setting label="Show Name Colour" id="choose_highlight_color" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_highlight_color)" />
         <setting label="Showing" id="highlight_color_display" type="text" default="Cyan" enable="false" subsetting="true" />
         <setting id="highlight_color" type="text" default="ff00d4ff" visible="false" />
+        <setting label="Menu Background" id="choose_background" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_background)" />
+        <setting label="Showing" id="background_display" type="text" default="Default" enable="false" subsetting="true" />
+        <setting id="background_image" type="text" default="" visible="false" />
     </category>
     <category label="Subtitles">
         <setting label="Enable External Subtitles" id="subs_enabled" type="bool" default="true" />

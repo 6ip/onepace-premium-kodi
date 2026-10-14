@@ -134,6 +134,18 @@ def get_setting(key):
     return ADDON.getSetting(key)
 
 
+def background():
+    """The picture behind our own menus: the viewer's choice, or the one we ship.
+
+    Checked every time, because a chosen file can be moved or deleted later and
+    a missing fanart leaves the menu on a black screen.
+    """
+    chosen = get_setting("background_image")
+    if chosen and xbmcvfs.exists(chosen):
+        return chosen
+    return f"special://home/addons/{ADDON_ID}/resources/fanart.png"
+
+
 def is_widget():
     """True when a skin is drawing our list on its own screen."""
     return ADDON_ID not in xbmc.getInfoLabel("Container.PluginName")

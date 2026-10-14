@@ -408,6 +408,34 @@ def choose_download_folder():
                                       xbmcgui.NOTIFICATION_INFO, 5000, False)
 
 
+def choose_background():
+    """The picture behind our own menus. Kodi's own browser previews images."""
+    addon = xbmcaddon.Addon(ADDON_ID)
+    current = addon.getSetting("background_image")
+    chosen = xbmcgui.Dialog().select(
+        "Menu Background",
+        ["Default  (the one the add-on ships)", "Custom..."],
+        preselect=0 if not current else 1,
+    )
+    if chosen < 0:
+        return
+
+    if chosen == 0:
+        path, shown = "", "Default"
+    else:
+        # Type 2 is Kodi's image browser, and useThumbs previews every picture.
+        path = xbmcgui.Dialog().browseSingle(
+            2, "Choose a background", "files", "", True, False, current)
+        if not path:
+            return
+        shown = path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] or path
+
+    if _save_settings(addon, {"background_image": path,
+                              "background_display": shown}):
+        xbmcgui.Dialog().notification("Menu Background", shown,
+                                      xbmcgui.NOTIFICATION_INFO, 5000, False)
+
+
 def choose_sub_langs():
     """Pick which subtitle languages to show. Empty selection means all."""
     addon = xbmcaddon.Addon(ADDON_ID)
@@ -454,5 +482,7 @@ if __name__ == "__main__":
         choose_sub_langs()
     elif action == "choose_highlight_color":
         choose_highlight_color()
+    elif action == "choose_background":
+        choose_background()
     elif action == "choose_preferred_service":
         choose_preferred_service()

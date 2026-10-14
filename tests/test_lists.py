@@ -144,4 +144,36 @@ assert distinct > 1, "every season fell back to the same art"
 META[0] = ONEPACE
 
 print()
+print("=== the menu background is the viewer's to choose ===")
+# A chosen picture can be moved or deleted later, and a missing fanart leaves
+# the menu on a black screen — so it is checked every time, not trusted once.
+_real_exists = utils.xbmcvfs.exists
+S["background_image"] = ""
+print(f"  nothing chosen      -> {utils.background().rsplit('/', 1)[-1]}")
+assert utils.background().endswith("/resources/fanart.png")
+
+S["background_image"] = "/home/me/wallpaper.jpg"
+utils.xbmcvfs.exists = lambda p: True
+print(f"  chosen and present  -> {utils.background()}")
+assert utils.background() == "/home/me/wallpaper.jpg"
+
+utils.xbmcvfs.exists = lambda p: False
+print(f"  chosen but missing  -> {utils.background().rsplit('/', 1)[-1]}")
+assert utils.background().endswith("/resources/fanart.png"),     "a deleted picture would leave the menu black"
+
+utils.xbmcvfs.exists = _real_exists
+S["background_image"] = ""
+
+# Every menu of ours has to use it, or one section keeps the shipped picture
+# while the rest change, which reads as a bug.
+_lib = harness.ADDON / "lib"
+_users = {p.name for p in _lib.glob("*.py") if "background()" in p.read_text(encoding="utf-8")}
+print(f"  used by: {sorted(_users - {'utils.py'})}")
+assert {"catalog_routes.py", "my_lists.py", "downloads.py"} <= _users
+_hard = [p.name for p in _lib.glob("*.py")
+         if "resources/fanart.png" in p.read_text(encoding="utf-8") and p.name != "utils.py"]
+assert not _hard, f"a fanart path is still hardcoded in {_hard}"
+print("  all our menus go through it  OK")
+
+print()
 print("all assertions passed")

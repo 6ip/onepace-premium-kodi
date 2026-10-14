@@ -13,7 +13,7 @@ from .provider_api import (_fetch_provider_meta,
 from .route_common import (_add_directory_items, end_directory,
                            set_category, set_content)
 
-from .utils import (ADDON_DIR, build_url,
+from .utils import (ADDON_DIR, background, build_url,
                     get_setting, log)
 
 _CATALOG_TYPE = "series"
@@ -21,7 +21,6 @@ _SKIN_MEDIA  = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media")
 
 _PLAYER_ICON = os.path.join(_SKIN_MEDIA, "player2.png")
 _NEXT_ICON   = os.path.join(_SKIN_MEDIA, "next_episodes2.png")
-_FANART      = os.path.join(ADDON_DIR, "resources", "fanart.png")
 
 
 def _folder_item(label, icon):
@@ -30,7 +29,7 @@ def _folder_item(label, icon):
         "icon": icon,
         "thumb": icon,
         "poster": icon,
-        "fanart": _FANART,
+        "fanart": background(),
         "banner": icon,
         "landscape": icon,
     })

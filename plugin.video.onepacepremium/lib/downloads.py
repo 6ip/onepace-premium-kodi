@@ -11,7 +11,7 @@ import xbmcvfs
 from . import download_queue
 from .route_common import (_add_directory_items, _notify_error, _notify_info,
                            end_directory, set_category, set_content)
-from .utils import (ADDON_ID, build_url, get_setting, log,
+from .utils import (ADDON_ID, background, build_url, get_setting, log,
                     refresh_container, session)
 
 # Only ever asked for the profile path, which never changes between calls.
@@ -1130,7 +1130,7 @@ def _empty(message):
     item = xbmcgui.ListItem(label="Nothing downloaded yet", offscreen=True)
     item.setArt({"icon": icon, "thumb": icon, "poster": icon, "banner": icon,
                  "landscape": icon,
-                 "fanart": f"special://home/addons/{ADDON_ID}/resources/fanart.png"})
+                 "fanart": background()})
     item.getVideoInfoTag().setPlot(message)
     _add_directory_items([(build_url("list_downloads"), item, False)])
     end_directory()
@@ -1349,7 +1349,7 @@ def list_downloads(params=None):
         return
 
     media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
-    fanart = f"special://home/addons/{ADDON_ID}/resources/fanart.png"
+    fanart = background()
 
     def _nav(label, icon):
         item = xbmcgui.ListItem(label=label, offscreen=True)

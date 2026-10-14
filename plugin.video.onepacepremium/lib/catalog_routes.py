@@ -10,7 +10,8 @@ from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
                             countable_episode_ids)
 from .route_common import (_add_directory_items, _notify_error, end_directory,
                            set_category, set_content)
-from .utils import ADDON_ID, build_url, ensure_configured, fetch_data
+from .utils import (ADDON_ID, background, build_url, ensure_configured,
+                    fetch_data)
 
 CATALOG_PAGE_SIZE = 25
 SUPPORTED_CATALOG_TYPES = {"movie", "series", "anime"}
@@ -49,7 +50,7 @@ def list_root():
         return
 
     _skin_media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
-    _fanart     = f"special://home/addons/{ADDON_ID}/resources/fanart.png"
+    _fanart     = background()
 
     def _nav_item(label, icon):
         item = xbmcgui.ListItem(label=label, offscreen=True)
