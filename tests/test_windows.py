@@ -395,4 +395,26 @@ assert _at == "2060" and len(set(_seen)) == len(_nav), f"left does not cycle: {_
 print("  every control is reachable from either arrow  OK")
 
 print()
+print("=== the donation QR follows the address ===")
+# It used to be cached under one fixed name, so moving the page would have left
+# every existing viewer scanning the old picture under the new link.
+import hashlib
+
+from lib import donate
+
+print(f"  {donate.DONATE_URL}  ->  {donate._QR_FILE}")
+assert hashlib.sha1(donate.DONATE_URL.encode()).hexdigest()[:8] in donate._QR_FILE,     "the filename does not carry the address, so a stale QR would be served"
+SRC_DONATE = (harness.ADDON / "lib" / "donate.py").read_text(encoding="utf-8")
+_qr = SRC_DONATE[SRC_DONATE.index("def _qr_path("):]
+_qr = _qr[:_qr.index(chr(10) + "def ")]
+assert "glob.glob" in _qr and "os.remove" in _qr, "pictures for old addresses are left behind"
+assert donate.DONATE_URL.startswith("https://"), "a donation page must not be plain http"
+
+# The page has moved off ko-fi, so nothing may still say so.
+for _name in ("lib/donate.py", "resources/skins/Default/1080i/donate.xml"):
+    _text = (harness.ADDON / _name).read_text(encoding="utf-8").lower()
+    assert "ko-fi" not in _text and "kofi" not in _text, f"{_name} still says ko-fi"
+print("  carries the address, sweeps old ones, and says nothing about ko-fi  OK")
+
+print()
 print("all assertions passed")

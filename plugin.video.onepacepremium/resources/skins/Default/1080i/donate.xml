@@ -119,7 +119,7 @@
                 <width>256</width><height>52</height>
                 <onleft>11</onleft><onright>11</onright>
                 <onup>10</onup><ondown>10</ondown>
-                <label>[B]Open ko-fi[/B]</label>
+                <label>[B]Open in Browser[/B]</label>
                 <font>font13</font>
                 <textcolor>FF14191E</textcolor>
                 <focusedcolor>FF14191E</focusedcolor>

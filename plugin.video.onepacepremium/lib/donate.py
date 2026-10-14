@@ -1,4 +1,6 @@
-"""Support the Project window, with a QR to the ko-fi page."""
+"""Support the Project window, with a QR to the donation page."""
+import glob
+import hashlib
 import os
 
 import xbmcaddon
@@ -7,8 +9,10 @@ import xbmcvfs
 
 from .utils import ADDON_ID, log
 
-KOFI_URL = "https://ko-fi.com/not6ip"
-_QR_FILE = "donate_qr.png"
+DONATE_URL = "https://onepace.e6ip.com/donate"
+# The address is in the filename, so a new one renders a new picture rather
+# than serving the old QR under the new link.
+_QR_FILE = f"donate_qr_{hashlib.sha1(DONATE_URL.encode()).hexdigest()[:8]}.png"
 
 _OPEN_BUTTON = 10
 _CLOSE_BUTTON = 11
@@ -25,7 +29,7 @@ class DonateDialog(xbmcgui.WindowXMLDialog):
 
     def onInit(self):
         self.setProperty("pp.icon", self._icon_path)
-        self.setProperty("pp.url", KOFI_URL.split("//", 1)[-1])
+        self.setProperty("pp.url", DONATE_URL.split("//", 1)[-1])
         if self._qr_path:
             try:
                 self.getControl(200).setImage(self._qr_path)
@@ -53,12 +57,17 @@ def _profile():
 
 
 def _qr_path():
-    """Render the ko-fi QR once and keep it in the profile."""
+    """Render the QR once and keep it in the profile."""
     path = _profile() + _QR_FILE
     if os.path.exists(path):
         return path
+    for stale in glob.glob(_profile() + "donate_qr*.png"):
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
     from .setup_dialog import _save_qr
-    return path if _save_qr(KOFI_URL, path) else ""
+    return path if _save_qr(DONATE_URL, path) else ""
 
 
 def show_donate(_params=None):
@@ -80,8 +89,8 @@ def show_donate(_params=None):
     if open_page:
         from .custom_settings_window import open_configuration_page
         try:
-            open_configuration_page(KOFI_URL)
+            open_configuration_page(DONATE_URL)
         except Exception as exc:
-            log(f"[donate] could not open {KOFI_URL}: {exc}")
+            log(f"[donate] could not open {DONATE_URL}: {exc}")
             xbmcgui.Dialog().ok("Support the Project",
-                                f"Open this link on your phone or browser:\n\n{KOFI_URL}")
+                                f"Open this link on your phone or browser:\n\n{DONATE_URL}")

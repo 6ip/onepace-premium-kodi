@@ -4,7 +4,7 @@
         <setting label="What's New" id="show_changelog" type="action" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_changelog)" />
         <setting type="sep" />
         <setting type="lsep" label="Connection" />
-        <setting label="Server URL" id="base_url" type="text" default="https://onepace-premium.e6ip.com" />
+        <setting label="Server URL" id="base_url" type="text" default="https://onepace.e6ip.com" />
         <setting label="Stremio API Prefix" id="stremio_api_prefix" type="text" default="" visible="false" />
         <setting label="Configuration" id="secret_string" type="text" default="" />
         <setting label="Configure / Reconfigure" id="configure_secret" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,configure_account)" />
