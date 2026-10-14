@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from typing import List
@@ -43,6 +44,11 @@ ALERT_ICON = os.path.join(ADDON_DIR, "resources", "skins", "Default", "media", "
 
 REQUEST_TIMEOUT = 20
 _SESSION = None
+
+ELEMENTUM_ID = "plugin.video.elementum"
+# Our own feed serves this repository, so it is installable by anyone who has
+# ours — which is the only reason offering it is worth anything.
+ELEMENTUM_REPO_ID = "repository.elementumorg"
 
 
 def session():
@@ -221,10 +227,29 @@ def get_catalog_provider_url():
 
 def is_elementum_installed_and_enabled():
     try:
-        xbmcaddon.Addon("plugin.video.elementum")
+        xbmcaddon.Addon(ELEMENTUM_ID)
         return True
     except Exception:
         return False
+
+
+def elementum_state():
+    """One of "ready", "disabled" or "missing".
+
+    Kodi raises for a disabled add-on exactly as it does for one that was never
+    installed, so the add-on manager is asked directly to tell the two apart.
+    They need different offers: one is a switch, the other is a download.
+    """
+    if is_elementum_installed_and_enabled():
+        return "ready"
+    try:
+        reply = json.loads(xbmc.executeJSONRPC(json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "Addons.GetAddonDetails",
+            "params": {"addonid": ELEMENTUM_ID, "properties": ["enabled"]},
+        })))
+    except ValueError:
+        return "missing"
+    return "disabled" if "result" in reply else "missing"
 
 
 def ensure_configured():
@@ -242,18 +267,28 @@ def ensure_configured():
     return False
 
 
-def _offer_elementum():
-    """Torrents are played by Elementum, so its absence is the first thing to say."""
+def _offer_elementum(state):
+    """Torrents are played by Elementum, so its absence is the first thing to say.
+
+    Switched off is one button away from fixed. Not installed is a download, and
+    Kodi can only install what a repository it already has offers — so it is the
+    repository we hand over, and Elementum is then picked from inside it.
+    """
+    preamble = ("No debrid service is set up, so episodes play over "
+                "peer-to-peer, which needs the Elementum add-on.\n\n")
+    if state == "disabled":
+        message, label = preamble + "Elementum is installed but switched off.", "Enable Elementum"
+    else:
+        message, label = preamble + (
+            "Installing the Elementum repository is the first step — Elementum "
+            "itself is then picked from inside it."), "Get Elementum"
+
     choice = xbmcgui.Dialog().yesnocustom(
-        ADDON_NAME,
-        "No debrid service is set up, so episodes play over peer-to-peer, "
-        "which needs the Elementum add-on.\n\n"
-        "Look for Elementum now, or set up a debrid service instead?",
-        "Configure", "Not now", "Find Elementum",
-    )
+        ADDON_NAME, message, "Configure", "Not now", label)
     if choice == 1:
         xbmc.executebuiltin(
-            f"RunScript(special://home/addons/{ADDON_ID}/lib/setup_elementum.py)"
+            f"EnableAddon({ELEMENTUM_ID})" if state == "disabled"
+            else f"InstallAddon({ELEMENTUM_REPO_ID})"
         )
     elif choice == 2:
         xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
@@ -290,8 +325,9 @@ def ensure_p2p_ready(silent=False):
     """
     if silent:
         return get_setting("p2p_ack") == "true"
-    if not is_elementum_installed_and_enabled():
-        return _offer_elementum()
+    state = elementum_state()
+    if state != "ready":
+        return _offer_elementum(state)
     if get_setting("p2p_ack") == "true":
         return True
     return _ask_p2p()

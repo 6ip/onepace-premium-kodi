@@ -22,12 +22,18 @@ kodistub.Dialog.yesnocustom = lambda self, *a, **k: (
     SEEN.append(a), _orig(self, *a, **k))[1]
 
 
-def ask(answers, acked=False, elementum=True, silent=False):
+_FOUND = '{"jsonrpc":"2.0","id":1,"result":{"addon":{"enabled":false}}}'
+
+
+def ask(answers, acked=False, elementum=True, silent=False, installed=False):
     rec = harness.recorder()
     SEEN.clear()
     D.yesno_answers = list(answers)
     S["p2p_ack"] = "true" if acked else "false"
     ELEMENTUM[0] = elementum
+    # Installed-but-disabled is the one Kodi still answers for.
+    if installed:
+        rec.jsonrpc_reply = _FOUND
     got = utils.ensure_p2p_ready(silent=silent)
     return got, rec, D.yesno_answers
 
@@ -69,16 +75,40 @@ for label, answers in [("Not now", [0, 1]), ("Back or Esc", [-1, 1])]:
 
 print()
 print("=== without Elementum there is nothing to play a torrent ===")
-got, rec, left = ask([1], elementum=False)
-ran = [b for b in rec.builtins if "setup_elementum" in b]
-print(f"  'Find Elementum'    -> {got}, builtins: {len(ran)}")
-assert got is False and ran, "it should offer to go and look for Elementum"
-assert "Elementum" in SEEN[0][1], "say what is missing, not just 'peer-to-peer'"
+# Switched off is one button away from fixed; never installed is a download.
+# Offering the wrong one of those does nothing at all: Kodi's InstallAddon
+# silently gives up on an add-on no installed repository carries.
+for label, installed, want in [("switched off", True, "EnableAddon"),
+                               ("never installed", False, "InstallAddon")]:
+    got, rec, left = ask([1], elementum=False, installed=installed)
+    fired = [b for b in rec.builtins if want in b]
+    print(f"  {label:<15} -> {got}, fired: {fired}")
+    assert got is False and fired, f"{label} needs {want}"
+    assert "Elementum" in SEEN[0][1], "say what is missing, not just 'peer-to-peer'"
+
+# The repository, not Elementum itself: Kodi can only install what a repository
+# it already has offers, and ours carries the one.
+assert utils.ELEMENTUM_REPO_ID in fired[0], fired
+print(f"  and it offers {utils.ELEMENTUM_REPO_ID}, which our own feed serves")
 
 got, rec, left = ask([2], elementum=False)
 print(f"  'Configure' instead -> {got}, settings opened: "
       f"{bool([b for b in rec.builtins if 'OpenSettings' in b])}")
 assert got is False and [b for b in rec.builtins if "OpenSettings" in b]
+
+print()
+print("=== a disabled add-on is not a missing one ===")
+for label, enabled, reply, want in [
+        ("installed and on", True,  None,   "ready"),
+        ("installed, off",   False, _FOUND, "disabled"),
+        ("never installed",  False, None,   "missing")]:
+    rec = harness.recorder()
+    ELEMENTUM[0] = enabled
+    if reply:
+        rec.jsonrpc_reply = reply
+    got = utils.elementum_state()
+    print(f"  {label:<17} -> {got!r}")
+    assert got == want, (label, got)
 
 print()
 print("=== the silent paths never raise a dialog ===")

@@ -31,6 +31,9 @@ class Recorder:
         self.infolabels = {}       # Container.* and friends
         self.progress = []         # DialogProgressBG calls
         self.rmdirs = []           # folders we asked Kodi to remove
+        self.jsonrpc = []          # executeJSONRPC payloads
+        # Kodi's answer when it has never heard of the add-on asked about.
+        self.jsonrpc_reply = '{"jsonrpc":"2.0","id":1,"error":{"code":-32602}}'
         _WINDOW_PROPS.clear()
 
 
@@ -199,8 +202,13 @@ def install(addon_root, fixtures, settings=None):
     def _builtin(command):
         recorder.builtins.append(command)
 
+    def _jsonrpc(payload):
+        recorder.jsonrpc.append(payload)
+        return recorder.jsonrpc_reply
+
     module("xbmc", log=lambda *a, **k: None, LOGINFO=0, LOGWARNING=1, LOGERROR=2,
            translatePath=lambda p: p, executebuiltin=_builtin,
+           executeJSONRPC=_jsonrpc,
            getInfoLabel=lambda k: recorder.infolabels.get(k, ""),
            getCondVisibility=lambda k: False,
            getLanguage=lambda *a, **k: "eng", ISO_639_2=1,
