@@ -57,7 +57,9 @@ def _walk(root, progress):
             if os.path.splitext(name)[1].lower() in import_match.VIDEO_EXTS:
                 found.append(here + name)
         looked += 1
-        progress.update(min(40, looked), f"Looking through {looked} folder(s)",
+        # The modal dialog takes a percentage and one line, with no heading.
+        progress.update(min(40, looked),
+                        f"Looking through {looked} folder(s) — "
                         f"{len(found)} episode(s) so far")
     return found, False
 
@@ -140,7 +142,7 @@ def run(_params=None):
             xbmcgui.Dialog().ok("Import", "No video files in that folder")
             return
 
-        progress.update(45, "Reading the release list", "")
+        progress.update(45, "Reading the release list")
         try:
             index, config = _releases()
         except Exception as exc:
@@ -151,7 +153,7 @@ def run(_params=None):
         arc_map = config.get("ARC_MAP", {})
         aliases = config.get("ALIASES", {})
 
-        progress.update(55, "Looking episodes up", "")
+        progress.update(55, "Looking episodes up")
         by_stream_id, metas = _catalogues()
         if not by_stream_id:
             progress.close()
@@ -164,9 +166,10 @@ def run(_params=None):
             if progress.iscanceled():
                 return
             if number % 10 == 0 or number == len(files):
-                progress.update(55 + int(number * 40 / len(files)),
-                                f"Looking up {number} of {len(files)}",
-                                os.path.basename(path))
+                progress.update(
+                    55 + int(number * 40 / len(files)),
+                    f"Looking up {number} of {len(files)} — "
+                    f"{os.path.basename(path)}")
             if path in known:
                 already += 1
                 continue

@@ -222,7 +222,9 @@ def install(addon_root, fixtures, settings=None):
         def create(self, heading="", message=""):
             recorder.progress.append(("create", heading, message))
 
-        def update(self, percent=0, heading="", message=""):
+        # Two arguments, not three: the modal dialog takes no heading, and a
+        # stub that accepted one hid exactly that bug once already.
+        def update(self, percent=0, message=""):
             recorder.progress.append(("update", percent, message))
 
         def iscanceled(self):

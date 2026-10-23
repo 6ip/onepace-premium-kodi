@@ -5,6 +5,7 @@ Pace is as likely to be one heap of files as it is neat seasons, so nothing
 here may depend on the shape of the folders.
 """
 import json
+import os
 import pathlib
 
 import harness
@@ -168,6 +169,21 @@ print("=== cancelling the walk stops there ===")
 rec = attempt(cancel=0)
 print(f"  cancelled -> writes {len(written)}")
 assert not written
+
+print()
+print("=== a folder nobody named in English works the same ===")
+# A real download folder: D:/تحميلات/Video/Test_ONEPACE. Nothing here may
+# depend on the path being ASCII, and the index escapes what it writes.
+ARABIC = "D:/\u062a\u062d\u0645\u064a\u0644\u0627\u062a/Video/Test_ONEPACE/"
+ARABIC_FILE = ARABIC + "[One Pace][1] Romance Dawn 01 [1080p][E5F09F49].mkv"
+TREE[ARABIC] = ([], [os.path.basename(ARABIC_FILE)])
+SIZES[ARABIC_FILE] = 397698454
+rec = attempt(browse=ARABIC)
+rows = written[-1]["files"] if written else {}
+print(f"  {len(rows)} row(s) from {ARABIC}")
+assert len(rows) == 1 and list(rows)[0] == ARABIC_FILE, sorted(rows)
+# json.dumps escapes it, so the index is plain ASCII on disk either way.
+assert json.loads(json.dumps(written[-1])), "the index has to round-trip"
 
 print()
 print("=== an episode is found whether or not its id carries the pp_ ===")
