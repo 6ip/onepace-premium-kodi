@@ -38,6 +38,12 @@ SIZES = {
     ROOT + "Extras/holiday clip.mkv": 12345,
 }
 
+CUTS = "F:/Kuma/"
+TREE[CUTS] = ([], ["One Piece - 1131 [Kuma Cut].mp4",
+                   "[DUB] One Piece - 1127+8 [Shaved Egghead].mp4"])
+SIZES[CUTS + "One Piece - 1131 [Kuma Cut].mp4"] = 518581763
+SIZES[CUTS + "[DUB] One Piece - 1127+8 [Shaved Egghead].mp4"] = 810092048
+
 imp.xbmcvfs.listdir = lambda path: TREE.get(path, ([], []))
 imp._size_on_disk = lambda path: SIZES.get(path, 0)
 imp._sidecars = lambda path: ()
@@ -54,13 +60,19 @@ META = {"id": "pp_onepacee", "name": "One Pace", "logo": "logo.png",
                    {"id": "RO_3", "season": 1, "episode": 3, "name": "The Pirate Hunter",
                     "thumbnail": "t3.jpg"},
                    {"id": "pp_fools17", "season": 0, "episode": 7, "name": "A World Abuzz"}]}
+KUMA = {"id": "pp_KUMA_SHAVED", "name": "Shaved Egghead & Kuma Cut",
+        "logo": "k.png", "seasons": [{"season": 1, "poster": "k1.jpg"}],
+        "videos": [{"id": "pp_KUMA_SHAVED_1", "season": 1, "episode": 1,
+                    "name": "Shaved Egghead 1127+8"},
+                   {"id": "pp_KUMA_SHAVED_4", "season": 1, "episode": 4,
+                    "name": "Kuma Cut 1131"}]}
 _real_catalogues = imp._catalogues
 imp._catalogues = lambda: (
     {"RO_1": ("One Pace", META["videos"][0]),
      "RO_3": ("One Pace", META["videos"][1]),
      "pp_fools17": ("One Pace", META["videos"][2]),
      "fools17": ("One Pace", META["videos"][2])},
-    {"One Pace": META})
+    {"One Pace": META, KUMA["name"]: KUMA})
 
 written = []
 imp.read_index = lambda: {"files": dict(written[-1]["files"]) if written else {},
@@ -200,6 +212,66 @@ for probe in ("RO_1", "pp_fools17", "fools17"):
     assert video, probe
 assert found["fools17"][1]["id"] == "pp_fools17", "the bare spelling must resolve"
 assert metas["One Pace"] is META
+
+print()
+print("=== the cuts with no arc are found by the title the catalogue uses ===")
+# Neither of these is the official release — both are re-encodes, so the size,
+# the CRC and the full name all miss. What is left is "Kuma Cut 1131".
+rec = attempt(browse=CUTS)
+rows = written[-1]["files"] if written else {}
+for path in sorted(rows):
+    print(f"  {path.split('/')[-1][:44]:<44} -> {rows[path]['episode_id']}")
+assert sorted(r["episode_id"] for r in rows.values()) == [
+    "pp_KUMA_SHAVED_1", "pp_KUMA_SHAVED_4"], sorted(rows.values(), key=str)
+assert all(r["imported"] is True for r in rows.values())
+
+print()
+print("=== what it cannot read, somebody can say by hand ===")
+# Review, then series -> season -> episode for the one unreadable file.
+D.select_answers = [0, 0, 0, 0]
+rec = attempt(answer=2)
+rows = written[-1]["files"] if written else {}
+chosen = [p for p in rows if "holiday" in p]
+print(f"  assigned by hand: {[p.split('/')[-1] for p in chosen]}")
+print(f"  as: {rows[chosen[0]]['episode_id']} "
+      f"s{rows[chosen[0]]['season']}e{rows[chosen[0]]['episode']}")
+assert chosen, "the file they assigned should have been added"
+assert rows[chosen[0]]["imported"] is True
+# The report is written last, so it counts what actually happened.
+body = chr(10).join(reports[-1][1])
+print(f"  report says: {[l for l in reports[-1][1] if 'hand' in l]}")
+assert "1 chosen by hand" in body and "not recognised" not in body, body
+
+print()
+print("=== backing out of the picker leaves the file alone ===")
+D.select_answers = [0, -1]
+rec = attempt(answer=2)
+rows = written[-1]["files"] if written else {}
+print(f"  cancelled at the season -> holiday clip in index: "
+      f"{any('holiday' in p for p in rows)}")
+assert not any("holiday" in p for p in rows)
+assert len(rows) == 2, "the ones it worked out itself still go in"
+
+print()
+print("=== assigning an episode that is already listed asks first ===")
+first = dict(written[-1]["files"])
+imp.read_index = lambda: {"files": dict(first), "series": {}}
+# Review, the file, One Pace, Season 1 (index 1, after Specials), its first
+# episode RO_1 — which the run before already listed — then "Leave this out".
+D.select_answers = [0, 0, 1, 0, 2]
+rec = attempt(answer=2)
+print(f"  chose 'leave it out' -> writes {len(written)}")
+assert not written, "nothing new to write, so nothing should be written"
+
+D.select_answers = [0, 0, 1, 0, 1]
+rec = attempt(answer=2)
+rows = written[-1]["files"]
+kept = [p for p in rows if "Romance Dawn 01" in p]
+print(f"  chose 'use this one instead' -> the listed one went: {not kept}")
+assert any("holiday" in p for p in rows), "their choice should be in"
+assert not kept, "the row it replaces should have gone"
+imp.read_index = lambda: {"files": dict(written[-1]["files"]) if written else {},
+                          "series": {}}
 
 print()
 print("all assertions passed")

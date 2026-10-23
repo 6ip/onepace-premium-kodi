@@ -64,6 +64,33 @@ def _walk(root, progress):
     return found, False
 
 
+def _flat(text):
+    """A title with the punctuation and case taken out of the comparison."""
+    return "".join(c for c in (text or "").lower() if c.isalnum())
+
+
+def _cut_titles(metas):
+    """The Kuma catalogue by title.
+
+    Its episodes are a flat sequence with no arc, so a filename carries no id
+    to build — but it does carry the cut and the One Piece episode, and the
+    catalogue calls them exactly that: "Kuma Cut 1131".
+    """
+    series = import_match.SERIES_NAMES[import_match.KUMA]
+    found = {}
+    for video in (metas.get(series) or {}).get("videos", ()):
+        title = _flat(video.get("name") or video.get("title") or "")
+        if title:
+            found.setdefault(title, (series, video))
+    return found
+
+
+def _by_cut_title(parsed, titles):
+    """The episode a Kuma filename names, if the catalogue has it."""
+    wanted = _flat(import_match.kuma_title(parsed))
+    return titles.get(wanted) if wanted else None
+
+
 def _catalogues():
     """Every series we serve, by the stream id each of its episodes carries.
 
@@ -159,6 +186,7 @@ def run(_params=None):
             progress.close()
             xbmcgui.Dialog().ok("Import", "Could not read the catalogue")
             return
+        cut_titles = _cut_titles(metas)
 
         known = set(read_index()["files"])
         sure, guessed, unknown, already = [], [], [], 0
@@ -177,6 +205,11 @@ def run(_params=None):
                                           arc_map, aliases)
             found = by_stream_id.get(answer["episode_id"] or "")
             if not found:
+                found = _by_cut_title(answer["parsed"], cut_titles)
+                if found:
+                    answer["episode_id"] = str(found[1].get("id") or "")
+                    answer["how"] = "title"
+            if not found:
                 unknown.append((path, answer))
                 continue
             (guessed if answer["how"] == "guess" else sure).append(
@@ -187,13 +220,96 @@ def run(_params=None):
     _offer(root, sure, guessed, unknown, already, metas)
 
 
+def _ask_episode(metas):
+    """Series, then season, then episode. None if they back out of any of it."""
+    names = sorted(metas)
+    at = xbmcgui.Dialog().select("Which series?", names)
+    if at < 0:
+        return None
+    series = names[at]
+    videos = [v for v in (metas[series] or {}).get("videos", ()) if v.get("id")]
+    if not videos:
+        return None
+
+    seasons = sorted({int(v.get("season") or 0) for v in videos})
+    labels = ["Specials" if s == 0 else f"Season {s}" for s in seasons]
+    at = xbmcgui.Dialog().select(f"{series} — which season?", labels)
+    if at < 0:
+        return None
+    season = seasons[at]
+
+    # One arc numbers an episode 3.5, so the order is read as a number rather
+    # than compared as text.
+    here = sorted((v for v in videos if int(v.get("season") or 0) == season),
+                  key=lambda v: float(v.get("episode") or 0))
+    labels = [f"{v.get('episode')}.  {v.get('name') or v.get('title') or ''}"
+              for v in here]
+    at = xbmcgui.Dialog().select(f"{series} — which episode?", labels)
+    if at < 0:
+        return None
+    return series, here[at]
+
+
+def _held_rows(episode_id, variant):
+    """Rows already pointing at this exact episode and cut."""
+    return [path for path, row in read_index()["files"].items()
+            if row.get("episode_id") == episode_id
+            and (row.get("variant") or "") == (variant or "")]
+
+
+def _by_hand(unknown, metas):
+    """Let them say what the add-on could not work out.
+
+    Returns the rows they settled and the paths to forget first, for when they
+    choose this file over one already listed.
+    """
+    picked, replace, left = [], [], list(unknown)
+    while left:
+        at = xbmcgui.Dialog().select(
+            f"{len(left)} not recognised — pick one",
+            [os.path.basename(path) for path, _ in left])
+        if at < 0:
+            break
+        path, answer = left[at]
+        chosen = _ask_episode(metas)
+        if chosen is None:
+            continue
+        series, video = chosen
+        episode_id = str(video.get("id") or "")
+        answer = dict(answer, episode_id=episode_id, how="hand")
+
+        held = _held_rows(episode_id, answer["variant"])
+        if held:
+            what = xbmcgui.Dialog().select(
+                f"{video.get('name') or video.get('title') or 'That episode'} "
+                f"is already listed",
+                ["Add this one as well", "Use this one instead",
+                 "Leave this file out"])
+            if what < 0 or what == 2:
+                left.pop(at)
+                continue
+            if what == 1:
+                replace.extend(held)
+
+        picked.append((path, answer, (series, video)))
+        left.pop(at)
+    return picked, replace
+
+
 def _offer(root, sure, guessed, unknown, already, metas):
     """Say what was found, and write nothing until it is asked for."""
-    # Written whatever happens next: the names it could not read are only
-    # listed here, and somebody who cancels to go and look for them should
-    # find them rather than nothing.
-    _report(root, sure, guessed, unknown, already)
+    by_hand, replace = [], []
+    try:
+        _add(root, sure, guessed, unknown, already, metas, by_hand, replace)
+    finally:
+        # Written whatever happened, and last, so the count is the one that
+        # ended up being true. The names it could not read are listed only
+        # here, so somebody who cancels to go and look should find them.
+        _report(root, sure, guessed, unknown, already, by_hand)
 
+
+def _add(root, sure, guessed, unknown, already, metas, by_hand, replace):
+    """The dialogs, and the one write at the end of them."""
     lines = [f"{len(sure)} episode(s) identified"]
     if guessed:
         lines.append(f"{len(guessed)} matched by name only")
@@ -201,39 +317,58 @@ def _offer(root, sure, guessed, unknown, already, metas):
         lines.append(f"{len(unknown)} not recognised")
     if already:
         lines.append(f"{already} already in the list")
-    if not sure and not guessed:
-        xbmcgui.Dialog().ok("Import", os.linesep.join(
-            ["Nothing here could be identified."] + lines[1:]))
-        return
-
     question = os.linesep.join(
         lines + ["", "Add them to Downloads?",
                  "Your files stay where they are."])
-    if not xbmcgui.Dialog().yesno("Import", question,
-                                  nolabel="Cancel", yeslabel="Add"):
+    if unknown:
+        # A third way out, because the names it could not read are the ones
+        # only the viewer can settle.
+        choice = xbmcgui.Dialog().yesnocustom(
+            "Import", question, f"Review {len(unknown)}", "Cancel", "Add")
+        if choice == 2:
+            picked, instead = _by_hand(unknown, metas)
+            by_hand.extend(picked)
+            replace.extend(instead)
+        elif choice != 1:
+            return
+    elif not sure and not guessed:
+        xbmcgui.Dialog().ok("Import", "Nothing here could be identified.")
+        return
+    elif not xbmcgui.Dialog().yesno("Import", question,
+                                    nolabel="Cancel", yeslabel="Add"):
+        return
+
+    if not sure and not guessed and not by_hand:
         return
 
     data = read_index()
-    for path, answer, (series_name, video) in sure + guessed:
+    for path in replace:
+        data["files"].pop(path, None)
+    for path, answer, (series_name, video) in sure + guessed + by_hand:
         remember_into(data, path, _row(path, answer, series_name, video,
                                        metas.get(series_name) or {}),
                       metas.get(series_name), _sidecars(path))
     _write_index(data)
-    added = len(sure) + len(guessed)
-    log(f"[import] adopted {added} file(s) from {root!r}")
+    added = len(sure) + len(guessed) + len(by_hand)
+    log(f"[import] adopted {added} file(s) from {root!r}"
+        + (f", {len(by_hand)} chosen by hand" if by_hand else ""))
     _notify_info(f"Imported {added} episode{'s' if added != 1 else ''}")
     refresh_container()
 
 
-def _report(root, sure, guessed, unknown, already):
+def _report(root, sure, guessed, unknown, already, by_hand=()):
     """The unrecognised names are the part worth keeping to look at."""
+    settled = {path for path, _, _ in by_hand}
+    left = [u for u in unknown if u[0] not in settled]
     lines = [f"From {root}",
              f"{len(sure)} identified from the release list",
              f"{len(guessed)} matched by name only",
              f"{already} already in the list"]
-    if unknown:
-        lines.append(f"{len(unknown)} not recognised:")
-        lines.extend(f"  {os.path.basename(p)}" for p, _ in unknown[:40])
-        if len(unknown) > 40:
-            lines.append(f"  ... and {len(unknown) - 40} more")
+    if settled:
+        lines.append(f"{len(settled)} chosen by hand")
+    if left:
+        lines.append(f"{len(left)} not recognised:")
+        lines.extend(f"  {os.path.basename(p)}" for p, _ in left[:40])
+        if len(left) > 40:
+            lines.append(f"  ... and {len(left) - 40} more")
     write_report("Import", lines)
