@@ -80,10 +80,19 @@ def variant_label(variant):
     return (variant or "standard").replace("_", " ").title()
 
 
+def cut_of(variant):
+    """The one name for a cut, so two spellings of it are not two cuts.
+
+    A download takes the bingeGroup's own word and writes "standard"; a rescan
+    and an import have no bingeGroup and write nothing at all. Both mean the
+    same file, so anything comparing them has to say so.
+    """
+    return (variant or "standard").strip().lower()
+
+
 def _variant_order(variant):
     """Standard sorts first; anything else follows it alphabetically."""
-    variant = (variant or "standard").lower()
-    return "" if variant == "standard" else variant
+    return "" if cut_of(variant) == "standard" else cut_of(variant)
 
 
 def _suffix(variant):
@@ -283,10 +292,10 @@ def _existing(params, destination):
     """
     episode_id = params.get("episode_id") or params.get("video_id")
     if episode_id:
-        variant = variant_of(params)
+        variant = cut_of(variant_of(params))
         for path, meta in read_index()["files"].items():
             if (meta.get("episode_id") == episode_id
-                    and (meta.get("variant") or "") == variant
+                    and cut_of(meta.get("variant")) == variant
                     and xbmcvfs.exists(path)):
                 return path
     return destination if xbmcvfs.exists(destination) else ""

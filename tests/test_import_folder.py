@@ -38,6 +38,14 @@ SIZES = {
     ROOT + "Extras/holiday clip.mkv": 12345,
 }
 
+TWICE = "G:/Both/"
+# The same episode at two qualities: the 1080p matches on size, the 720p only
+# by name. Both are RO_3 standard, so only one of them can take the seat.
+TREE[TWICE] = ([], ["[One Pace][3-5] Romance Dawn 03 [1080p][2DEB2701].mkv",
+                    "[One Pace][3-5] Romance Dawn 03 [720p][En CC][727376CF].mp4"])
+SIZES[TWICE + "[One Pace][3-5] Romance Dawn 03 [1080p][2DEB2701].mkv"] = 705395954
+SIZES[TWICE + "[One Pace][3-5] Romance Dawn 03 [720p][En CC][727376CF].mp4"] = 216984913
+
 CUTS = "F:/Kuma/"
 TREE[CUTS] = ([], ["One Piece - 1131 [Kuma Cut].mp4",
                    "[DUB] One Piece - 1127+8 [Shaved Egghead].mp4"])
@@ -240,7 +248,7 @@ assert rows[chosen[0]]["imported"] is True
 # The report is written last, so it counts what actually happened.
 body = chr(10).join(reports[-1][1])
 print(f"  report says: {[l for l in reports[-1][1] if 'hand' in l]}")
-assert "1 chosen by hand" in body and "not recognised" not in body, body
+assert "1 settled by hand" in body and "not recognised" not in body, body
 
 print()
 print("=== backing out of the picker leaves the file alone ===")
@@ -272,6 +280,39 @@ assert any("holiday" in p for p in rows), "their choice should be in"
 assert not kept, "the row it replaces should have gone"
 imp.read_index = lambda: {"files": dict(written[-1]["files"]) if written else {},
                           "series": {}}
+
+print()
+print("=== one episode cannot take two seats without being asked ===")
+# This is what makes a list show the same episode twice: a 720p and a 1080p of
+# one episode, both correctly identified, both added without a word.
+rec = attempt(answer=1, browse=TWICE)
+rows = written[-1]["files"] if written else {}
+print(f"  {len(rows)} row(s) written from two files of the same episode")
+for path in rows:
+    print(f"    {path.split('/')[-1][:50]}")
+assert len(rows) == 1, "the second one should have waited to be asked about"
+body = chr(10).join(reports[-1][1])
+print(f"  report: {[l for l in reports[-1][1] if 'already held' in l]}")
+assert "1 left out, already held as another file" in body, body
+
+print()
+print("=== and Review is where the second one gets its yes ===")
+# Pick the clash, then "Add this one as well".
+D.select_answers = [0, 0]
+rec = attempt(answer=2, browse=TWICE)
+rows = written[-1]["files"] if written else {}
+print(f"  after Review -> {len(rows)} row(s)")
+assert len(rows) == 2, "they said to add it, so it goes in"
+assert all(r["episode_id"] == "RO_3" for r in rows.values()), rows
+
+print()
+print("=== a clash is never asked which episode it is ===")
+# It already knows, so Review skips straight past the series, season and
+# episode questions — one answer, the file itself. Where the episode it
+# clashes with is already in the index, the three-way question follows; here
+# both files arrived in the same run, so there is nothing stored yet to keep
+# or replace, and picking it means adding it.
+assert len(D.select_answers) == 1, f"too many questions asked: {D.select_answers}"
 
 print()
 print("all assertions passed")

@@ -188,8 +188,14 @@ def run(_params=None):
             return
         cut_titles = _cut_titles(metas)
 
-        known = set(read_index()["files"])
-        sure, guessed, unknown, already = [], [], [], 0
+        from .downloads import cut_of
+        rows = read_index()["files"]
+        known = set(rows)
+        # An episode we hold already, as some other file. A folder with both
+        # the 720p and the 1080p of one episode would otherwise quietly list
+        # the same thing twice, which is nobody's idea of a good import.
+        taken = {(r.get("episode_id"), cut_of(r.get("variant"))) for r in rows.values()}
+        sure, guessed, clash, unknown, already = [], [], [], [], 0
         for number, path in enumerate(files, 1):
             if progress.iscanceled():
                 return
@@ -210,14 +216,19 @@ def run(_params=None):
                     answer["episode_id"] = str(found[1].get("id") or "")
                     answer["how"] = "title"
             if not found:
-                unknown.append((path, answer))
+                unknown.append((path, answer, None))
                 continue
+            seat = (answer["episode_id"], cut_of(answer["variant"]))
+            if seat in taken:
+                clash.append((path, answer, found))
+                continue
+            taken.add(seat)
             (guessed if answer["how"] == "guess" else sure).append(
                 (path, answer, found))
     finally:
         progress.close()
 
-    _offer(root, sure, guessed, unknown, already, metas)
+    _offer(root, sure, guessed, clash, unknown, already, metas)
 
 
 def _ask_episode(metas):
@@ -252,31 +263,36 @@ def _ask_episode(metas):
 
 def _held_rows(episode_id, variant):
     """Rows already pointing at this exact episode and cut."""
+    from .downloads import cut_of
+    wanted = cut_of(variant)
     return [path for path, row in read_index()["files"].items()
             if row.get("episode_id") == episode_id
-            and (row.get("variant") or "") == (variant or "")]
+            and cut_of(row.get("variant")) == wanted]
 
 
-def _by_hand(unknown, metas):
-    """Let them say what the add-on could not work out.
+def _by_hand(items, metas):
+    """Let them settle the files the add-on would not decide alone.
 
-    Returns the rows they settled and the paths to forget first, for when they
-    choose this file over one already listed.
+    Two sorts arrive here: one it could not read at all, which needs an episode
+    choosing, and one whose episode is already listed as another file, which
+    only needs a yes. Returns the rows they settled, and the paths to forget
+    first for when they pick this file over the one already there.
     """
-    picked, replace, left = [], [], list(unknown)
+    picked, replace, left = [], [], list(items)
     while left:
         at = xbmcgui.Dialog().select(
-            f"{len(left)} not recognised — pick one",
-            [os.path.basename(path) for path, _ in left])
+            f"{len(left)} to settle — pick one",
+            [os.path.basename(path) for path, _, _ in left])
         if at < 0:
             break
-        path, answer = left[at]
-        chosen = _ask_episode(metas)
+        path, answer, found = left[at]
+        chosen = found if found else _ask_episode(metas)
         if chosen is None:
             continue
         series, video = chosen
         episode_id = str(video.get("id") or "")
-        answer = dict(answer, episode_id=episode_id, how="hand")
+        answer = dict(answer, episode_id=episode_id,
+                      how=answer["how"] if found else "hand")
 
         held = _held_rows(episode_id, answer["variant"])
         if held:
@@ -296,23 +312,26 @@ def _by_hand(unknown, metas):
     return picked, replace
 
 
-def _offer(root, sure, guessed, unknown, already, metas):
+def _offer(root, sure, guessed, clash, unknown, already, metas):
     """Say what was found, and write nothing until it is asked for."""
     by_hand, replace = [], []
     try:
-        _add(root, sure, guessed, unknown, already, metas, by_hand, replace)
+        _add(root, sure, guessed, clash, unknown, already, metas,
+             by_hand, replace)
     finally:
         # Written whatever happened, and last, so the count is the one that
         # ended up being true. The names it could not read are listed only
         # here, so somebody who cancels to go and look should find them.
-        _report(root, sure, guessed, unknown, already, by_hand)
+        _report(root, sure, guessed, clash, unknown, already, by_hand)
 
 
-def _add(root, sure, guessed, unknown, already, metas, by_hand, replace):
+def _add(root, sure, guessed, clash, unknown, already, metas, by_hand, replace):
     """The dialogs, and the one write at the end of them."""
     lines = [f"{len(sure)} episode(s) identified"]
     if guessed:
         lines.append(f"{len(guessed)} matched by name only")
+    if clash:
+        lines.append(f"{len(clash)} you already have as another file")
     if unknown:
         lines.append(f"{len(unknown)} not recognised")
     if already:
@@ -320,13 +339,15 @@ def _add(root, sure, guessed, unknown, already, metas, by_hand, replace):
     question = os.linesep.join(
         lines + ["", "Add them to Downloads?",
                  "Your files stay where they are."])
-    if unknown:
-        # A third way out, because the names it could not read are the ones
-        # only the viewer can settle.
+    settle = clash + unknown
+    if settle:
+        # A third way out: these are the ones only the viewer can settle, and
+        # adding them unasked is how a list ends up with the same episode
+        # twice over.
         choice = xbmcgui.Dialog().yesnocustom(
-            "Import", question, f"Review {len(unknown)}", "Cancel", "Add")
+            "Import", question, f"Review {len(settle)}", "Cancel", "Add")
         if choice == 2:
-            picked, instead = _by_hand(unknown, metas)
+            picked, instead = _by_hand(settle, metas)
             by_hand.extend(picked)
             replace.extend(instead)
         elif choice != 1:
@@ -356,19 +377,23 @@ def _add(root, sure, guessed, unknown, already, metas, by_hand, replace):
     refresh_container()
 
 
-def _report(root, sure, guessed, unknown, already, by_hand=()):
-    """The unrecognised names are the part worth keeping to look at."""
+def _report(root, sure, guessed, clash, unknown, already, by_hand=()):
+    """The names it could not settle are the part worth keeping to look at."""
     settled = {path for path, _, _ in by_hand}
     left = [u for u in unknown if u[0] not in settled]
+    skipped = [c for c in clash if c[0] not in settled]
     lines = [f"From {root}",
              f"{len(sure)} identified from the release list",
              f"{len(guessed)} matched by name only",
              f"{already} already in the list"]
     if settled:
-        lines.append(f"{len(settled)} chosen by hand")
+        lines.append(f"{len(settled)} settled by hand")
+    if skipped:
+        lines.append(f"{len(skipped)} left out, already held as another file:")
+        lines.extend(f"  {os.path.basename(p)}" for p, _, _ in skipped[:20])
     if left:
         lines.append(f"{len(left)} not recognised:")
-        lines.extend(f"  {os.path.basename(p)}" for p, _ in left[:40])
+        lines.extend(f"  {os.path.basename(p)}" for p, _, _ in left[:40])
         if len(left) > 40:
             lines.append(f"  ... and {len(left) - 40} more")
     write_report("Import", lines)

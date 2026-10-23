@@ -283,7 +283,15 @@ print()
 print("=== the same cut never lands twice, but a different cut may ===")
 sames = SRC[SRC.index("def _existing("):SRC.index("def _remove_rows(")]
 assert 'meta.get("episode_id") == episode_id' in sames, "a different extension would slip past"
-assert 'meta.get("variant") or ""' in sames, "Extended would overwrite Standard"
+assert 'cut_of(meta.get("variant"))' in sames, "Extended would overwrite Standard"
+# A download writes "standard", a rescan and an import write nothing at all.
+# Comparing those as text makes one episode look like two.
+for raw, want in (("standard", "standard"), ("", "standard"), (None, "standard"),
+                  (" Standard ", "standard"), ("extended", "extended")):
+    print(f"  cut_of({raw!r}) -> {downloads.cut_of(raw)!r}")
+    assert downloads.cut_of(raw) == want, raw
+assert downloads.cut_of("") == downloads.cut_of("standard"), "two spellings, one cut"
+assert downloads.cut_of("extended") != downloads.cut_of(""), "but a real cut differs"
 swap = SRC[SRC.index("if already and already != destination"):]
 assert "xbmcvfs.delete(already)" in swap[:260], "the old file would sit beside the new one"
 # A copy they imported is the exception, and test_imported covers that.
