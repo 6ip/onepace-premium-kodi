@@ -1232,10 +1232,18 @@ print()
 print("=== with the preference off, the copy is offered rather than ignored ===")
 pickr = STREAMS[STREAMS.index("    choices = _preferred_streams(binge_groups, prefer)"):]
 pickr = pickr[:pickr.index("    if downloadable_only:")]
-assert "local_options" in pickr, "the download would be invisible in the picker"
+assert "if held:" in pickr, "the download would be invisible in the picker"
 assert "valid_streams.insert(offset, fields)" in pickr, "the cuts would not come first"
 assert "[i + shift for i in choices]" in pickr, "the other picks would shift onto the wrong stream"
-assert "if not downloadable_only:" in pickr, "downloading would offer the file to itself"
+
+# Read once at the top now, before the gates, so a copy on disk is offered
+# even when nothing remote can be reached. Downloading still never sees them:
+# it would otherwise offer the file to itself.
+opening = STREAMS[STREAMS.index("def _choose_stream("):]
+opening = opening[:opening.index("    catalog_type = params[")]
+assert "held = [] if downloadable_only else _held_copies(params)" in opening, opening
+assert opening.index("held =") < opening.index("ensure_p2p_ready"), "gated before it is read"
+assert "_local_only(held" in opening, "the gates would still refuse a file we hold"
 
 downloads.read_index = lambda: {"files": {
     "/d/6x05 - Arlong Park.mkv": {"episode_id": "AR_5", "video_size": 763871543,

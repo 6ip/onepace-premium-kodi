@@ -408,6 +408,29 @@ def list_episodes(params):
     end_directory(cache=True)
 
 
+def _held_copies(params):
+    """Every cut of this episode already on disk, newest first."""
+    from .downloads import local_options
+    return local_options(params.get("video_id", ""))
+
+
+def _local_only(held, quiet=False):
+    """Play what is on disk when nothing remote can be reached."""
+    if not held:
+        return None
+    if len(held) == 1 or quiet:
+        chosen = dict(held[0][1])
+    else:
+        pick = xbmcgui.Dialog().select("Select Stream",
+                                       [label for label, _ in held])
+        if pick < 0:
+            return None
+        chosen = dict(held[pick][1])
+    chosen["stream_choices"] = len(held)
+    log(f"[streams] nothing remote to offer, playing the copy on disk")
+    return chosen
+
+
 def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
                    survey=False):
     """Fetch this episode's streams and return the one to act on, or None.
@@ -417,14 +440,25 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
     season queue: it takes the preferred stream and says nothing, since one
     dialog per episode is thirty dialogs.
     """
-    if not ensure_configured():
+    # Read first, and before any of the gates below. A copy on disk needs no
+    # service, no configuration and no Elementum — it is a file. Asking about
+    # any of that before offering it is how Play Manually came to refuse an
+    # episode the viewer already had.
+    held = [] if downloadable_only else _held_copies(params)
+    hushed = quiet or survey or bool(params.get("autoplay"))
+
+    if not get_base_url():
+        if held:
+            return _local_only(held, hushed)
+        ensure_configured()
         return None
 
     if not get_secret_string():
         # No debrid key: the server answers these with peer-to-peer streams.
-        if not ensure_p2p_ready(
-                silent=quiet or survey or bool(params.get("autoplay"))):
-            return None
+        # Silent when something is already on disk, since there is then
+        # nothing to ask about.
+        if not ensure_p2p_ready(silent=hushed or bool(held)):
+            return _local_only(held, hushed)
 
     catalog_type = params["catalog_type"]
     video_id     = params["video_id"]
@@ -444,11 +478,13 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
     if response is None:
         response = fetch_data(stream_url)
         if not response:
-            return None
+            return _local_only(held, hushed)
         _cache.set(stream_url, response, 3600)
 
     streams = response.get("streams", ())
     if not streams:
+        if held:
+            return _local_only(held, hushed)
         _notify_error("No streams available")
         return None
 
@@ -561,6 +597,8 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
         binge_groups.append(behavior_hints.get("bingeGroup", ""))
 
     if not valid_streams:
+        if held:
+            return _local_only(held, hushed)
         _notify_error("No streams available")
         return None
 
@@ -576,15 +614,12 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
 
     # The copy on disk goes first, so it is never hidden behind a preference
     # that narrowed the list down to one remote stream.
-    if not downloadable_only:
-        from .downloads import local_options
-        held = local_options(params.get("video_id", ""))
+    if held:
         for offset, (label, fields) in enumerate(held):
             valid_streams.insert(offset, fields)
             dialog_labels.insert(offset, label)
-        if held:
-            shift = len(held)
-            choices = list(range(shift)) + [i + shift for i in choices]
+        shift = len(held)
+        choices = list(range(shift)) + [i + shift for i in choices]
 
     if downloadable_only:
         from .downloads import is_downloadable

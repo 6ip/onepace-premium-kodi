@@ -181,4 +181,55 @@ assert said == "No stream here can be downloaded", said
 S["secret_string"], S["preferred_version"] = "", "0"
 
 print()
+print("=== a file on disk is never refused for want of a service ===")
+# Play Manually used to go through the gates below before the copy on disk was
+# ever looked at, so an unconfigured viewer with no Elementum was told to go
+# and install things in order to watch a file they already had.
+LOCAL = [("[I] Imported  |  Standard  |  216.98 MB",
+          {"video_url": "E:/Anime/ep.mkv", "episode_id": "RO_3"})]
+er._held_copies = lambda params: list(LOCAL)
+er.ensure_p2p_ready = lambda silent=False: (_asked.append(silent), False)[1]
+P = {"catalog_type": "series", "video_id": "RO_3"}
+
+for label, settings, streams in [
+        ("no config at all",      {"base_url": "", "secret_string": ""},   None),
+        ("no debrid key",         {"base_url": "https://x", "secret_string": ""}, None),
+        ("the server says no",    {"base_url": "https://x", "secret_string": "k"},
+         lambda url: None),
+        ("torrents, no Elementum", {"base_url": "https://x", "secret_string": "k"},
+         lambda url: {"streams": [{"name": "P2P", "infoHash": "abc", "sources": [],
+                                   "behaviorHints": {}}]})]:
+    _asked = []
+    for key, value in settings.items():
+        S[key] = value
+    er.is_elementum_installed_and_enabled = lambda: False
+    if streams is not None:
+        er._cache.get = streams
+    rec = harness.recorder()
+    got = er._choose_stream(dict(P))
+    print(f"  {label:<22} -> plays {got and got['video_url']!r}")
+    assert got and got["video_url"] == "E:/Anime/ep.mkv", (label, got)
+
+print()
+print("=== and it is not nagged about peer-to-peer on the way ===")
+# Holding a copy means there is nothing to ask, so the gate is read silently.
+S["base_url"], S["secret_string"] = "https://x", ""
+_asked = []
+er.ensure_p2p_ready = lambda silent=False: (_asked.append(silent), False)[1]
+er._choose_stream(dict(P))
+print(f"  ensure_p2p_ready(silent={_asked[0]})")
+assert _asked == [True], _asked
+
+print()
+print("=== with nothing on disk it still says what is wrong ===")
+er._held_copies = lambda params: []
+S["base_url"], S["secret_string"] = "https://x", ""
+rec = harness.recorder()
+assert er._choose_stream(dict(P)) is None
+print(f"  no copy, no key -> asked out loud: {_asked[-1] is False}")
+assert _asked[-1] is False, _asked
+
+S["base_url"], S["secret_string"] = "https://onepace.e6ip.com", ""
+
+print()
 print("all assertions passed")
