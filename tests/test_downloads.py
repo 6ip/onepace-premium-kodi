@@ -1069,8 +1069,8 @@ print("=== a rescan looks where downloads used to go, not only where they go now
 # Changing the folder leaves the old files working where they are, so a scan
 # that only saw the current one found a library of exactly the newest episode.
 _real_folder, _real_profile = downloads.folder, downloads._profile
-downloads.folder = lambda: "C:/Users/hheb5/Downloads/One Pace Premium/"
-downloads._profile = lambda: "C:/Users/hheb5/AppData/Roaming/Kodi/userdata/addon_data/pp/"
+downloads.folder = lambda: "C:/Users/kodi/Downloads/One Pace Premium/"
+downloads._profile = lambda: "C:/Users/kodi/AppData/Roaming/Kodi/userdata/addon_data/pp/"
 roots = downloads._roots()
 for r in roots:
     print(f"  {r}")
@@ -1078,7 +1078,7 @@ assert len(roots) == 2, roots
 assert roots[1].endswith("/downloads/"), roots[1]
 
 # Pointed at the default, there is only one place to look.
-downloads.folder = lambda: "C:/Users/hheb5/AppData/Roaming/Kodi/userdata/addon_data/pp/downloads/"
+downloads.folder = lambda: "C:/Users/kodi/AppData/Roaming/Kodi/userdata/addon_data/pp/downloads/"
 assert len(downloads._roots()) == 1, downloads._roots()
 downloads.folder, downloads._profile = _real_folder, _real_profile
 print("  both roots when they differ, one when they do not  OK")
@@ -1129,15 +1129,13 @@ for label, paths, want in (
                          "D:/b/One Pace/S1/y.mkv"], "C:/a/One Pace/S1"),
         ("moved once",  ["C:/old/One Pace/S1/x.mkv",
                          "C:/new/One Pace/S1/y.mkv"], "C:/old/One Pace/S1"),
-        # Reported from a real library: most in Downloads, one in the profile.
-        # These share C:/Users/hheb5, which exists and is no use at all, and a
-        # rescan walks the current folder first so "the first one" is the wrong
-        # answer too. Where most of it lives is the one that helps.
-        ("real split",  ["C:/Users/hheb5/AppData/Roaming/Kodi/userdata/addon_data/"
+        # Most in Downloads, one in the profile: they share the home folder,
+        # which is no use, and the first one walked is the wrong answer too.
+        ("real split",  ["C:/Users/kodi/AppData/Roaming/Kodi/userdata/addon_data/"
                          "plugin.video.onepacepremium/downloads/One Pace/Season 01/new.mkv",
-                         "C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01/a.mkv",
-                         "C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01/b.mkv"],
-                        "C:/Users/hheb5/Downloads/One Pace Premium/One Pace/Season 01"),
+                         "C:/Users/kodi/Downloads/One Pace Premium/One Pace/Season 01/a.mkv",
+                         "C:/Users/kodi/Downloads/One Pace Premium/One Pace/Season 01/b.mkv"],
+                        "C:/Users/kodi/Downloads/One Pace Premium/One Pace/Season 01"),
         ("none",        [], "")):
     got = downloads._shared_folder(paths)
     print(f"  {label:<12} -> {got!r}")

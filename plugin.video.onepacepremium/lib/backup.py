@@ -13,8 +13,7 @@ from .utils import ADDON_ID, ADDON_NAME, log
 # Your configuration key unlocks the debrid account behind it.
 SENSITIVE = {"secret_string", "base_url", "stremio_api_prefix"}
 
-# The What's New window should still greet you on a new machine. The *_display
-# labels are only written by the pickers, so they must travel with their values.
+# The What's New window should still greet you on a new machine.
 SKIP = {"last_seen_version"}
 
 # key, label, on by default
@@ -22,9 +21,7 @@ PARTS = [
     ("settings",  "Settings",           True),
     ("watched",   "Watched history",    True),
     ("bookmarks", "Resume points",      True),
-    # The list of what was downloaded, not the videos: a few kilobytes of
-    # paths and titles. Worth restoring on the same machine, and harmless
-    # elsewhere, where rows whose file is missing are swept on first sight.
+    # The list of what was downloaded, not the videos themselves.
     ("downloads", "Download list",       True),
     ("config",    "Configuration key",  False),
 ]
@@ -221,8 +218,7 @@ def import_settings(_params=None):
         if name in want and _write_store(addon, name, section):
             done.append(f"{_count(name, section)} {_NOUNS.get(name, name)}")
 
-    # Our lists draw the tick from watched.json, but Kodi keeps its own
-    # playCount. Without this the two disagree until each episode is replayed.
+    # Our tick comes from watched.json; Kodi keeps its own playCount.
     if "watched" in want:
         episode_ids = [e for key, eps in data["watched"].items()
                        if not key.startswith("__") and isinstance(eps, list)

@@ -12,52 +12,29 @@ ADDON_ID = "plugin.video.onepacepremium"
 ACCENT = "FF81A6C6"
 
 _PROGRESS = 300
-# What to hand back to the player rather than swallow. Anything else simply
-# closes the bar, so a second press does whatever it was going to do.
-# What arrives here, mapped to what the Action builtin calls it. The two are
-# not the same vocabulary: 77 is ACTION_PLAYER_FORWARD, and the builtin only
-# answers to "fastforward". Names are ActionTranslator.cpp's.
-#
-# The keys on the left are what a *dialog* receives, which is why the arrows
-# are plain moves rather than the step actions fullscreen video would get.
+# What to hand back to the player rather than swallow.
 _FORWARD = {24: "osd", 7: "osd", 100: "osd", 103: "osd", 11: "info"}
-# A tap is the finger's left click, so it does what 100 does. 401 is one
-# finger and 410 is ten. Same ids on Kodi 21 and 22.
+# A tap is the finger's left click, so it does what 100 does.
 _FORWARD.update({a: "osd" for a in range(401, 411)})
-# Kodi's keyboard map handles these in its <global> section, so they reach the
-# player whether or not this bar is in the way. Touching them ourselves means
-# two handlers: it pauses, we see it paused, and we helpfully resume it.
+# Kodi's <global> map sends these to the player regardless.
 _GLOBAL = {12, 13, 79, 14, 15, 88, 89, 91, 104, 105}
-# Seeking is not global, so nothing else does it while the bar is up. The
-# builtins were accepted and did nothing, so it is done on the player.
+# Seeking is not global, so nothing else does it while the bar is up.
 _SEEK = {1: -10, 2: 10, 3: 60, 4: -60}
-# Slack around the edge of the range, so seeking near it cannot make the bar
-# blink in and out.
+# Slack at the edge, so seeking near it cannot make the bar blink.
 _HYSTERESIS = 5
 # 101 is the right mouse button, which is Back everywhere else in Kodi.
 _CLOSE_ACTIONS = (9, 10, 92, 101)
-# Kodi delivers something the instant the window opens — with nothing here able
-# to take focus, that arrived as a key press and shut the bar immediately.
+# Kodi sends something on open, which read as a press and shut it.
 _NOOP = 999
 _SETTLE = 1.0
-# Kodi's mouse actions. Moving and dragging are a nudge of the desk, not an
-# instruction; a click is somebody reaching for a control we are sitting on.
-# Drag, move, long click and the end-of-gesture marker. None of them are an
-# instruction, and 109 was closing the bar on the way out of a click.
+# Kodi's mouse actions.
 _MOUSE_QUIET = (106, 107, 108, 109)
-# The same again for fingers: a long press (411-420), and the gestures that are
-# a hand moving rather than an instruction — notify, begin, zoom, rotate, pan
-# and abort. Swipes are left out, so they close the bar like any other press.
+# The same for fingers: a long press, and hand-moving gestures.
 _TOUCH_QUIET = (*range(411, 421), *range(500, 506))
 
 
 def _publish_lift():
-    """Tell the skin how far to step up when the player's controls appear.
-
-    Every skin puts them at a different height and Kodi offers no way to ask
-    where they are, so the viewer sets it. The skin has one animation per step
-    because a slide distance cannot be read from a property.
-    """
+    """Tell the skin how far to step up when the player's controls appear."""
     try:
         raw = int(get_setting("autoplay_card_lift") or 100)
         step = min(240, max(0, raw // 20 * 20))
@@ -77,11 +54,7 @@ def countdown_label(seconds):
 
 
 class NextEpisodeCard(xbmcgui.WindowXMLDialog):
-    """Tells you what is next. Never asks, and never keeps the remote.
-
-    Nothing in the skin can take focus, so the only thing that reaches this
-    window is a key press — and every one of them gives control straight back.
-    """
+    """Tells you what is next. Never asks, and never keeps the remote."""
 
     def __init__(self, xml_file, addon_path, default_skin, default_res, **kwargs):
         super().__init__(xml_file, addon_path, default_skin, default_res)
@@ -114,14 +87,7 @@ class NextEpisodeCard(xbmcgui.WindowXMLDialog):
             self._bar = None
 
     def onAction(self, action):
-        """Hand back what we can, and get out of the way of what we cannot.
-
-        Kodi routes everything to the window on top, so while this is up the
-        player hears nothing. The few actions worth naming are put back and
-        the bar stays; anything else closes it, because a bar you cannot see
-        past is worse than one that ends early. Neither cancels what is next
-        — only Back does that.
-        """
+        """Hand back what we can, and get out of the way of what we cannot."""
         action_id = action.getId()
         if action_id == _NOOP or action_id in _MOUSE_QUIET + _TOUCH_QUIET:
             return
@@ -129,13 +95,11 @@ class NextEpisodeCard(xbmcgui.WindowXMLDialog):
             log(f"[autoplay] ignoring action {action_id} as the bar opens")
             return
         if not self._said_modal:
-            # Reaching here at all means the skin's modeless tag was not
-            # honoured, and everything below is the fallback.
+            # Reaching here means the modeless tag was not honoured.
             self._said_modal = True
             log("[autoplay] the bar is taking input, so it is not modeless here")
 
-        # Somebody is here. That is enough to start the run over, whatever
-        # they pressed and however the bar ends.
+        # Somebody is here.
         self.touched = True
 
         if action_id in _CLOSE_ACTIONS:
@@ -204,8 +168,7 @@ class NextEpisodeCard(xbmcgui.WindowXMLDialog):
                 if not player.isPlaying() or monitor.waitForAbort(0.2):
                     break
         finally:
-            # Dropped before the window goes, so nothing of Kodi's holds the
-            # player once the bar is done with it.
+            # Dropped before the window, so nothing of Kodi's holds the player.
             self._player = None
             self.close()
         return self

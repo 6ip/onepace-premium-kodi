@@ -108,7 +108,7 @@ def episode_play_url(video, meta, series_id, catalog_type="series",
     season = video.get("season")
     number = _episode_number(video)
     title = video.get("name") or video.get("title") or f"Episode {number}"
-    # Only set when autoplaying, so ordinary rows keep the URL Kodi already knows.
+    # Only when autoplaying, so ordinary rows keep the known URL.
     extra = {"autoplay": "1"} if autoplay else {}
     return build_url("check_resume", **extra, **episode_params(
         video, meta, series_id, catalog_type, season_poster, episode_id))
@@ -154,7 +154,7 @@ def _catalog_url(catalog_type: str, catalog_id: str, extra: str):
 
 
 def _catalog_specs(manifest: dict, catalog_type: str):
-    # "anime" catalogs are treated as "series" so they use the proven series pipeline
+    # "anime" is treated as "series" to use the proven pipeline.
     match_types = {catalog_type, "anime"} if catalog_type == "series" else {catalog_type}
     specs = []
     for catalog in manifest.get("catalogs", ()):
@@ -178,15 +178,7 @@ def _catalog_specs(manifest: dict, catalog_type: str):
 
 
 def series_order():
-    """Where each series sits in the catalog Browse lists, by id.
-
-    Downloads are grouped by name and would otherwise fall alphabetically,
-    which puts them in a different order from every other list in the add-on.
-
-    Read from the cache only, never fetched. Browsing fills that cache, and
-    the answer is kept once, so the one place that wants it must not stall
-    for two timeouts and raise a network error when there is no connection.
-    """
+    """Where each series sits in the catalog Browse lists, by id."""
     try:
         manifest_url, _ = _provider_context()
         manifest = _cache.get(manifest_url)
@@ -216,11 +208,7 @@ def _parse_release_year(release_info):
 
 
 def _parse_air_date(video):
-    """Episode air date as YYYY-MM-DD, which is what Kodi's info tags expect.
-
-    The feed carries full ISO timestamps ("2026-06-28T14:15:00.000Z"); Kodi wants
-    just the date part. firstAired wins over released when both are present.
-    """
+    """Episode air date as YYYY-MM-DD, which is what Kodi's info tags expect."""
     for field in ("firstAired", "released"):
         match = _AIR_DATE_RE.match(str(video.get(field) or ""))
         if match:

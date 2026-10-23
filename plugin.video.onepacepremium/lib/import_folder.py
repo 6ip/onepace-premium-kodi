@@ -1,13 +1,4 @@
-"""Adopting episodes the viewer already has, wherever they keep them.
-
-Nothing is copied: an import writes index rows that point at their own files,
-where those files already are. Nothing of theirs is moved or deleted either —
-that is what the imported flag in downloads.py protects.
-
-The folders are not read for meaning. People keep a hard disk of One Pace in
-one flat folder as often as in neat seasons, so only the filenames matter, and
-what identifies them is the release list rather than their shape.
-"""
+"""Adopting episodes the viewer already has, wherever they keep them."""
 import os
 
 import xbmcgui
@@ -20,8 +11,7 @@ from .downloads import (_sidecars, _size_on_disk, _write_index, enabled,
 from .route_common import _notify_error, _notify_info
 from .utils import log, refresh_container
 
-# The release list changes only when a release does, and an import is a rare
-# thing to do twice in a day.
+# The list changes only when a release does.
 _INDEX_KEY = "import_releases"
 _INDEX_TTL = 86400
 
@@ -49,8 +39,7 @@ def _walk(root, progress):
             log(f"[import] could not read {here!r}: {exc}")
             continue
         for name in dirs:
-            # Our own subtitle folders start with a dot, and so does most of
-            # what an operating system would rather we left alone.
+            # A leading dot is ours, or something the system wants left alone.
             if not name.startswith("."):
                 stack.append(f"{here}{name}/")
         for name in names:
@@ -70,12 +59,7 @@ def _flat(text):
 
 
 def _cut_titles(metas):
-    """The Kuma catalogue by title.
-
-    Its episodes are a flat sequence with no arc, so a filename carries no id
-    to build — but it does carry the cut and the One Piece episode, and the
-    catalogue calls them exactly that: "Kuma Cut 1131".
-    """
+    """The Kuma catalogue by title."""
     series = import_match.SERIES_NAMES[import_match.KUMA]
     found = {}
     for video in (metas.get(series) or {}).get("videos", ()):
@@ -92,11 +76,7 @@ def _by_cut_title(parsed, titles):
 
 
 def _catalogues():
-    """Every series we serve, by the stream id each of its episodes carries.
-
-    The provider prefixes some ids with pp_ and leaves others bare, so both
-    spellings are indexed and a release id finds its episode either way.
-    """
+    """Every series we serve, by the stream id each of its episodes carries."""
     from .downloads import _series_ids
     from .provider_api import _fetch_provider_meta
 
@@ -191,9 +171,7 @@ def run(_params=None):
         from .downloads import cut_of
         rows = read_index()["files"]
         known = set(rows)
-        # An episode we hold already, as some other file. A folder with both
-        # the 720p and the 1080p of one episode would otherwise quietly list
-        # the same thing twice, which is nobody's idea of a good import.
+        # An episode we hold already, as some other file.
         taken = {(r.get("episode_id"), cut_of(r.get("variant"))) for r in rows.values()}
         sure, guessed, clash, unknown, already = [], [], [], [], 0
         for number, path in enumerate(files, 1):
@@ -249,8 +227,7 @@ def _ask_episode(metas):
         return None
     season = seasons[at]
 
-    # One arc numbers an episode 3.5, so the order is read as a number rather
-    # than compared as text.
+    # One arc numbers an episode 3.5, so the order is read as a number.
     here = sorted((v for v in videos if int(v.get("season") or 0) == season),
                   key=lambda v: float(v.get("episode") or 0))
     labels = [f"{v.get('episode')}.  {v.get('name') or v.get('title') or ''}"
@@ -271,13 +248,7 @@ def _held_rows(episode_id, variant):
 
 
 def _by_hand(items, metas):
-    """Let them settle the files the add-on would not decide alone.
-
-    Two sorts arrive here: one it could not read at all, which needs an episode
-    choosing, and one whose episode is already listed as another file, which
-    only needs a yes. Returns the rows they settled, and the paths to forget
-    first for when they pick this file over the one already there.
-    """
+    """Let them settle the files the add-on would not decide alone."""
     picked, replace, left = [], [], list(items)
     while left:
         at = xbmcgui.Dialog().select(
@@ -319,9 +290,7 @@ def _offer(root, sure, guessed, clash, unknown, already, metas):
         _add(root, sure, guessed, clash, unknown, already, metas,
              by_hand, replace)
     finally:
-        # Written whatever happened, and last, so the count is the one that
-        # ended up being true. The names it could not read are listed only
-        # here, so somebody who cancels to go and look should find them.
+        # Written last, so the count is the one that ended up true.
         _report(root, sure, guessed, clash, unknown, already, by_hand)
 
 
@@ -341,9 +310,7 @@ def _add(root, sure, guessed, clash, unknown, already, metas, by_hand, replace):
                  "Your files stay where they are."])
     settle = clash + unknown
     if settle:
-        # A third way out: these are the ones only the viewer can settle, and
-        # adding them unasked is how a list ends up with the same episode
-        # twice over.
+        # Only the viewer can settle these; adding them unasked duplicates.
         choice = xbmcgui.Dialog().yesnocustom(
             "Import", question, f"Review {len(settle)}", "Cancel", "Add")
         if choice == 2:

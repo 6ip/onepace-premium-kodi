@@ -14,12 +14,7 @@ _CLOSE_ACTIONS = (9, 10, 92)
 
 
 class DownloadsManager(xbmcgui.WindowXMLDialog):
-    """The transfer in flight redraws itself from window properties.
-
-    Nothing here runs on a timer. A control may only be touched from the
-    thread Kodi calls us on, so the moving parts are left to the skin and
-    the list is rebuilt on a keypress, and only when it has actually changed.
-    """
+    """The transfer in flight redraws itself from window properties."""
 
     def __init__(self, xml_file, addon_path, default_skin, default_res, **kwargs):
         super().__init__(xml_file, addon_path, default_skin, default_res)
@@ -98,8 +93,7 @@ class DownloadsManager(xbmcgui.WindowXMLDialog):
 
 def show(_params=None):
     """Open the manager. Called from the Downloads menu."""
-    # Before the window, not after: Kodi holds the listing that led here open
-    # until this invocation answers, and doModal does not return for minutes.
+    # Before the window: doModal holds this invocation for minutes.
     end_directory(succeeded=False)
     addon = xbmcaddon.Addon(ADDON_ID)
     addon_path = xbmcvfs.translatePath(addon.getAddonInfo("path"))

@@ -126,7 +126,7 @@ def configure_addon():
 
         base_url = addon.getSetting("base_url")
 
-        # If a valid pending code already exists, skip URL input and show it immediately
+        # A valid pending code skips the URL question.
         code = None
         configure_url = None
         expires_in = None

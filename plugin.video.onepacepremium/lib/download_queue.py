@@ -1,10 +1,4 @@
-"""One transfer at a time, so a second Download waits instead of racing.
-
-The queue lives in Kodi's window properties rather than a file. Every plugin
-invocation can read them, they cost nothing to touch from inside a chunk loop,
-and they go when Kodi does — so a session that was killed mid-download cannot
-leave a lock behind that blocks the next one.
-"""
+"""One transfer at a time, so a second Download waits instead of racing."""
 import json
 import time
 import uuid
@@ -23,8 +17,7 @@ _CANCEL = "onepace.dl.cancel"
 _STALE = 90
 # A waiter beats every time round its loop, so this is many turns of silence.
 _WAIT_STALE = 15
-# Two invocations can both read an empty slot, so the winner is whoever the
-# property still names a moment later.
+# Two can read an empty slot, so the winner is who it still names.
 _SETTLE = 0.15
 
 _last_beat = (0, -1)
@@ -49,9 +42,8 @@ def _write(key, value):
 def publish():
     """Flat properties for the skin to read.
 
-    A window cannot pick apart the JSON above, and Python must not touch a
-    control from a download's own thread, so the skin binds to these and
-    redraws itself.
+    A control may only be touched from the thread Kodi calls us on, so
+    the skin binds to these and redraws itself.
     """
     rows = snapshot()
     running = rows[0] if rows and rows[0]["status"] == "Downloading" else None
@@ -75,13 +67,7 @@ def _wait_key(ticket):
 
 
 def _wait_beat(ticket):
-    """Kept in a property of its own, not in the shared list.
-
-    Two waiters leaving at once both write a list they read a moment earlier,
-    and whoever writes second puts the other one back — a row nothing owns any
-    more, which no cancel can then remove. Beating separately means such a row
-    is simply not read back.
-    """
+    """Kept in a property of its own, not in the shared list."""
     xbmcgui.Window(_HOME).setProperty(_wait_key(ticket), str(time.time()))
 
 
@@ -111,15 +97,7 @@ def _leave(ticket):
 
 
 def acquire(label, progress=None, total=1, detail=""):
-    """Take the download slot, waiting behind anyone already in line.
-
-    A season passes its episode count as total, so the row can say what
-    cancelling would actually stop. A single episode passes the series it
-    belongs to, which is the only context its filename does not carry.
-
-    Returns a ticket to pass back to beat() and release(), or None if the
-    wait was cancelled.
-    """
+    """Take the download slot, waiting behind anyone already in line."""
     ticket = uuid.uuid4().hex[:8]
     monitor = xbmc.Monitor()
     while True:
@@ -187,11 +165,7 @@ def beat(ticket, pct):
 
 
 def on_item(ticket, name, index):
-    """A season keeps one slot across many episodes; this says which one.
-
-    The season's own label stays put, so the row still shows what a cancel
-    would stop rather than only the episode in flight.
-    """
+    """A season keeps one slot across many episodes; this says which one."""
     current = _read(_HOLDER, {})
     if current.get("id") == ticket:
         current.update(now=name, index=index, pct=0, beat=time.time())
@@ -206,11 +180,7 @@ def release(ticket):
 
 
 def cancelled(ticket):
-    """Whether this transfer was asked to stop.
-
-    It stays true until the job ends, so a season can tell a cancel apart
-    from an episode that was merely skipped.
-    """
+    """Whether this transfer was asked to stop."""
     return ticket in _read(_CANCEL, [])
 
 

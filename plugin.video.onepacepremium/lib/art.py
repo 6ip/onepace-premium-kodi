@@ -144,8 +144,7 @@ def _build_art(
     if logo:
         art["clearlogo"] = logo
         art["tvshow.clearlogo"] = logo
-    # The icon slot sits beside the label, so it stays a placeholder. Without
-    # one Kodi falls back to DefaultFolder.png.
+    # The icon slot sits beside the label, so it stays a placeholder.
     art["icon"] = "DefaultAddonNone.png"
     return art
 
@@ -192,15 +191,11 @@ def _set_episode_art(list_item, video: dict, meta: dict,
     if episode_thumb and get_setting("thumb_fanart") == "true":
         background = episode_thumb
 
-    # Each slot keeps its own shape. An episode thumb is 16:9 and a poster is
-    # 2:3, so crossing them leaves a skin stretching one into the other. Empty
-    # values are dropped below, which lets the skin fall back on its own.
+    # Each slot keeps its own shape.
     art = {
         "thumb": episode_thumb,
         "landscape": episode_thumb or background,
-        # Nothing real in the icon slot: skins draw it beside the label, where
-        # any artwork reads as "[image] Title". The placeholder only keeps
-        # Kodi from substituting DefaultFolder.png.
+        # Skins draw the icon beside the label, so art reads as part of it.
         "icon": "DefaultAddonNone.png",
         "poster": poster,
         "season.poster": poster,

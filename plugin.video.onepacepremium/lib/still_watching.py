@@ -64,8 +64,7 @@ class StillWatching(xbmcgui.WindowXMLDialog):
 
     def onClick(self, control_id):
         self.keep_going = control_id == _KEEP_GOING
-        # Answered, not closed: the thread that showed this window is the one
-        # that closes it, the same way the setup dialog does.
+        # Answered, not closed: the thread that showed it closes it.
         self._answered = True
 
     def onAction(self, action):
@@ -77,8 +76,7 @@ class StillWatching(xbmcgui.WindowXMLDialog):
         left, waited = _COUNTDOWN, 0.0
         try:
             self.setProperty("pp.countdown", str(left))
-            # Polled far faster than it counts, so a button press is not left
-            # sitting on screen for the rest of the second.
+            # Polled faster than it counts, so a press is not left on screen.
             while not self._answered and left > 0:
                 if monitor.waitForAbort(_TICK):
                     break

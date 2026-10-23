@@ -7,8 +7,7 @@ import xbmc
 from .utils import log, reset_for_invocation
 
 
-# Each action names the module and function it lives in. Nothing is imported
-# until one is asked for, so a listing never pays for playback or backup.
+# Each action names the module and function it lives in.
 _ACTIONS = {
     "show_changelog":      "changelog:show_changelog",
     "export_settings":     "backup:export_settings",

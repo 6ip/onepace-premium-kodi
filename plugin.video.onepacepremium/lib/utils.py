@@ -11,10 +11,7 @@ import xbmcvfs
 
 
 class _Handle:
-    """Kodi hands us a new plugin handle every call, but with
-    reuselanguageinvoker the module is only imported once. Resolving on each
-    use keeps sys.argv[1] from going stale.
-    """
+    """A new handle arrives every call, so it is resolved on every use."""
 
     @staticmethod
     def _resolve():
@@ -46,8 +43,7 @@ REQUEST_TIMEOUT = 20
 _SESSION = None
 
 ELEMENTUM_ID = "plugin.video.elementum"
-# Our own feed carries the ElementumOrg repository, so this is where somebody
-# without Elementum can go and fetch it.
+# Our feed carries the ElementumOrg repository, so send them there.
 ONEPACE_REPO_ID = "repository.onepacepremium"
 
 
@@ -145,11 +141,7 @@ def set_setting(key, value):
 
 
 def background():
-    """The picture behind our own menus: the viewer's choice, or the one we ship.
-
-    Checked every time, because a chosen file can be moved or deleted later and
-    a missing fanart leaves the menu on a black screen.
-    """
+    """The picture behind our own menus: the viewer's choice, or the one we ship."""
     chosen = get_setting("background_image")
     if chosen and xbmcvfs.exists(chosen):
         return chosen
@@ -162,24 +154,12 @@ def is_widget():
 
 
 def ping_widgets():
-    """Nudge every shelf on the home screen.
-
-    The scan finds nothing under that path and stops, but widgets reload on
-    the way past. It is the only thing that reaches a container we do not own.
-    """
+    """Nudge every shelf on the home screen."""
     xbmc.executebuiltin("UpdateLibrary(video,special://skin/foo)")
 
 
 def refresh_container():
-    """Redraw whatever is showing what we just changed.
-
-    Shelves need the nudge either way, since a change made in our own list
-    still leaves them stale. Container.Refresh only reaches a container we
-    own, so it is worth adding when we are standing in one.
-
-    Ours first: the nudge starts a library scan, and Kodi drops a refresh that
-    arrives while one is running.
-    """
+    """Redraw whatever is showing what we just changed."""
     if not is_widget():
         xbmc.executebuiltin("Container.Refresh")
     ping_widgets()
@@ -234,12 +214,7 @@ def is_elementum_installed_and_enabled():
 
 
 def elementum_state():
-    """One of "ready", "disabled" or "missing".
-
-    Kodi raises for a disabled add-on exactly as it does for one that was never
-    installed, so the add-on manager is asked directly to tell the two apart.
-    They need different offers: one is a switch, the other is a download.
-    """
+    """One of "ready", "disabled" or "missing"."""
     if is_elementum_installed_and_enabled():
         return "ready"
     try:
@@ -268,19 +243,13 @@ def ensure_configured():
 
 
 def _offer_elementum(state):
-    """Torrents are played by Elementum, so its absence is the first thing to say.
-
-    Switched off is one button away from fixed. Not installed is a download, and
-    Kodi can only install what a repository it already has offers — so it is the
-    repository we hand over, and Elementum is then picked from inside it.
-    """
+    """Torrents are played by Elementum, so its absence is the first thing to say."""
     preamble = ("No debrid service is set up, so episodes play over "
                 "peer-to-peer, which needs the Elementum add-on.\n\n")
     if state == "disabled":
         message, label = preamble + "Elementum is installed but switched off.", "Enable Elementum"
     else:
-        # Said as two steps because it is two steps. Kodi installs nothing it
-        # cannot already see, so the repository has to come first.
+        # Said as two steps because it is two steps.
         message, label = preamble + (
             "Our repository will open. Install ElementumOrg Repository there, "
             "then Elementum from inside it."), "Open Repository"
@@ -312,19 +281,12 @@ def _ask_p2p():
         return True
     if choice == 2:
         xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
-    # "Not now", Back and Esc all leave it for later. Nothing is stored, so
-    # the next episode asks again.
+    # "Not now", Back and Esc all leave it for later.
     return False
 
 
 def ensure_p2p_ready(silent=False):
-    """Whether a viewer with no debrid key may go ahead over peer-to-peer.
-
-    The server answers an unconfigured request with torrents, so this asks for
-    consent rather than reporting a missing setup. silent is for the paths that
-    must not raise a dialog: a season queue, the preference survey, and the
-    hand-off into the next episode.
-    """
+    """Whether a viewer with no debrid key may go ahead over peer-to-peer."""
     if silent:
         return get_setting("p2p_ack") == "true"
     state = elementum_state()

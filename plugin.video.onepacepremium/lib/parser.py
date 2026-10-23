@@ -25,8 +25,7 @@ _DEFAULTS = {field: "" for field in _FIELDS}
 _DEFAULTS["width"] = 0
 _DEFAULTS["height"] = 0
 
-# "Dur: 17:57" or "Dur: 1:17:57" — the real length of this file, where the
-# provider's series-level runtime is only ever a round number.
+# This file's real length; the series runtime is only a round number.
 _DURATION = re.compile(r"Dur:\s*(?:(\d+):)?(\d{1,2}):(\d{2})")
 
 

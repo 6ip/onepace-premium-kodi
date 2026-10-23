@@ -36,7 +36,7 @@ class ChangelogDialog(xbmcgui.WindowXMLDialog):
 
     def onAction(self, action):
         action_id = action.getId()
-        # Enter closes too, but not while a button has focus — that is its click.
+        # Enter closes too, unless a button has focus: that is its click.
         if action_id in _CLOSE_ACTIONS or (
                 action_id in _SELECT_ACTIONS and self.getFocusId() not in _BUTTONS):
             self.close()

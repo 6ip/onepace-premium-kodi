@@ -12,12 +12,10 @@ import xbmcgui
 import xbmcvfs
 
 ADDON_ID = "plugin.video.onepacepremium"
-# Most people who finish do it in the first half minute, so ask often then and
-# ease off. A code nobody claims costs a third of what a flat interval did.
+# Most finish in the first half minute, so ask often then.
 _BACKOFF = ((30, 2), (90, 5))
 _BACKOFF_TAIL = 10
-# Long enough to swallow a poll already in flight, short enough that nothing
-# waits on it. The window is closed before this, so it is never felt.
+# Long enough to swallow a poll in flight, short enough to not wait.
 _JOIN_WAIT = 2.0
 
 
@@ -164,8 +162,7 @@ class SetupDialog(xbmcgui.WindowXMLDialog):
         self._expires_in = kwargs.get("expires_in", 0)
 
         self.result = DialogResult()
-        # An event rather than a flag, so closing the dialog interrupts the
-        # wait between polls instead of leaving the thread running behind it.
+        # An event, not a flag, so closing interrupts the wait between polls.
         self._stop = threading.Event()
         self._thread = None
 
@@ -177,7 +174,7 @@ class SetupDialog(xbmcgui.WindowXMLDialog):
             self.getControl(200).setImage(self._qr_path)
         self.setFocusId(11)
 
-        # Start background polling so the dialog auto-closes when setup finishes
+        # Poll in the background so the dialog closes when setup finishes.
         if self._poll_url and self._expires_in > 0:
             self._thread = threading.Thread(target=self._poll_loop, daemon=True)
             self._thread.start()
@@ -233,9 +230,6 @@ class SetupDialog(xbmcgui.WindowXMLDialog):
 
     def run(self) -> DialogResult:
         # Use show() so this thread stays free to drive the close() call.
-        # WindowXMLDialog is always modal (rendered on top) regardless of show vs doModal.
-        # Calling close() from a background thread via doModal() is unreliable in Kodi;
-        # this pattern lets the background thread set _stop and the main thread closes.
         self.show()
         while not self._stop.is_set():
             xbmc.sleep(100)
@@ -264,11 +258,7 @@ def show_setup_dialog(
     poll_url: str = "",
     expires_in: float = 0,
 ) -> DialogResult:
-    """Show the setup dialog with an embedded QR code.
-
-    Polls the server in the background while the dialog is visible.
-    Returns a DialogResult describing why the dialog closed.
-    """
+    """Show the setup dialog with an embedded QR code."""
     qr_path = os.path.join(profile_dir, "setup_qr.png")
     if not _save_qr(configure_url, qr_path):
         qr_path = ""

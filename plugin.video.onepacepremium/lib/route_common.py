@@ -8,11 +8,7 @@ from .utils import ADDON_HANDLE, ADDON_ID, ADDON_NAME, get_setting
 
 
 def _handle():
-    """The handle as a real int, which is the only thing Kodi 22 accepts.
-
-    It stays lazy in utils so a reused interpreter cannot serve a stale one,
-    and is resolved here, at the one place it crosses into Kodi.
-    """
+    """The handle as a real int, which is the only thing Kodi 22 accepts."""
     return int(ADDON_HANDLE)
 
 
@@ -50,11 +46,7 @@ def _notify_info(message: str):
 
 
 def end_directory(cache: bool = False, succeeded: bool = True):
-    """Finish a listing. cache=True lets Kodi reuse it instead of re-running us.
-
-    Only lists that carry no watched or resume state opt in, plus the episode
-    list, which is refreshed after every change to it.
-    """
+    """Finish a listing. cache=True lets Kodi reuse it instead of re-running us."""
     if cache and get_setting("menu_cache") == "false":
         cache = False
     xbmcplugin.endOfDirectory(_handle(), cacheToDisc=cache, succeeded=succeeded)

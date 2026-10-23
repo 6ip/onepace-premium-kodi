@@ -1,20 +1,10 @@
-"""Reading a One Pace episode out of whatever a file happens to be called.
-
-Pure text work: no Kodi, no network, no disk. The arc map comes from the
-streams repo's config.json and is passed in, so this stays testable against a
-folder of real filenames.
-
-Four release groups number their episodes differently, so which group a name
-belongs to has to be read before the arc means anything — an arc code alone
-would import a Muhn Pace file as the One Pace episode of the same name.
-"""
+"""Reading a One Pace episode out of whatever a file happens to be called."""
 import os
 import re
 
 ONEPACE, MUHN, ONIG, KUMA = "onepace", "muhn", "onig", "kuma"
 
-# The catalog's own names for them, which is how the series id is looked up at
-# import time — exactly as a rescan does it.
+# The catalog's own names: the series id is looked up by them.
 SERIES_NAMES = {
     ONEPACE: "One Pace",
     MUHN: "Muhn Pace",
@@ -22,8 +12,7 @@ SERIES_NAMES = {
     KUMA: "Shaved Egghead & Kuma Cut",
 }
 
-# The tag a group puts in brackets. Order matters: the Kuma releases carry a
-# cut name where the others carry a group name.
+# The tag a group puts in brackets.
 _GROUP_TAGS = (
     (ONEPACE, "one pace"),
     (MUHN, "muhn pace"),
@@ -34,9 +23,7 @@ _GROUP_TAGS = (
 
 _CUTS = {"kuma cut": "Kuma Cut", "shaved egghead": "Shaved Egghead"}
 
-# Onigashima Paced numbers its main run flat but gives a later arc its own
-# code, and config.json names neither. Written out rather than guessed at: an
-# arc this does not list is one we would get wrong.
+# Onigashima numbers its main run flat; a later arc has its own code.
 _ONIG_ARCS = {"onigashima": "", "endofwano": "WA"}
 
 # A chapter range: [3-5], [303], [0998], [405-406].
@@ -46,9 +33,7 @@ _CRC = re.compile(r"^[0-9A-Fa-f]{8}$")
 # Quality, and anything else the groups tack on.
 _TAGS = re.compile(r"^(?:\d{3,4}p|dub|en\s?cc|en\s?dub|sub|hevc|x26[45]|10bit)$", re.I)
 
-# "Romance Dawn 03", "Enies Lobby - 14", "One Piece - 1127+8", "End of Wano
-# 03.5". The number is optional: a one-episode arc is released under the arc
-# name alone.
+# Matches "Romance Dawn 03", "Enies Lobby - 14", "End of Wano 03.5".
 _TRAILING_NUMBER = re.compile(
     r"^(?P<arc>.+?)(?:\s*-\s*|\s+)(?P<ep>\d+(?:\.\d+)?(?:\+\d+)?)$")
 
@@ -76,11 +61,7 @@ def _split_number(text):
 
 
 def parse(filename):
-    """What a filename says, before anything is looked up.
-
-    Returns a dict that is always the same shape; group is "" when nothing in
-    the name identifies one.
-    """
+    """What a filename says, before anything is looked up."""
     stem = os.path.splitext(os.path.basename(filename or ""))[0]
     brackets = re.findall(r"\[([^\]]*)\]", stem)
     leftover = re.sub(r"\[[^\]]*\]", " ", stem)
@@ -105,9 +86,7 @@ def parse(filename):
         if _TAGS.match(token):
             tags.append(token)
 
-    # One Pace writes "Arlong Park 10 Extended", Onigashima writes "Onigashima
-    # Extended 09", and a shorthand release writes "Onigashima+". All three are
-    # the longer cut, which the lists keep beside the standard one.
+    # The longer cut, written "10 Extended", "Extended 09" or "09+".
     extended = bool(re.search(r"(?i)\bextended\b", leftover))
     if extended:
         leftover = re.sub(r"(?i)\s*\bextended\b\s*", " ", leftover).strip(" -_.")
@@ -115,9 +94,7 @@ def parse(filename):
     episode, piece, title, token = None, "", "", ""
     arc, number = _split_number(leftover)
     if number is None:
-        # "Onigashima 18 - Ancient Types": the number is not at the end until
-        # the episode title is taken off. Tried second, because "Enies Lobby
-        # - 14" puts the number itself after that same separator.
+        # A trailing title hides the number until it is taken off.
         before, sep, after = leftover.rpartition(" - ")
         if sep:
             head, trailing = _split_number(before)
@@ -128,8 +105,7 @@ def parse(filename):
             # Their numbers are One Piece episodes, not a place in a season.
             piece = number
         else:
-            # Kept as text too: one arc numbers an episode 03.5, and the id
-            # carries that fraction.
+            # Kept as text: one id carries a fraction, 3.5.
             token = _canon(number.split("+")[0])
             episode = int(float(token))
 
@@ -147,12 +123,7 @@ def parse(filename):
 
 
 def episode_id(parsed, arc_map, aliases=None):
-    """The provider's own id for this file, or "" when the name cannot say.
-
-    Kuma is the one group whose id carries no arc: its episodes are a flat
-    sequence, so the title is what identifies them and the resolver matches on
-    kuma_title() instead.
-    """
+    """The provider's own id for this file, or "" when the name cannot say."""
     group, number = parsed["group"], parsed["number"]
     if not number:
         return ""

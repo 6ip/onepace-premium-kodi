@@ -13,9 +13,7 @@ ADDON_ID = "plugin.video.onepacepremium"
 # Launched with RunScript, so it carries its own copy of the name.
 ADDON_NAME = "One Pace Addon"
 
-# This file is launched with RunScript, so it is __main__ and cannot import
-# anything from the package. Built the same way downloads.py builds it, and
-# the test suite fails if the two ever disagree.
+# Launched with RunScript, so it cannot import from the package.
 DEFAULT_DOWNLOAD_FOLDER = f"special://profile/addon_data/{ADDON_ID}/downloads/"
 
 # ISO 639-2/B codes used by the subtitles feed.
@@ -216,7 +214,7 @@ def _parse_config(config):
     try:
         decoded = json.loads(base64.b64decode(config).decode("utf-8"))
 
-        # 2. Multi-service: {"debridServices": [{"service": ..., "apiKey": ...}]}
+        # 2. Multi-service: a debridServices list of service and apiKey.
         if isinstance(decoded.get("debridServices"), list):
             seen = set()
             labels = []
@@ -302,7 +300,7 @@ def configure_account():
         nolabel="Cancel",
         yeslabel=yes_label,
     ):
-        # Close settings first so auth runs full-screen without settings in background
+        # Close settings first, so auth runs without it behind.
         xbmc.executebuiltin("Dialog.Close(all,true)")
         xbmc.executebuiltin(
             f"RunScript(special://home/addons/{ADDON_ID}/lib/custom_settings_window.py)"

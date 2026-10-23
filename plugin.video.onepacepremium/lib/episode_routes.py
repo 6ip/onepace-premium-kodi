@@ -29,14 +29,11 @@ from .utils import (ADDON_NAME, build_url,
 # Notice cards that sit in an episode slot but aren't episodes.
 _NOTICE_ID_PREFIX = "pp_COMPLETE"
 
-# bingeGroup is "onepace|<service>|<version>". The service preference stores the
-# code directly; the version is an enum.
+# bingeGroup is "onepace|<service>|<version>".
 _VERSION_BY_INDEX = {"1": "standard", "2": "extended"}
 
 
-# bingeGroup service codes and their names, in the order the settings picker
-# lists them. tools.py holds the same pairs but runs its dispatch on import,
-# so it cannot be the one place they live.
+# Service codes and names, in the order the picker lists them.
 _SERVICES = (("rd", "Real-Debrid"), ("pm", "Premiumize"), ("dl", "DebridLink"),
              ("tb", "TorBox"), ("ad", "AllDebrid"), ("p2p", "Torrent"))
 _SERVICE_NAMES = dict(_SERVICES)
@@ -49,12 +46,7 @@ def _binge_part(group, index):
 
 
 def _preferred_streams(groups, prefer=None):
-    """Narrow the streams to the preferred service and version.
-
-    A preference that matches nothing is ignored rather than leaving no
-    choices, and a missing version falls back to the standard cut. prefer
-    overrides the settings, which is how one answer covers a whole season.
-    """
+    """Narrow the streams to the preferred service and version."""
     indexes = list(range(len(groups)))
 
     if prefer:
@@ -304,8 +296,7 @@ def list_episodes(params):
         tags.setEpisode(int(episode_number))
 
         tags.setMediaType("episode")
-        # Watched wins: no resume bar. The bookmark is still looked up so a
-        # stale one left by an older version can be cleared from the menu.
+        # Watched wins: no resume bar.
         bm = _bookmarks.get(stream_video_id)
         if stream_video_id in series_watched:
             tags.setPlaycount(1)
@@ -328,10 +319,7 @@ def list_episodes(params):
         if release_year:
             tags.setYear(release_year)
 
-        # Air date and age rating are what the skin renders as its
-        # "28/06/2026 • TV-14" info line. ageRating is series-level, so every
-        # episode inherits it — but only alongside a date: some skins join these
-        # with a literal separator and would leave a stray "• TV-14" otherwise.
+        # What the skin renders as its "28/06/2026 / TV-14" line.
         air_date = _parse_air_date(video)
         if air_date:
             tags.setPremiered(air_date)
@@ -357,9 +345,7 @@ def list_episodes(params):
         if _offer_manual(stream_video_id, on_disk):
             ctx_items.append((
                 "[B]Play Manually[/B]",
-                # PlayMedia, not RunPlugin: check_resume answers with
-                # setResolvedUrl, which needs the handle Kodi only supplies
-                # when it is resolving something to play.
+                # PlayMedia, not RunPlugin: it needs a resolve handle.
                 f"PlayMedia({build_url('check_resume', manual='1', **episode_params(video, meta, video_id, catalog_type, season_poster, stream_video_id))})",
             ))
         ctx_items.append((
@@ -433,17 +419,8 @@ def _local_only(held, quiet=False):
 
 def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
                    survey=False):
-    """Fetch this episode's streams and return the one to act on, or None.
-
-    Playing and downloading want the same list and the same picker, so the
-    only difference is whether a magnet is allowed through. quiet is for a
-    season queue: it takes the preferred stream and says nothing, since one
-    dialog per episode is thirty dialogs.
-    """
-    # Read first, and before any of the gates below. A copy on disk needs no
-    # service, no configuration and no Elementum — it is a file. Asking about
-    # any of that before offering it is how Play Manually came to refuse an
-    # episode the viewer already had.
+    """Fetch this episode's streams and return the one to act on, or None."""
+    # Read first, and before any of the gates below.
     held = [] if downloadable_only else _held_copies(params)
     hushed = quiet or survey or bool(params.get("autoplay"))
 
@@ -455,8 +432,6 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
 
     if not get_secret_string():
         # No debrid key: the server answers these with peer-to-peer streams.
-        # Silent when something is already on disk, since there is then
-        # nothing to ask about.
         if not ensure_p2p_ready(silent=hushed or bool(held)):
             return _local_only(held, hushed)
 
@@ -488,7 +463,7 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
         _notify_error("No streams available")
         return None
 
-    # Detect server-side configuration error (externalUrl with no playable url/infoHash)
+    # A server-side config error: externalUrl with nothing playable.
     config_error = next(
         (s for s in streams if s.get("externalUrl") and "url" not in s and "infoHash" not in s),
         None
@@ -546,7 +521,7 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
             elementum_url = "plugin://plugin.video.elementum/play?uri=" + parse.quote_plus(magnet_link)
             if file_idx is not None:
                 elementum_url += f"&index={file_idx}&oindex={file_idx}"
-            # Resume is ours (bookmarks + Kodi's dialog); stop Elementum asking too.
+            # Resume is ours, so stop Elementum asking too.
             elementum_url += "&doresume=false"
             resolved_url = elementum_url
         else:
@@ -612,8 +587,7 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
 
     choices = _preferred_streams(binge_groups, prefer)
 
-    # The copy on disk goes first, so it is never hidden behind a preference
-    # that narrowed the list down to one remote stream.
+    # The copy on disk goes first, so a preference cannot hide it.
     if held:
         for offset, (label, fields) in enumerate(held):
             valid_streams.insert(offset, fields)
@@ -627,9 +601,7 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
                    if is_downloadable(valid_streams[i]["video_url"])]
         if not choices:
             if not quiet:
-                # Nothing to fetch anywhere in the list means the service, not
-                # this episode. Asked of the streams rather than the key: a
-                # peer-to-peer configuration has a key and still has no debrid.
+                # Nothing to fetch at all means the service, not this episode.
                 none_at_all = not any(is_downloadable(s["video_url"])
                                       for s in valid_streams)
                 _notify_error("Downloads need a debrid service" if none_at_all
@@ -648,9 +620,7 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
         selected = choices[pick]
 
     chosen = valid_streams[selected]
-    # How many there were to choose between. A season only remembers an answer
-    # that was actually given, so one episode with a single cut cannot decide
-    # for a later one that has two.
+    # How many there were to choose between.
     chosen["stream_choices"] = len(choices)
     return chosen
 
@@ -658,8 +628,7 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
 def check_resume(params):
     from .downloads import local_playback
 
-    # Already on disk, so there is nothing to ask a provider for — unless the
-    # row asked for the picker on purpose.
+    # Already on disk, unless the row asked for the picker.
     chosen = None if params.get("manual") else local_playback(params.get("video_id", ""))
     if chosen:
         log(f"[downloads] playing the copy on disk for {params.get('video_id')!r}")
@@ -668,9 +637,7 @@ def check_resume(params):
     if chosen is None:
         set_resolved(xbmcgui.ListItem(), False)
         return
-    # The copy on disk is built from the download index, which knows nothing
-    # about how playback was reached. Without this a run of downloaded
-    # episodes looks like somebody pressing play on each one.
+    # The download index knows nothing of how playback was reached.
     if params.get("autoplay"):
         chosen["autoplay"] = "1"
     from .playback import play_video as _play_video
@@ -707,16 +674,7 @@ _GIVE_UP_AFTER = 3
 
 
 def _season_preference(picks, label):
-    """Ask at most two questions before a run, or None if cancelled.
-
-    Deliberately does not survey the season: that would be one listing request
-    per episode, sixty of them for a long arc, fired before anything is even
-    downloaded and wasted entirely if the questions are cancelled.
-
-    The cut comes from a setting instead. The services come from one sample,
-    because which debrid hosts answer depends on the account rather than the
-    episode, so the first pick speaks for the rest.
-    """
+    """Ask at most two questions before a run, or None if cancelled."""
     want_service, want_version = "", ""
 
     if not get_setting("preferred_service"):
@@ -731,18 +689,14 @@ def _season_preference(picks, label):
                 return None
             want_service = services[pick]
 
-    # Preferred Version governs this too. A second download-only setting would
-    # only be another thing to keep in step, and "Always ask" already gives a
-    # per-season choice for anyone who wants Extended to stream and Standard
-    # to keep.
+    # Preferred Version governs this too.
     if not _VERSION_BY_INDEX.get(get_setting("preferred_version")):
         options = ["standard", "extended"]
         pick = xbmcgui.Dialog().select(
             f"{label} — which cut?", ["Standard", "Extended (if available)"])
         if pick < 0:
             return None
-        # Either way an episode without that cut keeps the one it has, so a
-        # third "whatever each has" entry would promise nothing new.
+        # An episode without that cut keeps the one it has.
         want_version = options[pick]
 
     log(f"[downloads] {label} will prefer {(want_service, want_version)}")
@@ -750,11 +704,7 @@ def _season_preference(picks, label):
 
 
 def download_season(params):
-    """Fetch a whole season, one episode at a time.
-
-    Sequential on purpose: a debrid account rate-limits parallel connections,
-    and one writer means the download index cannot be raced.
-    """
+    """Fetch a whole season, one episode at a time."""
     from . import download_queue
     from .downloads import (BLOCKED, CANCELLED, OK, download, downloaded_ids,
                             enabled, imported_ids,
@@ -777,8 +727,7 @@ def download_season(params):
         _notify_error("Nothing to download in this season")
         return
 
-    # Anything already on disk starts unticked, so the usual press re-fetches
-    # nothing and the choice is still there when a copy is wanted again.
+    # Already on disk starts unticked, so a press re-fetches nothing.
     on_disk, mine = downloaded_ids(), imported_ids()
     labels = [_download_mark(label, episode_id, on_disk, plain=True, mine=mine)
               for episode_id, label, _ in episodes]
@@ -797,8 +746,7 @@ def download_season(params):
     done = skipped = failed = in_a_row = 0
     progress = xbmcgui.DialogProgressBG()
     progress.create(f"Downloading {label}")
-    # The whole run takes the slot once, so cancelling it stops the season
-    # rather than one episode of it.
+    # The run takes the slot once, so a cancel stops the season.
     ticket = download_queue.acquire(label, progress, total=len(chosen))
     if ticket is None:
         progress.close()
@@ -833,9 +781,7 @@ def download_season(params):
             if outcome == OK:
                 done, in_a_row = done + 1, 0
             else:
-                # A blip on one episode is no reason to abandon the rest, but
-                # a drive pulled out or a connection gone fails every one of
-                # them — slowly, a timeout at a time, with a message each.
+                # One blip is no reason to stop; a dead drive fails them all.
                 failed, in_a_row = failed + 1, in_a_row + 1
                 if in_a_row >= _GIVE_UP_AFTER:
                     log(f"[downloads] {label} gave up after {in_a_row} failures in a row")
@@ -881,8 +827,7 @@ def download_episode(params):
     if chosen is None:
         return
     from .downloads import download
-    # Fetched while we are certainly online, so the list still looks right
-    # when the connection is gone.
+    # Fetched while certainly online, so the list survives going off.
     meta = _fetch_provider_meta(params.get("catalog_type", "series"),
                                 params.get("parent_id", "")) or {}
     download(chosen, meta)
@@ -951,7 +896,7 @@ def get_streams(params):
 
     for stream in streams:
         stream_name = stream.get("name", "")
-        # Support both 'description' (new Stremio spec) and 'title' (legacy field)
+        # 'description' is the new spec, 'title' the legacy field.
         stream_description = stream.get("description") or stream.get("title", "")
         behavior_hints = stream.get("behaviorHints", {})
         video_info = parse_stream_info(stream_name, stream_description, behavior_hints)
@@ -1014,7 +959,7 @@ def get_streams(params):
             elementum_url = "plugin://plugin.video.elementum/play?uri=" + parse.quote_plus(magnet_link)
             if file_idx is not None:
                 elementum_url += f"&index={file_idx}&oindex={file_idx}"
-            # Resume is ours (bookmarks + Kodi's dialog); stop Elementum asking too.
+            # Resume is ours, so stop Elementum asking too.
             elementum_url += "&doresume=false"
             resolved_stream_url = (
                 elementum_url
@@ -1081,15 +1026,10 @@ def _kodi_db_connect():
 
 
 def _bulk_kodi_update(episode_ids, marking_watched):
-    """Bulk-update Kodi's DB for a set of episodes in one transaction.
-    If marking_watched: set playCount=1, clear bookmark + streamdetails.
-    If marking_unwatched: set playCount=0.
-    """
+    """Bulk-update Kodi's DB for a set of episodes in one transaction."""
     if not episode_ids:
         return
-    # Closed in every case: this is a handle on Kodi's own database, and a
-    # playback invocation lives for the whole episode, so one left open by an
-    # error would block Kodi's writes until the episode ended.
+    # Closed always: a leak would block Kodi's writes all episode.
     con = None
     try:
         con = _kodi_db_connect()
@@ -1148,12 +1088,7 @@ def _update_kodi_episode_playcount(episode_id, playcount):
 
 
 def _clear_kodi_episode_state(episode_id, tables=("bookmark", "streamdetails")):
-    """Drop Kodi's per-episode rows for one episode.
-
-    Kodi only writes streamdetails when the row is empty, so clearing it before
-    playback is what keeps the codec badges current. The files row holds
-    playCount, so only the full reset in clear_progress includes it.
-    """
+    """Drop Kodi's per-episode rows for one episode."""
     con = None
     try:
         con = _kodi_db_connect()
@@ -1228,8 +1163,6 @@ def mark_watched(params):
         action = "marked" if episode_id in after else "unmarked"
         log(f"[watched] episode {action}: {episode_id!r} (total watched: {len(after)})")
         # Both ways: marking means "seen it", unmarking means "start over".
-        # Leaving the resume point behind makes an unmarked episode come back
-        # part-watched, which is neither.
         _bookmarks.clear(episode_id)
         _clear_kodi_episode_state(episode_id)
         _update_kodi_episode_playcount(episode_id, 1 if action == "marked" else 0)

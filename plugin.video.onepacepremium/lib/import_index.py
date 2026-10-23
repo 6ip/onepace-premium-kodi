@@ -1,15 +1,4 @@
-"""What the streams repo knows about its own releases, in one request.
-
-A filename cannot always say which episode it is. Two One Pace episodes are
-both called "Post-Enies Lobby 03", and an April Fools cut is named exactly like
-the episode it parodies — so reading the name alone files five of the repo's
-867 releases under the wrong episode.
-
-What does say, with no collisions at all across those 867: the byte size, the
-CRC a release carries in its own name, and the full name. So the repo's release
-list is read once and those three become the keys. Everything else is a guess,
-and says so.
-"""
+"""What the streams repo knows about its own releases, in one request."""
 import io
 import json
 import re
@@ -17,8 +6,7 @@ import tarfile
 
 from .utils import log, session
 
-# The whole repo as one tarball: 841 files, about 250 KB, one request. Reading
-# them one at a time would be 841.
+# The whole repo as one tarball: 841 files, about 250 KB, one request.
 ARCHIVE_URL = ("https://codeload.github.com/6ip/onepace-streams"
                "/tar.gz/refs/heads/main")
 
@@ -37,11 +25,7 @@ def _key(filename):
 
 
 def build(entries):
-    """Lookups from (episode_id, stream) pairs.
-
-    First writer wins, so a repo that ever did repeat a size or a CRC would
-    keep the earlier episode rather than silently reassigning it.
-    """
+    """Lookups from (episode_id, stream) pairs."""
     index = {"size": {}, "crc": {}, "name": {}}
     for episode_id, stream in entries:
         filename = stream.get("filename") or ""
@@ -59,12 +43,7 @@ def build(entries):
 
 
 def fetch():
-    """The release list and the repo's config.json, from one download.
-
-    The list comes back rather than the index built from it: it is what a
-    cache can hold, since the index itself is keyed by integers and tuples and
-    neither survives a trip through JSON.
-    """
+    """The release list and the repo's config.json, from one download."""
     payload = session().get(ARCHIVE_URL, timeout=60).content
     entries, config = [], {}
     with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
@@ -86,8 +65,7 @@ def fetch():
             elif tail.startswith("stream/"):
                 episode_id = tail.rsplit("/", 1)[-1][:-len(".json")]
                 for stream in body.get("streams", ()):
-                    # Only the two fields build() reads, so a cache of this
-                    # stays small.
+                    # Only the fields build() reads, so the cache stays small.
                     entries.append([episode_id,
                                     {"filename": stream.get("filename") or "",
                                      "videoSize": stream.get("videoSize") or 0}])
@@ -96,16 +74,10 @@ def fetch():
 
 
 def resolve(filename, size, index, arc_map, aliases=None):
-    """Which episode a file holds, and on what evidence.
-
-    how is "size", "crc" or "name" when the repo itself confirms it, "guess"
-    when only the shape of the filename says so, and "" when nothing does. A
-    guess is still worth offering, but not worth acting on unasked.
-    """
+    """Which episode a file holds, and on what evidence."""
     from . import import_match
 
-    # Always read the name, even when the size settles it: the caller still
-    # wants the cut, the arc and a title to show.
+    # Read the name even when the size settles it: the cut is wanted.
     parsed = import_match.parse(filename)
 
     if size:

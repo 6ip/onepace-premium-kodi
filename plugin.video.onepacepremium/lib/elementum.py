@@ -1,10 +1,4 @@
-"""Resolve Elementum streams directly from its daemon.
-
-Playing a plugin:// URL makes Kodi resolve a second time, and Elementum's own
-ListItem replaces ours. Asking the daemon for the stream URL ourselves keeps a
-single setResolvedUrl, so our metadata survives — same as the debrid path.
-Elementum still does all torrent work and shows its own progress dialog.
-"""
+"""Resolve Elementum streams directly from its daemon."""
 from urllib import parse
 
 import xbmcaddon
@@ -57,9 +51,7 @@ def resolve_stream(uri, file_idx=None):
     session = requests.Session()
     session.trust_env = False  # daemon is local; ignore system proxy settings
     try:
-        # Follow the redirect and open /files/ exactly as Elementum's own
-        # urlopen does, so the daemon sets up its reader the same way.
-        # stream=True keeps us from pulling the video body down.
+        # Opened exactly as Elementum does, so its reader is set up alike.
         response = session.get(
             url,
             allow_redirects=True,
@@ -79,8 +71,7 @@ def resolve_stream(uri, file_idx=None):
         response.close()
         session.close()
 
-    # A redirect chain ending on /files/ is success. Landing back on /play with
-    # no redirect means the daemon stopped early — cancelled, or no file chosen.
+    # A redirect chain ending on /files/ is success.
     if status == 200 and "/files/" in final_url:
         log(f"[direct] resolved to {final_url[:100]}")
         return final_url

@@ -10,8 +10,7 @@ import xbmcvfs
 from .utils import ADDON_ID, log
 
 DONATE_URL = "https://onepace.e6ip.com/donate"
-# The address is in the filename, so a new one renders a new picture rather
-# than serving the old QR under the new link.
+# The address is in the filename, so a new one renders a new picture.
 _QR_FILE = f"donate_qr_{hashlib.sha1(DONATE_URL.encode()).hexdigest()[:8]}.png"
 
 _OPEN_BUTTON = 10

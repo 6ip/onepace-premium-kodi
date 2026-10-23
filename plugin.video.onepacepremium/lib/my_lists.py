@@ -79,10 +79,7 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
     if release_year:
         tags.setYear(release_year)
 
-    # Air date and age rating are what the skin renders as its
-    # "28/06/2026 • TV-14" info line. ageRating is series-level, so every
-    # episode inherits it — but only alongside a date: some skins join these
-    # with a literal separator and would leave a stray "• TV-14" otherwise.
+    # What the skin renders as its "28/06/2026 / TV-14" line.
     air_date = _parse_air_date(video)
     if air_date:
         tags.setPremiered(air_date)
@@ -119,8 +116,7 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
             "[B]Clear Progress[/B]",
             f"RunPlugin({build_url('clear_progress', episode_id=ep_id)})",
         ))
-    # The lists where you decide what to watch next are where "take it with
-    # me" occurs to you, so the same item belongs here.
+    # Deciding what to watch next is when taking it with you occurs.
     if enabled():
         ctx_items.append((
             "[B]Re-download[/B]" if ep_id in stale else "[B]Download[/B]",

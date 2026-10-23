@@ -21,7 +21,7 @@ _INDEX = "downloads.json"
 _CHUNK = 1024 * 256
 _ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
-# Anything else is a stream we cannot fetch ourselves, like an Elementum magnet.
+# Anything else we cannot fetch ourselves, like an Elementum magnet.
 _DOWNLOADABLE = ("http://", "https://")
 
 
@@ -32,20 +32,13 @@ def _profile():
 
 DEFAULT_FOLDER = f"special://profile/addon_data/{ADDON_ID}/downloads/"
 
-# A folder of our own inside whatever the viewer picked, so pointing this at
-# an existing media drive does not scatter show folders through it.
-# Never rename: it is a real folder on disk, so a new name hides every
-# episode already downloaded by anyone using a custom folder.
+# Our own folder inside theirs, so a media drive is not scattered.
+# Never rename it: a new name hides every episode already downloaded.
 CONTAINER = "One Pace Premium"
 
 
 def folder():
-    """Where episodes are kept, always with forward slashes.
-
-    Kodi takes either separator on Windows, but translatePath hands back
-    backslashes and the rest of the path is built with slashes — comparing
-    and removing those folders needs one shape, not two.
-    """
+    """Where episodes are kept, always with forward slashes."""
     chosen = get_setting("download_folder")
     if not chosen or chosen == DEFAULT_FOLDER:
         # Already a folder of ours, so it needs no folder of ours inside it.
@@ -66,12 +59,7 @@ def safe_name(text, fallback="Unknown"):
 
 
 def variant_of(params):
-    """Which cut this is, from the provider's own bingeGroup.
-
-    The display name is free text — the same cut is called "Extended" on one
-    show and "Fillerver" on another — while the third part of the bingeGroup
-    is a fixed vocabulary the version preference is already built on.
-    """
+    """Which cut this is, from the provider's own bingeGroup."""
     return str(params.get("variant") or "").strip().lower()
 
 
@@ -81,12 +69,7 @@ def variant_label(variant):
 
 
 def cut_of(variant):
-    """The one name for a cut, so two spellings of it are not two cuts.
-
-    A download takes the bingeGroup's own word and writes "standard"; a rescan
-    and an import have no bingeGroup and write nothing at all. Both mean the
-    same file, so anything comparing them has to say so.
-    """
+    """The one name for a cut, so two spellings of it are not two cuts."""
     return (variant or "standard").strip().lower()
 
 
@@ -102,9 +85,7 @@ def _suffix(variant):
     return f" ({variant_label(variant)})"
 
 
-# When the debrid account cannot serve a file, the provider redirects to a
-# short video that says why. Watching it is the point when streaming; saving
-# it as the episode never is.
+# A debrid account that cannot serve a file redirects to a why video.
 _ERROR_PATH = "/api_errors/"
 
 _FIXABLE_IN_SETTINGS = {
@@ -131,9 +112,7 @@ _THIS_STREAM = {
     "UNAVAILABLE_FOR_LEGAL_REASONS",
 }
 
-# BAD_REQUEST, CONFLICT, FORBIDDEN, LOCKED and the rest are left out on
-# purpose: they could mean a key, a plan or a server, and the fallback says
-# what the server said rather than sending someone to the wrong screen.
+# The ambiguous codes are left out; the fallback quotes the server.
 
 
 def error_code(url):
@@ -174,8 +153,7 @@ def _target(params):
         episode = int(params.get("episode"))
     except (TypeError, ValueError):
         episode = 0
-    # The provider names the real file in behaviorHints, so the URL is only a
-    # fallback — a debrid link often ends in an id with no extension at all.
+    # behaviorHints names the real file; a debrid link has no extension.
     source = params.get("filename") or params.get("video_url", "").split("?")[0]
     ext = os.path.splitext(source)[1].lower()
     if len(ext) > 5 or not ext:
@@ -193,8 +171,7 @@ def _index_path():
     return _profile() + _INDEX
 
 
-# Only the fields the season and episode lists actually draw. The provider
-# meta also carries every video, which would be megabytes on disk.
+# Only the fields the season and episode lists actually draw.
 _META_KEYS = ("name", "poster", "background", "logo", "description", "genres",
               "cast", "released", "releaseInfo", "year", "imdbRating", "ageRating",
               "country", "status", "writer", "runtime", "seasons")
@@ -241,11 +218,7 @@ def _remember(path, params, meta=None, subtitles=()):
 
 
 def remember_into(data, path, params, meta=None, subtitles=()):
-    """Add one row to an index already in hand.
-
-    An import adopts hundreds of files at once, and reading and writing the
-    whole index for each one of them would be the slowest part of the job.
-    """
+    """Add one row to an index already in hand."""
     series = params.get("series_name") or "Downloads"
     if meta:
         data["series"][series] = {k: meta[k] for k in _META_KEYS if k in meta}
@@ -255,12 +228,11 @@ def remember_into(data, path, params, meta=None, subtitles=()):
         "video_size": params.get("video_size") or 0,
         "duration": params.get("duration") or 0,
         "variant": variant_of(params),
-        # The release we took, so a later check can tell it apart from a new one.
+        # The release we took, to tell it from a newer one later.
         "info_hash": _info_hash_of(params.get("video_url", "")),
         # Kept so they go when the episode goes, and travel when it moves.
         "subtitles": list(subtitles),
-        # The provider composes resolution, chapters, runtime, bitrate and
-        # source hash into this. Rebuilding it offline is not possible.
+        # The provider composes this; it cannot be rebuilt offline.
         "stream_desc": params.get("stream_desc", ""),
         "series_name": params.get("series_name", ""),
         "episode_title": params.get("episode_title", ""),
@@ -271,8 +243,7 @@ def remember_into(data, path, params, meta=None, subtitles=()):
         "thumb": params.get("thumb", ""),
         "season_poster": params.get("season_poster", ""),
         "logo": params.get("logo", ""),
-        # A file we only adopted, somewhere of the viewer's choosing. It is
-        # theirs: nothing here may delete, move or forget it.
+        # A file we only adopted, somewhere of the viewer's choosing.
         "imported": bool(params.get("imported")),
     }
 
@@ -285,11 +256,7 @@ def _info_hash_of(url):
 
 
 def _existing(params, destination):
-    """The file we hold for this episode *and* this cut.
-
-    Standard and Extended are different episodes as far as a viewer is
-    concerned, so fetching one must never quietly replace the other.
-    """
+    """The file we hold for this episode *and* this cut."""
     episode_id = params.get("episode_id") or params.get("video_id")
     if episode_id:
         variant = cut_of(variant_of(params))
@@ -312,11 +279,7 @@ OK, FAILED, CANCELLED, BLOCKED = "ok", "failed", "cancelled", "blocked"
 
 
 def _said(title, message):
-    """Say it in a dialog, not a notification.
-
-    These run from the settings window, and Kodi draws no notification while
-    that is open — so the work happened and nothing on screen said so.
-    """
+    """Say it in a dialog, not a notification."""
     xbmcgui.Dialog().ok(title, message)
 
 
@@ -332,11 +295,7 @@ def _blocked(response):
 
 
 def download(params, meta=None, ticket=None):
-    """Fetch one episode to disk, waiting its turn if another is running.
-
-    A season passes its own ticket: the whole run holds the slot once, so
-    cancelling it stops the season rather than one episode of it.
-    """
+    """Fetch one episode to disk, waiting its turn if another is running."""
     url = params.get("video_url", "")
     if not is_downloadable(url):
         _notify_error("This stream cannot be downloaded")
@@ -345,8 +304,7 @@ def download(params, meta=None, ticket=None):
     directory, name = _target(params)
     destination = directory + name
 
-    # A different stream of the same episode can carry a different extension,
-    # so match on the episode itself or the same file would arrive twice.
+    # Match on the episode, or another extension of it arrives twice.
     already = _existing(params, destination)
     if already:
         # A copy they imported is not ours to replace, so say so and keep both.
@@ -382,8 +340,7 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
     """The transfer itself, with the download slot already held."""
     url = params.get("video_url", "")
     destination = directory + name
-    # Written beside the real name, so a failed replacement cannot destroy
-    # the copy that already worked.
+    # Beside the real name, so a failed swap cannot destroy the copy.
     partial = destination + ".part"
     monitor = xbmc.Monitor()
     written, total, stopped = 0, 0, False
@@ -401,8 +358,7 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
                 if monitor.abortRequested():
                     raise InterruptedError("Kodi is shutting down")
                 if download_queue.cancelled(ticket):
-                    # Out of the loop, not straight out of the function: the
-                    # part file cannot be deleted while it is still open.
+                    # Not straight out: the part file is still open.
                     stopped = True
                     break
                 if not chunk:
@@ -410,8 +366,7 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
                 handle.write(bytearray(chunk))
                 written += len(chunk)
                 if total:
-                    # A server that undercounts Content-Length would push this
-                    # past 100 and Kodi refuses that.
+                    # A short Content-Length would pass 100; Kodi refuses.
                     pct = min(100, int(written * 100 / total))
                     progress.update(pct, "Downloading", name)
                     download_queue.beat(ticket, pct)
@@ -434,8 +389,7 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
         _notify_error("Download ended early, nothing kept")
         return FAILED
 
-    # Swap through a side name. Deleting the old file first would mean a
-    # rename that fails leaves neither copy.
+    # Swap through a side name.
     backup = destination + ".old"
     replacing = xbmcvfs.exists(destination)
     if replacing and not xbmcvfs.rename(destination, backup):
@@ -451,8 +405,7 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
     if replacing:
         xbmcvfs.delete(backup)
 
-    # Now the new file is in place, a cut under a different name can go. One
-    # they imported stays: it is their copy, and they now simply have both.
+    # Now the new file is in place, a cut under a different name can go.
     if already and already != destination and not imported(already):
         xbmcvfs.delete(already)
         _remove_rows([already])
@@ -467,9 +420,7 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
     return OK
 
 
-# Not "Subs" or "Subtitles": Kodi scans subfolders with those names as well
-# as the video's own, so the files it found there were added on top of the
-# ordered list we hand it and every track appeared twice.
+# Not "Subs" or "Subtitles": Kodi scans those too, so tracks double up.
 SUBS_DIR = ".onepace-subs"
 
 
@@ -479,12 +430,7 @@ def _subs_dir(video):
 
 
 def save_subtitles(destination, params):
-    """Write subtitle files beside the video, so Kodi finds them offline.
-
-    Only for languages actually chosen. Playback already works this way — it
-    fetches nothing when the setting is "all languages" — and downloading
-    thirty files an episode for a setting nobody narrowed is worse than none.
-    """
+    """Write subtitle files beside the video, so Kodi finds them offline."""
     from .playback import (_SUBS_URL, _fetch_subtitle, _filter_subtitles,
                            _wanted_langs, _VARIANT_RE)
 
@@ -512,9 +458,7 @@ def save_subtitles(destination, params):
         url, lang = track.get("url"), track.get("lang")
         if not (url and lang):
             continue
-        # A label only appears on alternate cuts; the plain track is the one
-        # most people actually want, and it has none — so it gets no tag in
-        # the filename either.
+        # Only alternate cuts get a label, so the plain track gets no tag.
         match = _VARIANT_RE.search(track.get("label") or "")
         tag = "." + re.sub(r"[^\w.-]", "_", match.group(1)) if match else ""
         path = f"{stem}{tag}.{lang}.vtt"
@@ -524,9 +468,7 @@ def save_subtitles(destination, params):
     return saved
 
 
-# The stream data lives in a public repo, so checking it costs the add-on's
-# own server nothing. One call lists every file with the git hash of its
-# contents, which is all that is needed to know whether anything changed.
+# A public repo, so checking it costs our own server nothing.
 _TREE_URL = ("https://api.github.com/repos/6ip/onepace-streams/git/trees/"
              "main?recursive=1")
 _STREAM_URL = "https://6ip.github.io/onepace-streams/stream/{path}.json"
@@ -539,7 +481,6 @@ _STREAM_DIRS = (("MUHN_", "Muhn"), ("ONIG_", "ONIG"),
 
 def stream_path(episode_id):
     # The meta prefixes some catalogs with "pp_" and leaves Muhn and ONIG bare.
-    # The files never carry it, so strip it before matching.
     if episode_id.startswith("pp_"):
         episode_id = episode_id[3:]
     for prefix, directory in _STREAM_DIRS:
@@ -566,19 +507,13 @@ def _release_of(episode_id, variant):
     return "", 0
 
 
-# What our own naming produces: "6x05 - Arlong Park (Extended).mkv". Only the
-# numbers and an optional trailing cut are read back; the title and everything
-# else come from the provider, which is far more reliable than a filename.
+# What our own naming produces: "6x05 - Arlong Park (Extended).mkv".
 _NAMED = re.compile(r"^(\d+)x(\d+) - (.+?)(?: \(([^)]+)\))?$")
 _VIDEO_EXTS = (".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".webm")
 
 
 def _roots():
-    """Where downloads can be, not only where they go now.
-
-    Changing the folder leaves the old files working where they are, so a
-    rescan that only looked at the current one would miss every one of them.
-    """
+    """Where downloads can be, not only where they go now."""
     here = folder()
     was = _profile().rstrip("/" + chr(92)).replace(chr(92), "/") + "/downloads/"
     return [here] + ([was] if was != here else [])
@@ -619,15 +554,8 @@ def _walk_one(root):
 
 
 def rescan(_params=None):
-    """Rebuild the index from what is actually on disk.
-
-    A reinstall leaves the files but takes the index with it, and every
-    download becomes invisible. Names carry the season and episode; the
-    provider supplies the rest, so the rebuilt rows are as good as the
-    originals apart from the release hash.
-    """
-    # A transfer in flight writes to a .part the index knows nothing about,
-    # so a scan running now would adopt a half-written file.
+    """Rebuild the index from what is actually on disk."""
+    # A transfer in flight writes a .part this would adopt half-written.
     if download_queue.busy():
         _said("Rescan", "Wait for the downloads to finish first")
         return
@@ -679,9 +607,7 @@ def rescan(_params=None):
             unknown += 1
             log(f"[rescan] no provider entry for {entry['path']!r}")
             continue
-        # "Farewell (Filler)" is the episode's name, not a cut of it. The
-        # provider knows what it called the thing, so ask before believing
-        # the brackets in a filename.
+        # "Farewell (Filler)" is the episode's name, not a cut of it.
         real = safe_name(video.get("name") or video.get("title") or "")
         if entry["cut"] and f"{entry['title']} ({entry['cut']})" == real:
             log(f"[rescan] {real!r} is the title, not a cut")
@@ -730,11 +656,7 @@ def _match_episode(meta, entry):
 
 
 def _folders_present(paths):
-    """Whether each file's folder is attached, checked once per folder.
-
-    An imported library can sit on a drive that comes and goes, and asking
-    after every episode would cost a long list one check per row.
-    """
+    """Whether each file's folder is attached, checked once per folder."""
     seen = {}
     for path in paths:
         where = path.rsplit("/", 1)[0] + "/" if "/" in path else path
@@ -744,12 +666,7 @@ def _folders_present(paths):
 
 
 def _dead_imported(files):
-    """Imported rows whose file has really gone, not merely gone offline.
-
-    A missing folder is a drive that is out, and the row waits for it. A folder
-    that is there without its file means the file was moved or deleted, and
-    nothing would ever tidy that row away.
-    """
+    """Imported rows whose file has really gone, not merely gone offline."""
     gone = [p for p, m in files.items()
             if m.get("imported") and not xbmcvfs.exists(p)]
     attached = _folders_present(gone)
@@ -766,12 +683,7 @@ def _size_on_disk(path):
 
 
 def _sidecars(path):
-    """Subtitles already sitting beside a file we are adopting.
-
-    Our folder is named so Kodi does not scan it — that is what stops the
-    duplicates — so a rebuilt row that forgot them would leave the subtitles
-    on disk and unreachable.
-    """
+    """Subtitles already sitting beside a file we are adopting."""
     directory = _subs_dir(path)
     stem = os.path.splitext(os.path.basename(path))[0]
     try:
@@ -801,17 +713,9 @@ def _rebuilt(entry, video, meta):
 
 
 def check_updates(_params=None):
-    """See which downloads the repo has re-released since we fetched them.
-
-    One request lists every stream file with a content hash. Only the ones
-    whose hash moved are fetched individually, so a library of four hundred
-    episodes normally costs a single request — and none of them touch the
-    add-on's own server.
-    """
+    """See which downloads the repo has re-released since we fetched them."""
     data = read_index()
-    # Imported files are left out: we never fetched them, so there is no
-    # release of ours to compare, and offering to re-download would hand them
-    # a different cut of a file they already chose.
+    # Never fetched, so there is no release of ours to compare.
     held = [(path, meta) for path, meta in data["files"].items()
             if meta.get("episode_id") and not meta.get("imported")]
     if not held:
@@ -843,11 +747,7 @@ def check_updates(_params=None):
             log(f"[updates] {episode_id}: {exc}")
             failed += 1
             continue
-        # The file's hash only says the file was edited — adding a field to
-        # the JSON changes it while the release stays put. What decides is the
-        # release itself: its infoHash, or the byte count for a download made
-        # before we stored one. With neither, there is nothing to compare, so
-        # record what is there now and call it current.
+        # An edited file is not a new release; the infoHash decides.
         was, was_size = meta.get("info_hash") or "", meta.get("video_size") or 0
         if info_hash and was:
             stale = info_hash != was
@@ -875,13 +775,8 @@ def check_updates(_params=None):
 
 
 def _prune(path):
-    """Drop the season and series folders once nothing is left in them.
-
-    rmdir without force refuses a folder that still holds anything, so this
-    can only ever remove the shells we made. The download root itself stays.
-    """
-    # Both roots: moving a library out of the old folder leaves its shells
-    # behind, and that is the very thing Move is for.
+    """Drop the season and series folders once nothing is left in them."""
+    # Both roots: the old folder keeps its empty shells, which Move clears.
     roots = [r.rstrip("/") for r in _roots()]
     directory = os.path.dirname(_normalised(path)).rstrip("/")
     # Series and season, and nothing above them, however the paths compare.
@@ -895,8 +790,7 @@ def _prune(path):
         directory = os.path.dirname(directory).rstrip("/")
 
 
-# Whatever opens a folder on this desktop. Nothing on a TV box, which is why
-# Kodi's own browser stays as the fallback.
+# Whatever opens a folder on this desktop.
 _FILE_MANAGERS = (
     ("System.Platform.Windows", 'explorer.exe "{win}"'),
     ("System.Platform.OSX", 'open "{path}"'),
@@ -905,11 +799,7 @@ _FILE_MANAGERS = (
 
 
 def browse(params):
-    """Open the folder in the desktop's file manager, or Kodi's if there is none.
-
-    Takes a folder outright, a path to a file in one, or an episode id for
-    the lists that only know that much.
-    """
+    """Open the folder in the desktop's file manager, or Kodi's if there is none."""
     directory = _normalised(params.get("dir", "")).rstrip("/")
     if not directory:
         path = params.get("path") or path_for(params.get("episode_id", ""))
@@ -932,8 +822,7 @@ def browse(params):
 
 _REPORT = "last_download.txt"
 
-# Enough to see what happened over an evening, few enough that the file stays
-# small and the window stays readable.
+# An evening's worth, and few enough to keep the file small.
 _REPORT_KEEP = 10
 
 
@@ -949,11 +838,7 @@ def _read_report():
 
 
 def write_report(heading, lines):
-    """Add a summary at the top, keeping the last few.
-
-    A background notification is gone in four seconds, which is no use when
-    a season took twenty minutes and you were in another room.
-    """
+    """Add a summary at the top, keeping the last few."""
     import time
 
     when = time.strftime("%d %B %Y, %H:%M") + time.strftime(" (%I:%M %p)").replace(" 0", " ")
@@ -989,11 +874,7 @@ def imported(path, files=None):
 
 
 def _remove(paths):
-    """Delete what we fetched, and only forget what we adopted.
-
-    An imported file is the viewer's own copy in their own folder, so the row
-    goes and the file stays. Its subtitles were there before us too.
-    """
+    """Delete what we fetched, and only forget what we adopted."""
     data = read_index()
     removed = 0
     for path in paths:
@@ -1076,11 +957,7 @@ def _relocate(src, dst):
 
 
 def _move_subtitles(paths, was, now):
-    """Move each sidecar into the Subs folder beside the video's new home.
-
-    Every one was written as the video's own name plus a tail, so swapping
-    the stem is exact — no guessing where the name ends and the tail begins.
-    """
+    """Move each sidecar into the Subs folder beside the video's new home."""
     old_stem = _subs_dir(was) + os.path.splitext(os.path.basename(was))[0]
     new_stem = _subs_dir(now) + os.path.splitext(os.path.basename(now))[0]
     moved = []
@@ -1100,21 +977,15 @@ def _move_subtitles(paths, was, now):
 
 
 def move_downloads(_params=None):
-    """Bring everything already downloaded under the current folder.
-
-    Changing the folder only redirects new downloads — the old files keep
-    working where they are. This is for when you actually want them together.
-    """
-    # A transfer in flight writes to a .part the index knows nothing about,
-    # so it would finish into the folder we just emptied.
+    """Bring everything already downloaded under the current folder."""
+    # A transfer in flight would finish into the folder just emptied.
     if download_queue.busy():
         _said("Move Downloads", "Wait for the downloads to finish first")
         return
     data = read_index()
     planned = []
     for path, meta in data["files"].items():
-        # An imported file sits where its owner put it. Every one of them
-        # would look misplaced here, and moving them is not ours to do.
+        # An imported file sits where its owner put it.
         if meta.get("imported"):
             continue
         directory, name = _target(dict(meta, filename=path))
@@ -1164,11 +1035,7 @@ def move_downloads(_params=None):
 
 
 def _sweep(data):
-    """Forget rows whose file someone deleted outside the add-on.
-
-    Imported rows stay: they point at the viewer's own disk, and a drive that
-    is merely unplugged would otherwise cost them the whole library.
-    """
+    """Forget rows whose file someone deleted outside the add-on."""
     gone = [p for p, m in data["files"].items()
             if not m.get("imported") and not xbmcvfs.exists(p)]
     if gone:
@@ -1180,15 +1047,10 @@ def _sweep(data):
 
 
 def _series_order(data):
-    """Name to catalog position, so On Device reads like every other list.
-
-    Filled in on the first visit that finds the catalog, then kept, so the
-    order holds when the connection is gone.
-    """
+    """Name to catalog position, so On Device reads like every other list."""
     known = {name: meta["order"] for name, meta in data["series"].items()
              if isinstance(meta.get("order"), int)}
-    # Only rows that name a series can be looked up, so only they can make
-    # us go and ask.
+    # Only a row that names a series can be looked up.
     named = {(m.get("series_name") or "Downloads"): m.get("series_id")
              for m in data["files"].values() if m.get("series_id")}
     if all(name in known for name in named):
@@ -1211,13 +1073,7 @@ def _series_order(data):
 
 
 def _shared_folder(paths):
-    """The folder to open for a row, which is where most of it lives.
-
-    Our layout is <root>/<series>/Season NN/file, so the only answers worth
-    giving are a season folder or the series folder above it. A library split
-    between two roots — what changing the download folder leaves behind —
-    shares nothing above the user's home folder, which is no answer at all.
-    """
+    """The folder to open for a row, which is where most of it lives."""
     folders = [_normalised(p).rsplit("/", 1)[0] for p in paths if p]
     if not folders:
         return ""
@@ -1230,11 +1086,7 @@ def _shared_folder(paths):
     return seasons.pop() if len(seasons) == 1 else home
 
 def _empty(message):
-    """Dressed like the root menu, since that is what an empty section is.
-
-    Setting a content type here would have the skin draw an episode row with
-    no episode in it, which is where the missing artwork came from.
-    """
+    """Dressed like the root menu, since that is what an empty section is."""
     media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
     icon = f"{media}/info.png"
     set_content("")
@@ -1248,11 +1100,7 @@ def _empty(message):
 
 
 def _counts(item, metas):
-    """The same properties the season list sets, so skins read them the same.
-
-    Counted against the watched store, not assumed unwatched — a row saying
-    4 when three have been seen is worse than saying nothing.
-    """
+    """The same properties the season list sets, so skins read them the same."""
     from . import watched as _watched
 
     series_id = next((m.get("series_id") for m in metas if m.get("series_id")), "")
@@ -1269,13 +1117,7 @@ def _counts(item, metas):
 
 
 def play_url(path, meta):
-    """Play a downloaded file through the add-on, not straight off disk.
-
-    Going through play_video is what keeps a downloaded episode and a streamed
-    one the same thing: one watched store, one set of resume points, and the
-    next-episode card at the end of both. sub_id is deliberately left out —
-    fetching the subtitle list would stall when the point is to be offline.
-    """
+    """Play a downloaded file through the add-on, not straight off disk."""
     return build_url("play_video", **_play_fields(path, meta))
 
 
@@ -1305,22 +1147,15 @@ def _play_fields(path, meta):
               "thumb": meta.get("thumb", ""),
               "season_poster": meta.get("season_poster", ""),
               "logo": meta.get("logo", ""),
-              # Without these the player has no plot to show and the info
-              # panel falls back to "Not available".
+              # Without these the info panel falls back to "Not available".
               "episode_plot": video.get("overview", ""),
-              # Our own header, then whatever the provider said about the file
-              # when we fetched it. The original name says [RD], which stopped
-              # being true the moment it landed on disk.
+              # Our own header, then what the provider said when we fetched it.
               "stream_name": describe(meta),
               "stream_desc": meta.get("stream_desc", "")}
     return {k: v for k, v in fields.items() if v}
 
 
-# In front of the title, not after it: a list view truncates the tail, and a
-# flag in a fixed spot is what the eye scans down a column. A list renders the
-# bold inside the colour; the select dialog leaves its closing tag showing, so
-# that one goes without.
-# Letters rather than arrows: every font has them, on every skin and device.
+# In front, not after: a list truncates the tail, and the eye scans.
 _T_HELD, _T_STALE, _T_MINE = "[D]", "[!]", "[I]"
 _MARK = f"[COLOR FFA8E6A3][B]{_T_HELD}[/B][/COLOR]"
 _MARK_PLAIN = f"[COLOR FFA8E6A3]{_T_HELD}[/COLOR]"
@@ -1346,10 +1181,7 @@ def outdated_ids():
 
 
 def mark(label, episode_id, on_disk, plain=False, stale=(), mine=()):
-    """Flag a title we hold, one worth fetching again, or one of their own.
-
-    plain drops the bold, which a select dialog renders as a literal [/B].
-    """
+    """Flag a title we hold, one worth fetching again, or one of their own."""
     if not episode_id or episode_id not in on_disk:
         return label
     if not enabled() or get_setting("download_marker") == "false":
@@ -1387,8 +1219,7 @@ def local_playback(episode_id):
     if not enabled():
         return None
     if get_setting("prefer_downloads") == "false":
-        # Says which of the two reasons it is, so a stream request that fails
-        # with no connection reads as the setting rather than a fault.
+        # Says which reason it is, so a failed stream is not read as a fault.
         log("[downloads] streaming instead: Play the Downloaded Copy is off")
         return None
     held = copies_of(episode_id)
@@ -1406,32 +1237,20 @@ def local_playback(episode_id):
 
 
 def local_subtitles(path):
-    """The sidecars we saved for this file, in the order the feed listed them.
-
-    Kodi sorts what it finds in a folder by name, which puts ALT above the
-    plain track. Handing it the list instead keeps the feed's own order.
-    """
+    """The sidecars we saved for this file, in the order the feed listed them."""
     kept = [p for p in read_index()["files"].get(path, {}).get("subtitles", ())
             if xbmcvfs.exists(p)]
     return kept
 
 
 def offer_manual(episode_id, on_disk):
-    """True when pressing play would silently use the copy on disk.
-
-    That is what the preference is for, but it leaves no way to stream a
-    better cut tonight — so the row gets a way back to the picker.
-    """
+    """True when pressing play would silently use the copy on disk."""
     return (enabled() and episode_id in on_disk
             and get_setting("prefer_downloads") != "false")
 
 
 def local_options(episode_id):
-    """Each cut on disk, offered alongside the streams.
-
-    Used when the preference is off: rather than pretending the files are not
-    there, put them at the top of the list and let the choice be made.
-    """
+    """Each cut on disk, offered alongside the streams."""
     options = []
     for path, meta in copies_of(episode_id):
         tag = _MINE_PLAIN if meta.get("imported") else _MARK_PLAIN
@@ -1448,11 +1267,7 @@ def downloaded_ids():
 
 
 def imported_ids():
-    """Episode ids held only as the viewer's own files.
-
-    Holding a copy of ours as well makes it one of ours for marking: that is
-    the copy an update reaches and the one Delete would take off the disk.
-    """
+    """Episode ids held only as the viewer's own files."""
     if not enabled():
         return set()
     ours, theirs = set(), set()
@@ -1627,7 +1442,7 @@ def list_on_device(params=None):
         number = int(meta.get("episode") or 0)
         title = meta.get("episode_title") or os.path.basename(path)
         label = _episode_label(title, int(season), number, meta.get("episode_id", ""))
-        # Two cuts of one episode sit next to each other, so say which is which.
+        # Two cuts sit next to each other, so say which is which.
         if meta.get("variant") and meta["variant"] != "standard":
             label += f"  ({variant_label(meta['variant'])})"
         here = attached.get(path.rsplit("/", 1)[0] + "/", True)
@@ -1642,7 +1457,7 @@ def list_on_device(params=None):
         tags.setSeason(int(season))
         tags.setEpisode(number)
 
-        # Everything below mirrors the episode list, off the same provider entry.
+        # The rest mirrors the episode list, off the same provider entry.
         plot = video.get("overview") or show.get("description")
         if plot:
             tags.setPlot(plot)
@@ -1676,8 +1491,7 @@ def list_on_device(params=None):
                 item.setProperty("PercentPlayed", str(pct))
                 tags.setResumePoint(pos, whole)
 
-        # Not playable while its drive is out, rather than handing Kodi a path
-        # that is not there and letting it say the file is broken.
+        # Not playable while its drive is out, rather than a missing path.
         item.setProperty("IsPlayable", "true" if here else "false")
         item.setProperty("Downloaded", "true")
         menu = []
@@ -1691,8 +1505,7 @@ def list_on_device(params=None):
                     "clear_progress", episode_id=episode_id)))
         menu.append(("[B]Browse Folder[/B]",
                      "RunPlugin(%s)" % build_url("browse_download", path=path)))
-        # The same wording My Lists uses, and the same jump: out of a filtered
-        # view into the whole season, downloaded or not.
+        # The same wording and jump My Lists uses.
         if meta.get("series_id"):
             menu.append(("[B]Browse Season...[/B]",
                          "ActivateWindow(Videos,%s,return)" % build_url(
