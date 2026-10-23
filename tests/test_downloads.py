@@ -284,8 +284,10 @@ print("=== the same cut never lands twice, but a different cut may ===")
 sames = SRC[SRC.index("def _existing("):SRC.index("def _remove_rows(")]
 assert 'meta.get("episode_id") == episode_id' in sames, "a different extension would slip past"
 assert 'meta.get("variant") or ""' in sames, "Extended would overwrite Standard"
-swap = SRC[SRC.index("if already and already != destination:"):]
-assert "xbmcvfs.delete(already)" in swap[:200], "the old file would sit beside the new one"
+swap = SRC[SRC.index("if already and already != destination"):]
+assert "xbmcvfs.delete(already)" in swap[:260], "the old file would sit beside the new one"
+# A copy they imported is the exception, and test_imported covers that.
+assert "not imported(already)" in swap[:120], "replacing would delete their own file"
 
 base = {"series_name": "One Pace", "episode_title": "Arlong Park", "season": "6",
         "episode": "5", "filename": "x.mkv", "video_url": "https://x/play/AR_5"}

@@ -252,6 +252,9 @@ def _remember(path, params, meta=None, subtitles=()):
         "thumb": params.get("thumb", ""),
         "season_poster": params.get("season_poster", ""),
         "logo": params.get("logo", ""),
+        # A file we only adopted, somewhere of the viewer's choosing. It is
+        # theirs: nothing here may delete, move or forget it.
+        "imported": bool(params.get("imported")),
     }
     _write_index(data)
 
@@ -328,10 +331,15 @@ def download(params, meta=None, ticket=None):
     # so match on the episode itself or the same file would arrive twice.
     already = _existing(params, destination)
     if already:
+        # A copy they imported is not ours to replace, so say so and keep both.
+        question, yeslabel = "is already here. Fetch it again?", "Replace"
+        if imported(already):
+            question, yeslabel = ("is one you imported. Download our own copy "
+                                  "as well?"), "Download"
         if not xbmcgui.Dialog().yesno(
                 "Download",
-                os.path.basename(already) + chr(10) + chr(10) + "is already here. Fetch it again?",
-                nolabel="Keep", yeslabel="Replace"):
+                os.path.basename(already) + chr(10) + chr(10) + question,
+                nolabel="Keep", yeslabel=yeslabel):
             return CANCELLED
     if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
         _notify_error("Could not create the download folder")
@@ -425,8 +433,9 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
     if replacing:
         xbmcvfs.delete(backup)
 
-    # Now the new file is in place, a cut under a different name can go.
-    if already and already != destination:
+    # Now the new file is in place, a cut under a different name can go. One
+    # they imported stays: it is their copy, and they now simply have both.
+    if already and already != destination and not imported(already):
         xbmcvfs.delete(already)
         _remove_rows([already])
 
@@ -736,8 +745,11 @@ def check_updates(_params=None):
     add-on's own server.
     """
     data = read_index()
+    # Imported files are left out: we never fetched them, so there is no
+    # release of ours to compare, and offering to re-download would hand them
+    # a different cut of a file they already chose.
     held = [(path, meta) for path, meta in data["files"].items()
-            if meta.get("episode_id")]
+            if meta.get("episode_id") and not meta.get("imported")]
     if not held:
         _said("Check for Updates", "Nothing downloaded yet")
         return
@@ -906,11 +918,25 @@ def show_report(_params=None):
     show_text(text, "Downloads")
 
 
+def imported(path, files=None):
+    """Whether this one was adopted from the viewer's own disk."""
+    rows = files if files is not None else read_index()["files"]
+    return bool(rows.get(path, {}).get("imported"))
+
+
 def _remove(paths):
-    """Delete files and forget them. Returns how many actually went."""
+    """Delete what we fetched, and only forget what we adopted.
+
+    An imported file is the viewer's own copy in their own folder, so the row
+    goes and the file stays. Its subtitles were there before us too.
+    """
     data = read_index()
     removed = 0
     for path in paths:
+        if imported(path, data["files"]):
+            data["files"].pop(path, None)
+            removed += 1
+            continue
         if not xbmcvfs.exists(path) or xbmcvfs.delete(path):
             for sidecar in data["files"].get(path, {}).get("subtitles", ()):
                 xbmcvfs.delete(sidecar)
@@ -950,8 +976,20 @@ def delete(params):
     if not targets:
         _notify_error("Nothing left to delete")
         return
-    if not xbmcgui.Dialog().yesno("Delete", f"Remove {what} from disk?",
-                                  nolabel="Keep", yeslabel="Delete"):
+
+    # Say what will actually happen: an imported file is not ours to delete.
+    adopted = [p for p in targets if imported(p, files)]
+    question, yeslabel = f"Remove {what} from disk?", "Delete"
+    if len(adopted) == len(targets):
+        question = (f"Remove {what} from the list?{chr(10)}{chr(10)}"
+                    "The files stay where they are.")
+        yeslabel = "Remove"
+    elif adopted:
+        question = (f"Remove {what}?{chr(10)}{chr(10)}"
+                    f"{len(targets) - len(adopted)} will be deleted. "
+                    f"{len(adopted)} imported only leave the list.")
+    if not xbmcgui.Dialog().yesno("Delete", question,
+                                  nolabel="Keep", yeslabel=yeslabel):
         return
 
     removed = _remove(targets)
@@ -1011,6 +1049,10 @@ def move_downloads(_params=None):
     data = read_index()
     planned = []
     for path, meta in data["files"].items():
+        # An imported file sits where its owner put it. Every one of them
+        # would look misplaced here, and moving them is not ours to do.
+        if meta.get("imported"):
+            continue
         directory, name = _target(dict(meta, filename=path))
         if directory + name != path and xbmcvfs.exists(path):
             planned.append((path, directory, name))
@@ -1058,8 +1100,13 @@ def move_downloads(_params=None):
 
 
 def _sweep(data):
-    """Forget rows whose file someone deleted outside the add-on."""
-    gone = [p for p in data["files"] if not xbmcvfs.exists(p)]
+    """Forget rows whose file someone deleted outside the add-on.
+
+    Imported rows stay: they point at the viewer's own disk, and a drive that
+    is merely unplugged would otherwise cost them the whole library.
+    """
+    gone = [p for p, m in data["files"].items()
+            if not m.get("imported") and not xbmcvfs.exists(p)]
     if gone:
         for p in gone:
             data["files"].pop(p, None)
