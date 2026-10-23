@@ -34,6 +34,11 @@ _GROUP_TAGS = (
 
 _CUTS = {"kuma cut": "Kuma Cut", "shaved egghead": "Shaved Egghead"}
 
+# Onigashima Paced numbers its main run flat but gives a later arc its own
+# code, and config.json names neither. Written out rather than guessed at: an
+# arc this does not list is one we would get wrong.
+_ONIG_ARCS = {"onigashima": "", "endofwano": "WA"}
+
 # A chapter range: [3-5], [303], [0998], [405-406].
 _CHAPTERS = re.compile(r"^\d+(?:-\d+)?$")
 # The CRC32 One Pace puts on a release.
@@ -41,9 +46,11 @@ _CRC = re.compile(r"^[0-9A-Fa-f]{8}$")
 # Quality, and anything else the groups tack on.
 _TAGS = re.compile(r"^(?:\d{3,4}p|dub|en\s?cc|en\s?dub|sub|hevc|x26[45]|10bit)$", re.I)
 
-# "Romance Dawn 03", "Enies Lobby - 14", "One Piece - 1127+8". The number is
-# optional: a one-episode arc is released under the arc name alone.
-_TRAILING_NUMBER = re.compile(r"^(?P<arc>.+?)(?:\s*-\s*|\s+)(?P<ep>\d+(?:\+\d+)?)$")
+# "Romance Dawn 03", "Enies Lobby - 14", "One Piece - 1127+8", "End of Wano
+# 03.5". The number is optional: a one-episode arc is released under the arc
+# name alone.
+_TRAILING_NUMBER = re.compile(
+    r"^(?P<arc>.+?)(?:\s*-\s*|\s+)(?P<ep>\d+(?:\.\d+)?(?:\+\d+)?)$")
 
 VIDEO_EXTS = (".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".webm")
 
@@ -51,6 +58,13 @@ VIDEO_EXTS = (".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".webm")
 def _normalise(arc):
     """The shape config.json's lowercase keys are written in."""
     return re.sub(r"[^a-z0-9]", "", (arc or "").lower())
+
+
+def _canon(number):
+    """"03" and "03.5" as the id itself writes them: "3" and "3.5"."""
+    whole, _, fraction = number.partition(".")
+    whole = str(int(whole or 0))
+    return f"{whole}.{fraction}" if fraction else whole
 
 
 def _split_number(text):
@@ -98,7 +112,7 @@ def parse(filename):
     if extended:
         leftover = re.sub(r"(?i)\s*\bextended\b\s*", " ", leftover).strip(" -_.")
 
-    episode, piece, title = None, "", ""
+    episode, piece, title, token = None, "", "", ""
     arc, number = _split_number(leftover)
     if number is None:
         # "Onigashima 18 - Ancient Types": the number is not at the end until
@@ -114,17 +128,20 @@ def parse(filename):
             # Their numbers are One Piece episodes, not a place in a season.
             piece = number
         else:
-            episode = int(number.split("+")[0])
+            # Kept as text too: one arc numbers an episode 03.5, and the id
+            # carries that fraction.
+            token = _canon(number.split("+")[0])
+            episode = int(float(token))
 
     if arc.endswith("+"):
         extended = True
         arc = arc.rstrip("+").strip()
-    if not group and _normalise(arc) == "onigashima":
+    if not group and _normalise(arc) in _ONIG_ARCS:
         group = ONIG
 
-    return {"group": group, "arc": arc, "episode": episode, "piece": piece,
-            "cut": cut, "title": title, "chapters": chapters, "crc": crc,
-            "tags": tuple(tags),
+    return {"group": group, "arc": arc, "episode": episode, "number": token,
+            "piece": piece, "cut": cut, "title": title, "chapters": chapters,
+            "crc": crc, "tags": tuple(tags),
             "variant": "extended" if extended or any(
                 "extend" in t.lower() for t in tags) else ""}
 
@@ -136,14 +153,19 @@ def episode_id(parsed, arc_map, aliases=None):
     sequence, so the title is what identifies them and the resolver matches on
     kuma_title() instead.
     """
-    group, episode = parsed["group"], parsed["episode"]
+    group, number = parsed["group"], parsed["number"]
+    if not number:
+        return ""
     if group == ONIG:
-        return f"ONIG_{episode}" if episode is not None else ""
+        code = _ONIG_ARCS.get(_normalise(parsed["arc"]))
+        if code is None:
+            return ""
+        return f"ONIG_{code}_{number}" if code else f"ONIG_{number}"
     if group in (ONEPACE, MUHN):
         code = _arc_code(parsed["arc"], arc_map, aliases)
-        if not code or episode is None:
+        if not code:
             return ""
-        return f"MUHN_{code}_{episode}" if group == MUHN else f"{code}_{episode}"
+        return f"MUHN_{code}_{number}" if group == MUHN else f"{code}_{number}"
     return ""
 
 
