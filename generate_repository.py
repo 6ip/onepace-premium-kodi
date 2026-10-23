@@ -4,6 +4,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 DIST_DIR = Path("dist")
+# Out of the datadir: Kodi can cache a listing of that folder and then
+# answer "no such file" for the index inside it without asking the server.
+INDEX_DIR = DIST_DIR / "index"
 
 
 def collect_addons(dist: Path):
@@ -29,13 +32,20 @@ def main():
     root = ET.Element("addons")
     root.extend(addons)
 
-    xml_path = DIST_DIR / "addons.xml"
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+    xml_path = INDEX_DIR / "addons.xml"
     ET.ElementTree(root).write(xml_path, encoding="utf-8", xml_declaration=True)
+    body = xml_path.read_bytes()
+    md5 = hashlib.md5(body).hexdigest()
+    (INDEX_DIR / "addons.xml.md5").write_text(md5)
 
-    md5 = hashlib.md5(xml_path.read_bytes()).hexdigest()
+    # Repositories already installed still read the old place, and dropping it
+    # would leave them unable to fetch even the update that moves them.
+    (DIST_DIR / "addons.xml").write_bytes(body)
     (DIST_DIR / "addons.xml.md5").write_text(md5)
 
-    print(f"Generated {xml_path} ({len(addons)} addons) + addons.xml.md5")
+    print(f"Generated {xml_path} ({len(addons)} addons) + addons.xml.md5, "
+          f"and a copy at the old path")
 
 
 if __name__ == "__main__":
