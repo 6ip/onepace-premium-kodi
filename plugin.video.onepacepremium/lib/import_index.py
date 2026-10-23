@@ -59,7 +59,12 @@ def build(entries):
 
 
 def fetch():
-    """The index and the repo's config.json, from one download."""
+    """The release list and the repo's config.json, from one download.
+
+    The list comes back rather than the index built from it: it is what a
+    cache can hold, since the index itself is keyed by integers and tuples and
+    neither survives a trip through JSON.
+    """
     payload = session().get(ARCHIVE_URL, timeout=60).content
     entries, config = [], {}
     with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
@@ -81,9 +86,13 @@ def fetch():
             elif tail.startswith("stream/"):
                 episode_id = tail.rsplit("/", 1)[-1][:-len(".json")]
                 for stream in body.get("streams", ()):
-                    entries.append((episode_id, stream))
+                    # Only the two fields build() reads, so a cache of this
+                    # stays small.
+                    entries.append([episode_id,
+                                    {"filename": stream.get("filename") or "",
+                                     "videoSize": stream.get("videoSize") or 0}])
     log(f"[import] read {len(entries)} releases from the streams repo")
-    return build(entries), config
+    return entries, config
 
 
 def resolve(filename, size, index, arc_map, aliases=None):

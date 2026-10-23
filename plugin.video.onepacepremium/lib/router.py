@@ -40,6 +40,7 @@ _ACTIONS = {
     "show_download_report": "downloads:show_report",
     "check_updates":       "downloads:check_updates",
     "rescan_downloads":    "downloads:rescan",
+    "import_folder":       "import_folder:run",
 }
 
 

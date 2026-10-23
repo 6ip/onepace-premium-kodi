@@ -63,11 +63,16 @@ groups = {c.get("label"): [x.get("label") for x in c if x.get("type") == "lsep"]
           for c in SETTINGS.iter("category")}
 print(f"  Downloads: {groups['Downloads']}")
 print(f"  Tools:     {groups['Tools']}")
-assert groups["Downloads"] == ["Where They Go", "In the Lists", "Updates", "History"]
+assert groups["Downloads"] == ["Where They Go", "In the Lists", "Updates",
+                               "History", "Import"]
 rows = list(next(c for c in SETTINGS.iter("category") if c.get("label") == "Downloads"))
 actions = [r.get("id") for r in rows if r.get("type") == "action"]
 print(f"  Downloads actions: {actions}")
 assert "rescan_downloads" in actions, "no way back after a reinstall"
+# Import points somewhere else entirely, so it does not belong under the
+# heading that describes our own download folder.
+assert "import_folder" in actions, "no way to adopt a folder of your own"
+assert groups["Downloads"].index("Import") > groups["Downloads"].index("Where They Go")
 assert groups["Tools"] == ["Backup", "Cache", "Advanced"]
 
 # Every row in the Downloads tab greys out with the feature turned off.

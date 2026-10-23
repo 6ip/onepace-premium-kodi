@@ -214,6 +214,26 @@ def install(addon_root, fixtures, settings=None):
            getLanguage=lambda *a, **k: "eng", ISO_639_2=1,
            Monitor=Monitor, Player=Player, Actor=Actor, sleep=lambda ms: None)
     module("xbmcaddon", Addon=Addon)
+    class DialogProgress:
+        """The modal one, with a Cancel the test decides the answer for."""
+
+        cancel_after = None        # None never cancels
+
+        def create(self, heading="", message=""):
+            recorder.progress.append(("create", heading, message))
+
+        def update(self, percent=0, heading="", message=""):
+            recorder.progress.append(("update", percent, message))
+
+        def iscanceled(self):
+            if DialogProgress.cancel_after is None:
+                return False
+            DialogProgress.cancel_after -= 1
+            return DialogProgress.cancel_after < 0
+
+        def close(self):
+            recorder.progress.append(("close",))
+
     class DialogProgressBG:
         """Records the headings it was given, and never blocks."""
 
@@ -228,6 +248,7 @@ def install(addon_root, fixtures, settings=None):
 
     module("xbmcgui", ListItem=ListItem, Dialog=Dialog, Window=Window,
            DialogProgressBG=DialogProgressBG,
+           DialogProgress=DialogProgress,
            WindowXMLDialog=WindowXMLDialog,
            NOTIFICATION_INFO=NOTIFICATION_INFO,
            NOTIFICATION_ERROR=NOTIFICATION_ERROR,

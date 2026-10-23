@@ -227,6 +227,16 @@ def _video_entry(meta, episode_id):
 def _remember(path, params, meta=None, subtitles=()):
     """The list reads this, so a download looks like the rest of the add-on."""
     data = read_index()
+    remember_into(data, path, params, meta, subtitles)
+    _write_index(data)
+
+
+def remember_into(data, path, params, meta=None, subtitles=()):
+    """Add one row to an index already in hand.
+
+    An import adopts hundreds of files at once, and reading and writing the
+    whole index for each one of them would be the slowest part of the job.
+    """
     series = params.get("series_name") or "Downloads"
     if meta:
         data["series"][series] = {k: meta[k] for k in _META_KEYS if k in meta}
@@ -256,7 +266,6 @@ def _remember(path, params, meta=None, subtitles=()):
         # theirs: nothing here may delete, move or forget it.
         "imported": bool(params.get("imported")),
     }
-    _write_index(data)
 
 
 def _info_hash_of(url):

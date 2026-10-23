@@ -47,22 +47,32 @@ assert set(how) == {"size"}, how
 
 print()
 print("=== the names a filename cannot settle ===")
-# These five are why the index exists. Two One Pace episodes share the name
-# "Post-Enies Lobby 03", and the April Fools cuts are named exactly like the
-# episodes they parody, so reading the name files them under the wrong one.
+# No size on any of these: a renamed or re-encoded file, so the CRC is all
+# that is left to go on.
 UNSETTLED = [
-    ("[One Pace][436-437] Post-Enies Lobby 03 [720p][2C843A0F].mkv", "PEN_4", "PEN_3"),
-    ("[One Pace][438-439] Post-Enies Lobby 04 [720p][659EF70C].mkv", "PEN_5", "PEN_4"),
-    ("[One Pace][440-441] Post-Enies Lobby 05 [720p][CEF78887].mkv", "PEN_6", "PEN_5"),
+    # The April Fools cuts are named exactly like the episodes they parody, so
+    # the name will always read as the wrong one. That is the joke.
     ("[One Pace][823-824] Whole Cake Island 01 [720p][EDB72EE5].mp4", "fools17", "WC_1"),
     ("[One Pace][199-201] Arabasta 16 - April Fools [480p][2F71D53E].mkv", "fools24", "AL_16"),
 ]
+# Two One Pace episodes are both called "Post-Enies Lobby 03" today, which
+# shifts every name after them. The arc is being restructured upstream, so what
+# the name reads as will change — only the CRC answer is worth pinning here.
+SHIFTING = [
+    ("[One Pace][436-437] Post-Enies Lobby 03 [720p][2C843A0F].mkv", "PEN_4"),
+    ("[One Pace][438-439] Post-Enies Lobby 04 [720p][659EF70C].mkv", "PEN_5"),
+    ("[One Pace][440-441] Post-Enies Lobby 05 [720p][CEF78887].mkv", "PEN_6"),
+]
 for name, right, name_says in UNSETTLED:
     byname = m.episode_id(m.parse(name), ARC_MAP, ALIASES)
-    # No size: the file was renamed or re-encoded, so only the CRC is left.
     got = ix.resolve(name, 0, INDEX, ARC_MAP, ALIASES)
     print(f"  {name[:48]:<48} name says {byname:<7} CRC says {got['episode_id']}")
     assert byname == name_says, (name, byname)
+    assert got["episode_id"] == right and got["how"] == "crc", got
+
+for name, right in SHIFTING:
+    got = ix.resolve(name, 0, INDEX, ARC_MAP, ALIASES)
+    print(f"  {name[:48]:<48} CRC says {got['episode_id']}")
     assert got["episode_id"] == right and got["how"] == "crc", got
 
 print()

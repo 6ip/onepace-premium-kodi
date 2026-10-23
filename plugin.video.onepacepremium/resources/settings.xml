@@ -74,6 +74,9 @@
         <setting type="sep" />
         <setting type="lsep" label="History" />
         <setting label="Last Download Summary" id="show_download_report" type="action" enable="eq(-17,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=show_download_report)" />
+        <setting type="sep" />
+        <setting type="lsep" label="Import" />
+        <setting label="Import from a Folder" id="import_folder" type="action" enable="eq(-20,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=import_folder)" />
     </category>
     <category label="Tools">
         <setting type="lsep" label="Backup" />
