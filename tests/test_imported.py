@@ -225,4 +225,16 @@ assert OURS not in downloads._dead_imported(written[-1]["files"])
 print("  and it only ever names files of theirs  OK")
 
 print()
+print("=== a copy of theirs does not call itself a download ===")
+# describe() names the copy in the stream picker and again in the player's
+# own info panel, so calling an imported file "Downloaded" is wrong twice.
+for imported_flag, want in ((False, "Downloaded"), (True, "Imported")):
+    meta = {"variant": "standard", "video_size": 216984913,
+            "imported": imported_flag}
+    said = downloads.describe(meta)
+    print(f"  imported={str(imported_flag):<5} -> {said}")
+    assert said.startswith(want), said
+    assert downloads._play_fields("E:/x.mkv", meta)["stream_name"] == said
+
+print()
 print("all assertions passed")

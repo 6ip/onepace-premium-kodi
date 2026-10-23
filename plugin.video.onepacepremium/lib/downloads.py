@@ -1287,7 +1287,8 @@ def _size_label(meta):
 
 def describe(meta):
     """What this copy is, for the row in the picker and the player's OSD."""
-    parts = ["Downloaded", variant_label(meta.get("variant"))]
+    parts = ["Imported" if meta.get("imported") else "Downloaded",
+             variant_label(meta.get("variant"))]
     size = _size_label(meta)
     if size:
         parts.append(size)
