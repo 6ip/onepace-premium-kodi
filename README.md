@@ -1,6 +1,6 @@
 # 🎌 One Pace Addon — Kodi Add-on
 
-Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`repository.onepacepremium`). Watch the complete One Pace catalog with your debrid service directly inside Kodi.
+Kodi plugin (`plugin.video.onepacepremium`) and its update repository (`repository.onepacepremium`). Watch the complete One Pace catalog in Kodi through your debrid service, or peer-to-peer.
 
 ## 🚀 Installation (Recommended)
 
@@ -34,7 +34,7 @@ Using the repository ensures you receive automatic updates.
 
 <img src="assets/steps-guide/screenshot00002.jpg" width="900">
 
-**4.** Type `https://6ip.github.io/onepace-premium-kodi/` in the top box and `onepace premium` in the bottom box. Press **OK** to add the source.
+**4.** Type `https://6ip.github.io/onepace-premium-kodi/` in the top box and `One Pace Addon` in the bottom box. Press **OK** to add the source.
 
 <img src="assets/steps-guide/screenshot00003.jpg" width="900">
 
@@ -57,7 +57,7 @@ However, if **Unknown Sources** is **disabled**, you'll see a "Disabled" notific
 - Press **Back**
 - Click **Install from zip file** again
 
-**7.** Now select **onepace premium**.
+**7.** Now select **One Pace Addon**.
 
 <img src="assets/steps-guide/screenshot00006.jpg" width="900">
 
@@ -75,6 +75,8 @@ The repository is now installed. Next, we'll use it to download and install the 
 
 <img src="assets/steps-guide/screenshot00009.jpg" width="900">
 
+> If it fails right after installing the repository, restart Kodi and try again.
+
 **11.** Select **Video add-ons**.
 
 <img src="assets/steps-guide/screenshot00010.jpg" width="900">
@@ -82,8 +84,6 @@ The repository is now installed. Next, we'll use it to download and install the 
 **12.** Now select **One Pace Addon**.
 
 <img src="assets/steps-guide/screenshot00011.jpg" width="900">
-
-> If it fails right after installing the repository, restart Kodi and try again.
 
 **13.** Press the **Install** button.
 
@@ -128,7 +128,7 @@ Once installed, link the add-on to your account:
 
 ## 🧲 Torrent Support (Optional)
 
-Debrid streams work out of the box. Install Elementum only if you also want torrent/P2P sources.
+Debrid streams work out of the box. Elementum is needed for torrent/P2P sources — including when the add-on is left unconfigured, which plays over peer-to-peer.
 
 **[Elementum](https://howtomediacenter.com/en/install-elementum-kodi/)**: An exceptional add-on that offers high-quality streams via torrents.
 
@@ -159,7 +159,9 @@ push to `main` and deploys `dist/` to GitHub Pages.
 ### Build Outputs (`dist/`)
 ```
 dist/
-├── addons.xml + addons.xml.md5
+├── index/
+│   └── addons.xml + addons.xml.md5        # what the repository reads
+├── addons.xml + addons.xml.md5            # kept for repositories already installed
 ├── repository.onepacepremium-X.Y.Z.zip   # what the page links to
 ├── plugin.video.onepacepremium/
 │   ├── addon.xml
