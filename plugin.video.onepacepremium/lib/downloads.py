@@ -711,6 +711,20 @@ def _match_episode(meta, entry):
     return None
 
 
+def _folders_present(paths):
+    """Whether each file's folder is attached, checked once per folder.
+
+    An imported library can sit on a drive that comes and goes, and asking
+    after every episode would cost a long list one check per row.
+    """
+    seen = {}
+    for path in paths:
+        where = path.rsplit("/", 1)[0] + "/" if "/" in path else path
+        if where not in seen:
+            seen[where] = xbmcvfs.exists(where)
+    return seen
+
+
 def _size_on_disk(path):
     try:
         return int(xbmcvfs.Stat(path).st_size())
@@ -1273,13 +1287,16 @@ def _play_fields(path, meta):
 # flag in a fixed spot is what the eye scans down a column. A list renders the
 # bold inside the colour; the select dialog leaves its closing tag showing, so
 # that one goes without.
-_ARROW = "[↓]"
-_REDO = "[↻]"
-_MARK = f"[COLOR FF2ECC71][B]{_ARROW}[/B][/COLOR]"
-_MARK_PLAIN = f"[COLOR FF2ECC71]{_ARROW}[/COLOR]"
-# Amber, and a different glyph: held, but the repo has moved on.
-_STALE = f"[COLOR FFF5A623][B]{_REDO}[/B][/COLOR]"
-_STALE_PLAIN = f"[COLOR FFF5A623]{_REDO}[/COLOR]"
+# Letters rather than arrows: every font has them, on every skin and device.
+_T_HELD, _T_STALE, _T_MINE = "[D]", "[!]", "[I]"
+_MARK = f"[COLOR FFA8E6A3][B]{_T_HELD}[/B][/COLOR]"
+_MARK_PLAIN = f"[COLOR FFA8E6A3]{_T_HELD}[/COLOR]"
+# Held, but the repo has moved on.
+_STALE = f"[COLOR FFFFD166][B]{_T_STALE}[/B][/COLOR]"
+_STALE_PLAIN = f"[COLOR FFFFD166]{_T_STALE}[/COLOR]"
+# Theirs, not ours: Delete only forgets it, and no update applies to it.
+_MINE = f"[COLOR FF8CC8FF][B]{_T_MINE}[/B][/COLOR]"
+_MINE_PLAIN = f"[COLOR FF8CC8FF]{_T_MINE}[/COLOR]"
 
 
 def enabled():
@@ -1295,8 +1312,8 @@ def outdated_ids():
             if m.get("outdated") and m.get("episode_id")}
 
 
-def mark(label, episode_id, on_disk, plain=False, stale=()):
-    """Flag a title that is already on disk, or one worth fetching again.
+def mark(label, episode_id, on_disk, plain=False, stale=(), mine=()):
+    """Flag a title we hold, one worth fetching again, or one of their own.
 
     plain drops the bold, which a select dialog renders as a literal [/B].
     """
@@ -1306,6 +1323,8 @@ def mark(label, episode_id, on_disk, plain=False, stale=()):
         return label
     if episode_id in stale:
         return f"{_STALE_PLAIN if plain else _STALE} {label}"
+    if episode_id in mine:
+        return f"{_MINE_PLAIN if plain else _MINE} {label}"
     return f"{_MARK_PLAIN if plain else _MARK} {label}"
 
 
@@ -1390,6 +1409,14 @@ def downloaded_ids():
         return set()
     return {m.get("episode_id") for m in read_index()["files"].values()
             if m.get("episode_id")}
+
+
+def imported_ids():
+    """Episode ids that are the viewer's own files rather than our downloads."""
+    if not enabled():
+        return set()
+    return {m.get("episode_id") for m in read_index()["files"].values()
+            if m.get("imported") and m.get("episode_id")}
 
 
 def _season_of(meta):
@@ -1543,6 +1570,8 @@ def list_on_device(params=None):
         next((m.get("series_id") for m in mine.values() if m.get("series_id")), ""))
 
     chosen = {p: m for p, m in mine.items() if _season_of(m) == int(season)}
+    # Only an imported row can be missing here: the sweep drops any of ours.
+    attached = _folders_present(chosen)
     set_content("episodes")
     label = "Specials" if int(season) == 0 else f"Season {season}"
     set_category(f"{series} - {label}")
@@ -1557,6 +1586,9 @@ def list_on_device(params=None):
         # Two cuts of one episode sit next to each other, so say which is which.
         if meta.get("variant") and meta["variant"] != "standard":
             label += f"  ({variant_label(meta['variant'])})"
+        here = attached.get(path.rsplit("/", 1)[0] + "/", True)
+        if not here:
+            label = f"[COLOR FF888899]{label}  (drive not connected)[/COLOR]"
         item = xbmcgui.ListItem(label=label, offscreen=True)
         video = meta.get("video") or {}
         tags = item.getVideoInfoTag()
@@ -1600,7 +1632,9 @@ def list_on_device(params=None):
                 item.setProperty("PercentPlayed", str(pct))
                 tags.setResumePoint(pos, whole)
 
-        item.setProperty("IsPlayable", "true")
+        # Not playable while its drive is out, rather than handing Kodi a path
+        # that is not there and letting it say the file is broken.
+        item.setProperty("IsPlayable", "true" if here else "false")
         item.setProperty("Downloaded", "true")
         menu = []
         if episode_id:

@@ -139,4 +139,49 @@ assert written[-1]["files"][THEIRS]["imported"] is True
 print("  a download writes False, an import writes True  OK")
 
 print()
+print("=== the list says which kind each one is ===")
+# The two behave differently on Delete and on Check for Updates, so the mark
+# has to say which is which before somebody presses anything.
+fresh()
+store["download_marker"] = "true"
+held, mine = {"RO_1"}, {"RO_1"}
+print(f"  ours      -> {downloads.mark('Romance Dawn', 'RO_1', held)!r}")
+print(f"  theirs    -> {downloads.mark('Romance Dawn', 'RO_1', held, mine=mine)!r}")
+print(f"  outdated  -> {downloads.mark('Romance Dawn', 'RO_1', held, stale=mine, mine=mine)!r}")
+assert "FFA8E6A3" in downloads.mark("x", "RO_1", held)
+assert "FF8CC8FF" in downloads.mark("x", "RO_1", held, mine=mine)
+# Outdated wins: it is the one that wants doing something about.
+assert "FFFFD166" in downloads.mark("x", "RO_1", held, stale=mine, mine=mine)
+assert downloads.mark("x", "RO_1", set(), mine=mine) == "x", "not held, not marked"
+plain = downloads.mark("x", "RO_1", held, plain=True, mine=mine)
+assert "[B]" not in plain, "a select dialog shows the tags literally"
+
+print()
+print("=== imported_ids only counts the viewer's own ===")
+fresh()
+print(f"  rows: ours + theirs -> imported_ids() = {downloads.imported_ids()}")
+assert downloads.imported_ids() == {"RO_1"}, downloads.imported_ids()
+assert downloads.downloaded_ids() == {"RO_1"}, "both rows are the same episode"
+store["downloads_enabled"] = "false"
+assert downloads.imported_ids() == set(), "off means no marks at all"
+store["downloads_enabled"] = "true"
+
+print()
+print("=== a drive that is not plugged in is asked after once ===")
+# One check per folder, not per episode: a library of four hundred would
+# otherwise stat four hundred times every time the list is opened.
+asked = []
+downloads.xbmcvfs.exists = lambda path: (asked.append(path), path in present)[1]
+present.clear()
+present.add(OURS)
+paths = {f"E:/Anime/ep{n}.mkv": {} for n in range(20)}
+paths[OURS] = {}
+seen = downloads._folders_present(paths)
+print(f"  {len(paths)} files in 2 folders -> {len(asked)} check(s)")
+print(f"  {seen}")
+assert len(asked) == 2, asked
+assert seen["E:/Anime/"] is False and seen[OURS.rsplit("/", 1)[0] + "/"] is False
+downloads.xbmcvfs.exists = lambda path: path in present
+
+print()
 print("all assertions passed")

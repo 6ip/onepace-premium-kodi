@@ -500,8 +500,8 @@ fresh = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"})
 stale = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"}, stale={"RO_1"})
 print(f"  current : {fresh.encode('unicode_escape').decode()}")
 print(f"  outdated: {stale.encode('unicode_escape').decode()}")
-assert fresh.startswith("[COLOR FF2ECC71]"), fresh
-assert stale.startswith("[COLOR FFF5A623]"), "an outdated row looks the same as a current one"
+assert fresh.startswith("[COLOR FFA8E6A3]"), fresh
+assert stale.startswith("[COLOR FFFFD166]"), "an outdated row looks the same as a current one"
 assert "[/B]" not in downloads.mark("x", "RO_1", {"RO_1"}, plain=True, stale={"RO_1"})
 for name, src in (("episode list", STREAMS),
                   ("My Lists", (harness.ADDON / "lib" / "my_lists.py").read_text(encoding="utf-8"))):
@@ -1186,11 +1186,11 @@ store["download_marker"] = "true"
 store["downloads_enabled"] = "true"
 marked = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"})
 print("  " + marked.encode("unicode_escape").decode())
-assert marked.startswith("[COLOR FF2ECC71][B]"), "a list renders the bold fine"
+assert marked.startswith("[COLOR FFA8E6A3][B]"), "a list renders the bold fine"
 plainly = downloads.mark("1x01. Romance Dawn", "RO_1", {"RO_1"}, plain=True)
 print("  " + plainly.encode("unicode_escape").decode())
 assert "[B]" not in plainly, "a select dialog shows the closing tag as text"
-assert plainly.startswith("[COLOR FF2ECC71]"), plainly
+assert plainly.startswith("[COLOR FFA8E6A3]"), plainly
 assert "plain=True" in STREAMS, "the season picker would show the bold version"
 assert marked.endswith("1x01. Romance Dawn"), "a list view clips the tail, not the head"
 assert downloads.mark("x", "RO_9", {"RO_1"}) == "x", "an undownloaded row must stay plain"
@@ -1249,7 +1249,7 @@ for label, fields in held:
 assert len(held) == 2, "holding both cuts must offer both"
 assert "Standard" in held[0][0] and "763.87 MB" in held[0][0], held[0][0]
 assert "Extended" in held[1][0] and "783.66 MB" in held[1][0], held[1][0]
-assert held[0][0].startswith("[COLOR FF2ECC71][↓]"), "the dialog would show the [/B]"
+assert held[0][0].startswith("[COLOR FFA8E6A3][D]"), "the dialog would show the [/B]"
 assert "[/B]" not in held[0][0], "the select dialog shows the closing tag"
 assert downloads.local_options("NOPE") == [], "an undownloaded episode must offer nothing"
 store["downloads_enabled"] = "false"

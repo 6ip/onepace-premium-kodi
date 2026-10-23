@@ -272,10 +272,11 @@ def list_episodes(params):
         set_category(show_title)
     series_actors = _cast_list(meta)
     hide_watched = get_setting("hide_watched") == "true"
-    from .downloads import (downloaded_ids, enabled, mark as _download_mark,
+    from .downloads import (downloaded_ids, enabled, imported_ids,
+                            mark as _download_mark,
                             offer_manual as _offer_manual, outdated_ids)
     on_disk, downloads_on = downloaded_ids(), enabled()
-    stale = outdated_ids()
+    stale, mine = outdated_ids(), imported_ids()
     items = []
     n_watched = n_resume = n_hidden = 0
     for video in season_videos:
@@ -293,7 +294,7 @@ def list_episodes(params):
         title = video.get("name") or video.get("title") or f"Episode {episode_number}"
         label = _download_mark(
             _episode_label(title, selected_season, episode_number, stream_video_id),
-            stream_video_id, on_disk, stale=stale)
+            stream_video_id, on_disk, stale=stale, mine=mine)
         list_item = xbmcgui.ListItem(label=label, offscreen=True)
         tags = list_item.getVideoInfoTag()
         _set_ids(tags, video_id)
@@ -719,7 +720,8 @@ def download_season(params):
     """
     from . import download_queue
     from .downloads import (BLOCKED, CANCELLED, OK, download, downloaded_ids,
-                            enabled, mark as _download_mark, write_report)
+                            enabled, imported_ids,
+                            mark as _download_mark, write_report)
 
     if not enabled() or not ensure_configured():
         return
@@ -740,8 +742,8 @@ def download_season(params):
 
     # Anything already on disk starts unticked, so the usual press re-fetches
     # nothing and the choice is still there when a copy is wanted again.
-    on_disk = downloaded_ids()
-    labels = [_download_mark(label, episode_id, on_disk, plain=True)
+    on_disk, mine = downloaded_ids(), imported_ids()
+    labels = [_download_mark(label, episode_id, on_disk, plain=True, mine=mine)
               for episode_id, label, _ in episodes]
     preselect = [i for i, (episode_id, _, _) in enumerate(episodes)
                  if episode_id not in on_disk]
