@@ -592,10 +592,12 @@ def _choose_stream(params, downloadable_only=False, quiet=False, prefer=None,
                    if is_downloadable(valid_streams[i]["video_url"])]
         if not choices:
             if not quiet:
-                # Peer-to-peer is a magnet, not a file to fetch, so for a
-                # viewer with no key the reason is worth saying.
-                _notify_error("Downloads need a debrid service"
-                              if not get_secret_string()
+                # Nothing to fetch anywhere in the list means the service, not
+                # this episode. Asked of the streams rather than the key: a
+                # peer-to-peer configuration has a key and still has no debrid.
+                none_at_all = not any(is_downloadable(s["video_url"])
+                                      for s in valid_streams)
+                _notify_error("Downloads need a debrid service" if none_at_all
                               else "No stream here can be downloaded")
             return None
     log(f"[streams] {len(valid_streams)} available, {len(choices)} after preferences")

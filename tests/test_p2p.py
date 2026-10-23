@@ -75,21 +75,22 @@ for label, answers in [("Not now", [0, 1]), ("Back or Esc", [-1, 1])]:
 
 print()
 print("=== without Elementum there is nothing to play a torrent ===")
-# Switched off is one button away from fixed; never installed is a download.
-# Offering the wrong one of those does nothing at all: Kodi's InstallAddon
-# silently gives up on an add-on no installed repository carries.
+# Switched off is one button away from fixed; never installed is a trip to the
+# repository. InstallAddon is deliberately not used for the second: it gives up
+# silently on anything no installed repository already carries.
 for label, installed, want in [("switched off", True, "EnableAddon"),
-                               ("never installed", False, "InstallAddon")]:
+                               ("never installed", False, "addonbrowser")]:
     got, rec, left = ask([1], elementum=False, installed=installed)
     fired = [b for b in rec.builtins if want in b]
     print(f"  {label:<15} -> {got}, fired: {fired}")
     assert got is False and fired, f"{label} needs {want}"
     assert "Elementum" in SEEN[0][1], "say what is missing, not just 'peer-to-peer'"
 
-# The repository, not Elementum itself: Kodi can only install what a repository
-# it already has offers, and ours carries the one.
-assert utils.ELEMENTUM_REPO_ID in fired[0], fired
-print(f"  and it offers {utils.ELEMENTUM_REPO_ID}, which our own feed serves")
+# Our own repository, which carries the ElementumOrg one: Kodi installs
+# nothing it cannot already see, so that is where the trip has to start.
+assert utils.ONEPACE_REPO_ID in fired[0], fired
+assert "InstallAddon" not in fired[0], "that is the call that fails quietly"
+print(f"  and it opens {utils.ONEPACE_REPO_ID} in the add-on browser")
 
 got, rec, left = ask([2], elementum=False)
 print(f"  'Configure' instead -> {got}, settings opened: "
@@ -146,17 +147,38 @@ er._cache.get = lambda url: {"streams": [
     {"name": "One Pace", "description": "1080p", "infoHash": "abc123",
      "sources": [], "behaviorHints": {}}]}
 
-for secret, expect in [("", "Downloads need a debrid service"),
-                       ("rdkey=X", "No stream here can be downloaded")]:
-    S["secret_string"] = secret
+
+
+def refused(**settings):
+    """What Download says when it can find nothing to fetch."""
+    for key, value in settings.items():
+        S[key] = value
     rec = harness.recorder()
     got = er._choose_stream({"catalog_type": "series", "video_id": "pp_onepacee"},
                             downloadable_only=True)
-    said = rec.notifications[0][0] if rec.notifications else None
-    print(f"  key={secret or 'none':<9} -> {said!r}")
-    assert got is None and said == expect, (secret, said)
+    assert got is None, got
+    return rec.notifications[0][0] if rec.notifications else None
 
-S["secret_string"] = ""
+
+# Asked of the streams, not of the key: a peer-to-peer configuration has a key
+# and still has no debrid service, so it used to hear the wrong one of these.
+for label, secret in [("no key at all", ""), ("a p2p-only key", "p2p")]:
+    said = refused(secret_string=secret)
+    print(f"  {label:<15} -> {said!r}")
+    assert said == "Downloads need a debrid service", (label, said)
+
+# A debrid stream does exist here; the version preference is what ruled it out,
+# so the episode is the problem rather than the service.
+er._cache.get = lambda url: {"streams": [
+    {"name": "Real-Debrid", "description": "1080p", "url": "https://dl/x.mkv",
+     "behaviorHints": {"bingeGroup": "onepace|rd|standard"}},
+    {"name": "P2P", "description": "1080p", "infoHash": "abc123", "sources": [],
+     "behaviorHints": {"bingeGroup": "onepace|p2p|extended"}}]}
+said = refused(secret_string="rdkey=X", preferred_version="2")
+print(f"  {'extended, p2p only':<15} -> {said!r}")
+assert said == "No stream here can be downloaded", said
+
+S["secret_string"], S["preferred_version"] = "", "0"
 
 print()
 print("all assertions passed")

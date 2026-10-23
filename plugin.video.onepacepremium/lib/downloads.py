@@ -634,6 +634,7 @@ def rescan(_params=None):
     from .provider_api import _fetch_provider_meta
 
     data = _sweep(read_index())
+    dead = _dead_imported(data["files"])
     known = set(data["files"])
     try:
         on_disk = _walk_downloads()
@@ -643,19 +644,31 @@ def rescan(_params=None):
         return
 
     missing = [f for f in on_disk if f["path"] not in known]
-    if not missing:
+    if not missing and not dead:
         _said("Rescan", f"All {len(on_disk)} file(s) already listed")
         return
+
+    asking = []
+    if missing:
+        asking.append(f"{len(missing)} file(s) here are not in the list.")
+    if dead:
+        asking.append(f"{len(dead)} imported file(s) are no longer where "
+                      f"the list says.")
     if not xbmcgui.Dialog().yesno(
-            "Rescan", f"{len(missing)} file(s) here are not in the list."
-            + chr(10) + chr(10) + "Look them up and add them?",
-            nolabel="Cancel", yeslabel="Add"):
+            "Rescan", chr(10).join(asking) + chr(10) + chr(10) + "Tidy the list up?",
+            nolabel="Cancel", yeslabel="Tidy"):
         return
 
-    progress = xbmcgui.DialogProgressBG()
-    progress.create("Rescanning downloads")
+    if dead:
+        _remove_rows(dead)
+        data = read_index()
+        log(f"[rescan] forgot {len(dead)} imported file(s) that had moved")
+
     added, unknown = 0, 0
-    ids = _series_ids()
+    progress = xbmcgui.DialogProgressBG()
+    if missing:
+        progress.create("Rescanning downloads")
+    ids = _series_ids() if missing else {}
     for index, entry in enumerate(missing, 1):
         progress.update(int(index * 100 / len(missing)), "Rescanning downloads",
                         os.path.basename(entry["path"]))
@@ -678,11 +691,16 @@ def rescan(_params=None):
         added += 1
     progress.close()
 
-    lines = [f"Added {added} of {len(missing)} found"]
+    lines = [f"Added {added} of {len(missing)} found"] if missing else []
     if unknown:
         lines.append(f"{unknown} could not be matched to an episode")
+    if dead:
+        lines.append(f"{len(dead)} imported file(s) had moved and were forgotten")
     write_report("Rescanned downloads", lines)
-    _said("Rescan", f"Added {added} download(s)" if added else "Nothing could be added")
+    done = [f"Added {added} download(s)"] if added else []
+    if dead:
+        done.append(f"Forgot {len(dead)} that had moved")
+    _said("Rescan", chr(10).join(done) if done else "Nothing could be added")
     refresh_container()
 
 
@@ -723,6 +741,20 @@ def _folders_present(paths):
         if where not in seen:
             seen[where] = xbmcvfs.exists(where)
     return seen
+
+
+def _dead_imported(files):
+    """Imported rows whose file has really gone, not merely gone offline.
+
+    A missing folder is a drive that is out, and the row waits for it. A folder
+    that is there without its file means the file was moved or deleted, and
+    nothing would ever tidy that row away.
+    """
+    gone = [p for p, m in files.items()
+            if m.get("imported") and not xbmcvfs.exists(p)]
+    attached = _folders_present(gone)
+    return [p for p in gone
+            if attached.get(p.rsplit("/", 1)[0] + "/", False)]
 
 
 def _size_on_disk(path):
@@ -1338,7 +1370,9 @@ def copies_of(episode_id):
         return []
     held = [(path, meta) for path, meta in read_index()["files"].items()
             if meta.get("episode_id") == episode_id and xbmcvfs.exists(path)]
-    return sorted(held, key=lambda kv: _variant_order(kv[1].get("variant")))
+    # Ours before theirs: it sits on storage we keep, and updates reach it.
+    return sorted(held, key=lambda kv: (_variant_order(kv[1].get("variant")),
+                                        bool(kv[1].get("imported"))))
 
 
 def path_for(episode_id):
@@ -1399,7 +1433,8 @@ def local_options(episode_id):
     """
     options = []
     for path, meta in copies_of(episode_id):
-        options.append((f"{_MARK_PLAIN} {describe(meta)}", _play_fields(path, meta)))
+        tag = _MINE_PLAIN if meta.get("imported") else _MARK_PLAIN
+        options.append((f"{tag} {describe(meta)}", _play_fields(path, meta)))
     return options
 
 
@@ -1412,11 +1447,19 @@ def downloaded_ids():
 
 
 def imported_ids():
-    """Episode ids that are the viewer's own files rather than our downloads."""
+    """Episode ids held only as the viewer's own files.
+
+    Holding a copy of ours as well makes it one of ours for marking: that is
+    the copy an update reaches and the one Delete would take off the disk.
+    """
     if not enabled():
         return set()
-    return {m.get("episode_id") for m in read_index()["files"].values()
-            if m.get("imported") and m.get("episode_id")}
+    ours, theirs = set(), set()
+    for meta in read_index()["files"].values():
+        episode_id = meta.get("episode_id")
+        if episode_id:
+            (theirs if meta.get("imported") else ours).add(episode_id)
+    return theirs - ours
 
 
 def _season_of(meta):

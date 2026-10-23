@@ -157,14 +157,31 @@ plain = downloads.mark("x", "RO_1", held, plain=True, mine=mine)
 assert "[B]" not in plain, "a select dialog shows the tags literally"
 
 print()
-print("=== imported_ids only counts the viewer's own ===")
+print("=== holding one of ours makes an episode ours for marking ===")
+# [I] says nothing here is ours. Holding a copy of ours as well means an
+# update can reach it and Delete would take a file off the disk, so the list
+# should say [D] rather than [I].
 fresh()
-print(f"  rows: ours + theirs -> imported_ids() = {downloads.imported_ids()}")
-assert downloads.imported_ids() == {"RO_1"}, downloads.imported_ids()
+print(f"  ours + theirs -> imported_ids() = {downloads.imported_ids() or 'set()'}")
+assert downloads.imported_ids() == set(), downloads.imported_ids()
 assert downloads.downloaded_ids() == {"RO_1"}, "both rows are the same episode"
+
+fresh(ours=False)
+print(f"  theirs only   -> imported_ids() = {downloads.imported_ids()}")
+assert downloads.imported_ids() == {"RO_1"}, downloads.imported_ids()
+
 store["downloads_enabled"] = "false"
 assert downloads.imported_ids() == set(), "off means no marks at all"
 store["downloads_enabled"] = "true"
+
+print()
+print("=== and ours is the copy that plays ===")
+# Both exist and both are the standard cut, so without a tiebreak whichever
+# row happened to be written first would win.
+fresh()
+order = [downloads.imported(path) for path, _ in downloads.copies_of("RO_1")]
+print(f"  copies_of order, imported? -> {order}")
+assert order == [False, True], "ours should come first"
 
 print()
 print("=== a drive that is not plugged in is asked after once ===")
@@ -182,6 +199,30 @@ print(f"  {seen}")
 assert len(asked) == 2, asked
 assert seen["E:/Anime/"] is False and seen[OURS.rsplit("/", 1)[0] + "/"] is False
 downloads.xbmcvfs.exists = lambda path: path in present
+
+print()
+print("=== a moved file is forgotten, an unplugged one is waited for ===")
+# The row for a file that really went would otherwise sit in the list for
+# ever, because the sweep keeps imported rows on purpose.
+fresh(on_disk=(OURS, THEIRS))
+print(f"  everything present      -> {downloads._dead_imported(written[-1]['files'])}")
+assert downloads._dead_imported(written[-1]["files"]) == []
+
+# The folder is there, the file is not: it was moved or deleted.
+fresh(on_disk=(OURS, "E:/Anime/"))
+dead = downloads._dead_imported(written[-1]["files"])
+print(f"  folder there, file gone -> {[p.split('/')[-1] for p in dead]}")
+assert dead == [THEIRS], dead
+
+# The whole folder is missing: the drive is out, so the row waits.
+fresh(on_disk=(OURS,))
+print(f"  folder gone too         -> {downloads._dead_imported(written[-1]['files'])}")
+assert downloads._dead_imported(written[-1]["files"]) == [], "a drive comes back"
+
+# One of ours is never in this list: the sweep already drops it.
+fresh(on_disk=(THEIRS, "E:/Anime/"))
+assert OURS not in downloads._dead_imported(written[-1]["files"])
+print("  and it only ever names files of theirs  OK")
 
 print()
 print("all assertions passed")

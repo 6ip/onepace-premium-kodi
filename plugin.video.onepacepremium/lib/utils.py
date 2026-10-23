@@ -46,9 +46,9 @@ REQUEST_TIMEOUT = 20
 _SESSION = None
 
 ELEMENTUM_ID = "plugin.video.elementum"
-# Our own feed serves this repository, so it is installable by anyone who has
-# ours — which is the only reason offering it is worth anything.
-ELEMENTUM_REPO_ID = "repository.elementumorg"
+# Our own feed carries the ElementumOrg repository, so this is where somebody
+# without Elementum can go and fetch it.
+ONEPACE_REPO_ID = "repository.onepacepremium"
 
 
 def session():
@@ -279,16 +279,18 @@ def _offer_elementum(state):
     if state == "disabled":
         message, label = preamble + "Elementum is installed but switched off.", "Enable Elementum"
     else:
+        # Said as two steps because it is two steps. Kodi installs nothing it
+        # cannot already see, so the repository has to come first.
         message, label = preamble + (
-            "Installing the Elementum repository is the first step — Elementum "
-            "itself is then picked from inside it."), "Get Elementum"
+            "Our repository will open. Install ElementumOrg Repository there, "
+            "then Elementum from inside it."), "Open Repository"
 
     choice = xbmcgui.Dialog().yesnocustom(
         ADDON_NAME, message, "Configure", "Not now", label)
     if choice == 1:
         xbmc.executebuiltin(
             f"EnableAddon({ELEMENTUM_ID})" if state == "disabled"
-            else f"InstallAddon({ELEMENTUM_REPO_ID})"
+            else f"ActivateWindow(addonbrowser,addons://{ONEPACE_REPO_ID}/,return)"
         )
     elif choice == 2:
         xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
