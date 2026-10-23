@@ -1,4 +1,6 @@
 """Keeping episodes on disk: names, what is fetchable, and the index."""
+import re
+
 import harness
 
 store = harness.setup()
@@ -710,15 +712,40 @@ assert "_sweep(read_index())" in SRC, "the list never sweeps"
 print("  files removed by hand are swept on the next visit  OK")
 
 print()
-print("=== Downloads opens on two ways in ===")
+print("=== Downloads opens on three ways in ===")
 kodistub._WINDOW_PROPS.clear()
 kodistub.recorder.reset()
 downloads.list_downloads(None)
 landing = kodistub.recorder.directories
 print("  " + ", ".join(f"{i.label!r} folder={f}" for _, i, f in landing))
-assert [i.label for _, i, f in landing] == ["Downloading", "On Device"]
+assert [i.label for _, i, f in landing] == ["Downloading", "On Device", "Manage"]
 assert not landing[0][2], "the manager opens a window, so it must not be a folder"
 assert landing[1][2], "On Device is a folder to walk into"
+assert landing[2][2], "Manage is a folder to walk into"
+
+# Manage mirrors the settings tab rather than replacing it, so every row has
+# to be a route that exists and every job there has to stay in settings too.
+kodistub.recorder.reset()
+downloads.list_manage(None)
+jobs = kodistub.recorder.directories
+print("  Manage: " + ", ".join(repr(i.label) for _, i, _ in jobs))
+assert len(jobs) == 5, [i.label for _, i, _ in jobs]
+assert not any(f for _, _, f in jobs), "each one does a job, none navigates"
+ROUTES = set(re.findall(r'"([a-z_]+)":\s+"', (harness.ADDON / "lib" / "router.py")
+                        .read_text(encoding="utf-8")))
+MEDIA = harness.ADDON / "resources" / "skins" / "Default" / "media"
+for url, item, _ in jobs:
+    action = url.split("action=", 1)[1].split("&")[0]
+    assert action in ROUTES, (item.label, action)
+    # Reporting is not doing, so the one row that only shows looks different.
+    wanted = "info.png" if action == "show_download_report" else "tools.png"
+    icon = item.art.get("icon", "")
+    assert icon.endswith(wanted), (item.label, icon, wanted)
+    assert (MEDIA / wanted).exists(), wanted + " has to ship"
+    # A plot, because the skin's info panel is what explains the row.
+    says = item._tag.calls.get("setPlot", "")
+    assert says and says.strip() and len(says) < 80, (item.label, says)
+print("  every row is a real route, with an icon and a one-line description")
 for url, item, _ in landing:
     icon = item.art.get("icon", "")
     assert (harness.ADDON / "resources" / "skins" / "Default" / "media"
@@ -1569,15 +1596,30 @@ assert kept["text"].count(chr(8226)) == 3, "the bullets the changelog window exp
 downloads.write_report("One Pace - Season 7", ["Downloaded 1 of 1 picked"])
 assert kept["text"].index("Season 7") < kept["text"].index("Season 6"), "newest should lead"
 
-for n in range(20):
+for n in range(80):
     downloads.write_report(f"Run {n}", ["one line"])
 blocks = [b for b in kept["text"].split(chr(10) * 3) if b.strip()]
-print(f"  after 22 runs the file holds {len(blocks)} of them, newest first:")
+print(f"  after 82 runs the file holds {len(blocks)} of them, newest first:")
 print(f"    {blocks[0].splitlines()[0][:52]}")
 print(f"    {blocks[-1].splitlines()[0][:52]}")
 assert len(blocks) == downloads._REPORT_KEEP, blocks
-assert "Run 19" in blocks[0] and "Run 10" in blocks[-1], "the wrong end was trimmed"
-print("  the last ten kept, older ones dropped  OK")
+assert "Run 79" in blocks[0] and "Run 30" in blocks[-1], "the wrong end was trimmed"
+print(f"  the last {downloads._REPORT_KEEP} kept, older ones dropped  OK")
+
+# A count is not a size: one import summary runs to forty lines where a
+# download is one, so a run of them has to stop on bytes as well.
+downloads._write_index = lambda data: None
+kept["text"] = ""
+for n in range(60):
+    downloads.write_report(f"Import {n}", [
+        f"  [One Pace][823-{i}] Whole Cake Island {i:02d} [720p][EDB72EE5].mp4"
+        for i in range(40)])
+blocks = [b for b in kept["text"].split(chr(10) * 3) if b.strip()]
+size = len(kept["text"].encode("utf-8"))
+print(f"  60 big summaries -> {len(blocks)} kept, {size / 1024:.0f} KB")
+assert len(blocks) < downloads._REPORT_KEEP, "the size cap never bit"
+assert size <= downloads._REPORT_BYTES, size
+assert "Import 59" in blocks[0], "the newest must always survive"
 
 single = SRC[SRC.index("def download("):SRC.index("def _prune(")]
 assert 'if not params.get("in_season")' in single, "a season would write a summary per episode"

@@ -11,7 +11,7 @@ from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
 from .route_common import (_add_directory_items, _notify_error, end_directory,
                            set_category, set_content)
 from .utils import (ADDON_ID, background, build_url, ensure_configured,
-                    fetch_data)
+                    fetch_data, set_defaults_for_new_install)
 
 CATALOG_PAGE_SIZE = 25
 SUPPORTED_CATALOG_TYPES = {"movie", "series", "anime"}
@@ -60,6 +60,10 @@ def list_root():
         return item
 
     from .downloads import enabled as _downloads_enabled
+
+    # Before the items are built, or a new viewer's first screen would be the
+    # one without the row.
+    set_defaults_for_new_install()
 
     set_content("")
     items = [

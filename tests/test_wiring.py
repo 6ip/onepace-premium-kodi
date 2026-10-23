@@ -162,4 +162,33 @@ print(f"  TODO / FIXME / stray print: {marks or 'none'}")
 assert not marks
 
 print()
+print("=== a new install finds Downloads already on ===")
+# Off by default so an update never rearranges an existing menu, but a new
+# viewer should not have to go looking for the feature in settings.
+from lib import utils as _u
+_store = harness.setup({"downloads_enabled": "false", "last_seen_version": ""})
+import importlib
+importlib.reload(_u)
+print(f"  fresh install   -> new_install()={_u.new_install()}")
+assert _u.new_install() is True
+_u.set_defaults_for_new_install()
+print(f"  after first run -> downloads_enabled={_store['downloads_enabled']!r}")
+assert _store["downloads_enabled"] == "true"
+
+_store["downloads_enabled"], _store["last_seen_version"] = "false", "2.4.5"
+print(f"  an existing one -> new_install()={_u.new_install()}")
+assert _u.new_install() is False
+_u.set_defaults_for_new_install()
+print(f"  left alone      -> downloads_enabled={_store['downloads_enabled']!r}")
+assert _store["downloads_enabled"] == "false", "their own choice must stand"
+
+# And it happens before the menu is built, or the first screen lacks the row.
+root = (LIB / "catalog_routes.py").read_text(encoding="utf-8")
+block = root[root.index("def list_root("):]
+block = block[:block.index("_add_directory_items(items)")]
+assert "set_defaults_for_new_install()" in block, "nothing would switch it on"
+assert block.index("set_defaults_for_new_install") < block.index("_downloads_enabled()"),     "the row is decided before the default is set"
+print("  set before the row is decided  OK")
+
+print()
 print("all assertions passed")

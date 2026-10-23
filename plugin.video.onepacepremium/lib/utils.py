@@ -181,6 +181,24 @@ def reset_for_invocation():
     _w.invalidate()
 
 
+def new_install():
+    """True on a fresh install, before anything has been seen or chosen.
+
+    last_seen_version is written the first time the menu is drawn, so an empty
+    one means nobody has used this copy yet. An existing install always has it.
+    """
+    return not get_setting("last_seen_version")
+
+
+def set_defaults_for_new_install():
+    """Switch on what a new viewer should find already there."""
+    if not new_install():
+        return
+    if get_setting("downloads_enabled") != "true":
+        set_setting("downloads_enabled", "true")
+        log("[boot] first run, so Downloads starts switched on")
+
+
 def get_base_url():
     return ADDON.getSetting("base_url").rstrip("/")
 

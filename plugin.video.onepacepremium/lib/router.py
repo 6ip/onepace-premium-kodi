@@ -30,6 +30,7 @@ _ACTIONS = {
     "list_next_episodes":  "my_lists:list_next_episodes",
     "list_downloads":      "downloads:list_downloads",
     "list_on_device":      "downloads:list_on_device",
+    "list_manage":         "downloads:list_manage",
     "open_downloads_manager": "downloads_manager:show",
     "download_episode":    "episode_routes:download_episode",
     "download_season":     "episode_routes:download_season",

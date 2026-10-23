@@ -822,8 +822,10 @@ def browse(params):
 
 _REPORT = "last_download.txt"
 
-# An evening's worth, and few enough to keep the file small.
-_REPORT_KEEP = 10
+_REPORT_KEEP = 50
+# One import summary runs to forty lines where a download is one, so a count
+# on its own is not a size.
+_REPORT_BYTES = 60 * 1024
 
 
 def _read_report():
@@ -846,7 +848,12 @@ def write_report(heading, lines):
     entry += [f"  {chr(8226)}  {line}" for line in lines]
 
     older = [block for block in _read_report().split(chr(10) * 3) if block.strip()]
-    body = (chr(10) * 3).join([chr(10).join(entry)] + older[:_REPORT_KEEP - 1])
+    kept = [chr(10).join(entry)]
+    for block in older[:_REPORT_KEEP - 1]:
+        if len((chr(10) * 3).join(kept + [block]).encode("utf-8")) > _REPORT_BYTES:
+            break
+        kept.append(block)
+    body = (chr(10) * 3).join(kept)
     try:
         xbmcvfs.mkdirs(_profile())
         with xbmcvfs.File(_profile() + _REPORT, "w") as handle:
@@ -1318,8 +1325,42 @@ def list_downloads(params=None):
          _nav(f"Downloading  ({running})" if running else "Downloading",
               f"{media}/downloading.png"), False),
         (build_url("list_on_device"), _nav("On Device", f"{media}/library.png"), True),
+        (build_url("list_manage"), _nav("Manage", f"{media}/settings.png"), True),
     ])
     # Never cached: the count above moves while you are looking at it.
+    end_directory()
+
+
+def list_manage(params=None):
+    """The jobs from the settings tab, in the menu Downloads already lives in."""
+    media = f"special://home/addons/{ADDON_ID}/resources/skins/Default/media"
+    icon = f"{media}/tools.png"
+    fanart = background()
+
+    def _job(label, url, says, art=icon):
+        item = xbmcgui.ListItem(label=label, offscreen=True)
+        item.setArt({"icon": art, "thumb": art, "poster": art,
+                     "fanart": fanart, "banner": art, "landscape": art})
+        item.getVideoInfoTag().setPlot(says)
+        return (url, item, False)
+
+    set_content("")
+    set_category("Manage")
+    _add_directory_items([
+        _job("Import from a Folder", build_url("import_folder"),
+             "Add episodes you already have, from anywhere on your disk."),
+        _job("Rescan Download Folder", build_url("rescan_downloads"),
+             "Find downloads the list has lost, and forget ones that moved."),
+        _job("Check for Updates", build_url("check_updates"),
+             "See which downloads One Pace has re-released since."),
+        _job("Move Existing Downloads", build_url("move_downloads"),
+             "Bring everything already downloaded into the current folder."),
+        # The one row that reports rather than does, so it looks different.
+        _job("Last Download Summary", build_url("show_download_report"),
+             "What the last downloads, imports and scans actually did.",
+             art=f"{media}/info.png"),
+    ])
+    # Never cached: each of these changes what the others would report.
     end_directory()
 
 
