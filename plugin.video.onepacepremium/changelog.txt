@@ -1,3 +1,19 @@
+[B]v2.4.6[/B]  [COLOR FF888899]23 October 2026[/COLOR]
+
+[COLOR FF81A6C6][B]New[/B][/COLOR]
+  •  Import One Pace you already have, from Downloads under Manage.
+  •  Downloads has a Manage menu for rescanning, importing and updates.
+  •  Downloads starts switched on for new installs.
+
+[COLOR FF81A6C6][B]Changed[/B][/COLOR]
+  •  Episodes on disk are marked: downloaded, imported, or worth fetching again.
+
+[COLOR FF81A6C6][B]Fixes[/B][/COLOR]
+  •  An episode you already have now plays with no connection or setup.
+  •  The same episode is no longer listed twice.
+  •  Downloading over torrents now says it needs a debrid service.
+
+
 [B]v2.4.5[/B]  [COLOR FF888899]14 October 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Renamed[/B][/COLOR]
