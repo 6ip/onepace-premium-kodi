@@ -315,4 +315,60 @@ print("=== a clash is never asked which episode it is ===")
 assert len(D.select_answers) == 1, f"too many questions asked: {D.select_answers}"
 
 print()
+print("=== our own downloads are never adopted as somebody else's ===")
+# Choosing a parent of our download folder is a fair thing to want. Walking
+# into it would mark our own files imported, and Delete would then stop
+# deleting them while Check for Updates skipped them for good.
+PARENT = "D:/Media/"
+OURS_DIR = "D:/Media/One Pace Premium/"
+TREE[PARENT] = (["One Pace Premium", "Mine"], [])
+TREE[PARENT + "Mine/"] = ([], ["[One Pace][1] Romance Dawn 01 [1080p][E5F09F49].mkv"])
+TREE[OURS_DIR] = ([], ["1x01 - Romance Dawn.mkv"])
+SIZES[PARENT + "Mine/[One Pace][1] Romance Dawn 01 [1080p][E5F09F49].mkv"] = 397698454
+SIZES[OURS_DIR + "1x01 - Romance Dawn.mkv"] = 397698454
+imp.folder = lambda: OURS_DIR
+imp._ours = lambda: (OURS_DIR,)
+
+rec = attempt(answer=1, browse=PARENT)
+rows = written[-1]["files"] if written else {}
+print(f"  rows written: {[p.split('/')[-1] for p in rows]}")
+assert len(rows) == 1, sorted(rows)
+assert OURS_DIR not in list(rows)[0], "our own download was adopted as theirs"
+assert list(rows)[0].startswith(PARENT + "Mine/"), list(rows)
+
+# And choosing the folder itself is still refused outright, with a reason.
+rec = attempt(answer=1, browse=OURS_DIR)
+print(f"  choosing it directly -> writes {len(written)}, said {rec.notifications}")
+assert not written
+imp.folder = lambda: "C:/kodi/downloads/"
+imp._ours = lambda: ()
+
+print()
+print("=== two files cannot quietly take the same episode in one pass ===")
+# The stored index knows nothing of what was settled a moment ago, so without
+# a check the second one is written beside the first with no word said.
+TWO = "H:/Unknown/"
+TREE[TWO] = ([], ["mystery one.mkv", "mystery two.mkv"])
+SIZES[TWO + "mystery one.mkv"] = 111
+SIZES[TWO + "mystery two.mkv"] = 222
+imp.read_index = lambda: {"files": {}, "series": {}}
+
+# Review; file 0 -> One Pace, Season 1, RO_1; then file 0 again -> the same,
+# and answer "Leave this file out" when it asks.
+D.select_answers = [0, 0, 1, 0, 0, 0, 1, 0, 2]
+rec = attempt(answer=2, browse=TWO)
+rows = written[-1]["files"] if written else {}
+print(f"  asked, answered 'leave out' -> {len(rows)} row(s)")
+assert len(rows) == 1, sorted(rows)
+
+# And "Use this one instead" keeps the second, dropping the first.
+D.select_answers = [0, 0, 1, 0, 0, 0, 1, 0, 1]
+rec = attempt(answer=2, browse=TWO)
+rows = written[-1]["files"] if written else {}
+print(f"  asked, answered 'use this instead' -> {[p.split('/')[-1] for p in rows]}")
+assert len(rows) == 1 and "mystery two" in list(rows)[0], sorted(rows)
+imp.read_index = lambda: {"files": dict(written[-1]["files"]) if written else {},
+                          "series": {}}
+
+print()
 print("all assertions passed")

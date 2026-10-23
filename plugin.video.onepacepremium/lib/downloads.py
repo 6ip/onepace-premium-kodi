@@ -1238,7 +1238,7 @@ def local_playback(episode_id):
     # Holding both cuts, honour the same preference the stream picker uses.
     wanted = _PREFERRED_VARIANT.get(get_setting("preferred_version"))
     if wanted and len(held) > 1:
-        held = [kv for kv in held if (kv[1].get("variant") or "standard") == wanted] or held
+        held = [kv for kv in held if cut_of(kv[1].get("variant")) == wanted] or held
     path, meta = held[0]
     return _play_fields(path, meta)
 

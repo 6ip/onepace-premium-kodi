@@ -26,7 +26,13 @@ def _releases():
     return import_index.build(entries), config
 
 
-def _walk(root, progress):
+def _ours():
+    """Our own download folders, current and former, to be walked around."""
+    from .downloads import _roots
+    return tuple(r.replace(chr(92), "/") for r in _roots())
+
+
+def _walk(root, progress, ours=()):
     """Every video file under a folder, however the folders are arranged."""
     found, stack, looked = [], [root], 0
     while stack:
@@ -40,8 +46,15 @@ def _walk(root, progress):
             continue
         for name in dirs:
             # A leading dot is ours, or something the system wants left alone.
-            if not name.startswith("."):
-                stack.append(f"{here}{name}/")
+            if name.startswith("."):
+                continue
+            where = f"{here}{name}/"
+            # Choosing a parent of our own folder is a fair thing to do, so
+            # step around it rather than adopting what we fetched ourselves.
+            if any(where.startswith(o) for o in ours):
+                log(f"[import] stepping around our own {where!r}")
+                continue
+            stack.append(where)
         for name in names:
             if os.path.splitext(name)[1].lower() in import_match.VIDEO_EXTS:
                 found.append(here + name)
@@ -141,11 +154,10 @@ def run(_params=None):
     progress = xbmcgui.DialogProgress()
     progress.create("Import", "Looking for episodes")
     try:
-        files, stopped = _walk(root.replace("\\", "/"), progress)
+        files, stopped = _walk(root.replace(chr(92), "/"), progress, _ours())
         if stopped:
             return
         if not files:
-            progress.close()
             xbmcgui.Dialog().ok("Import", "No video files in that folder")
             return
 
@@ -153,7 +165,6 @@ def run(_params=None):
         try:
             index, config = _releases()
         except Exception as exc:
-            progress.close()
             log(f"[import] could not read the release list: {exc}")
             xbmcgui.Dialog().ok("Import", "Could not read the release list")
             return
@@ -163,7 +174,6 @@ def run(_params=None):
         progress.update(55, "Looking episodes up")
         by_stream_id, metas = _catalogues()
         if not by_stream_id:
-            progress.close()
             xbmcgui.Dialog().ok("Import", "Could not read the catalogue")
             return
         cut_titles = _cut_titles(metas)
@@ -265,8 +275,14 @@ def _by_hand(items, metas):
         answer = dict(answer, episode_id=episode_id,
                       how=answer["how"] if found else "hand")
 
+        from .downloads import cut_of
+        seat = (episode_id, cut_of(answer["variant"]))
         held = _held_rows(episode_id, answer["variant"])
-        if held:
+        # Settled onto earlier in this same pass, which the stored index
+        # cannot know about yet.
+        earlier = [i for i, (_, a, _) in enumerate(picked)
+                   if (a["episode_id"], cut_of(a["variant"])) == seat]
+        if held or earlier:
             what = xbmcgui.Dialog().select(
                 f"{video.get('name') or video.get('title') or 'That episode'} "
                 f"is already listed",
@@ -277,6 +293,8 @@ def _by_hand(items, metas):
                 continue
             if what == 1:
                 replace.extend(held)
+                for i in reversed(earlier):
+                    picked.pop(i)
 
         picked.append((path, answer, (series, video)))
         left.pop(at)
