@@ -315,15 +315,7 @@ HIGHLIGHT_COLORS = (
 
 
 def _save_settings(addon, values):
-    """The settings window writes its own copy back on close, so shut it first."""
-    import xbmc
-    monitor = xbmc.Monitor()
-    xbmc.executebuiltin("Dialog.Close(addonsettings, true)")
-    for _ in range(30):
-        if not xbmc.getCondVisibility("Window.IsActive(addonsettings)"):
-            break
-        if monitor.waitForAbort(0.1):
-            return False
+    """Kodi routes these into the open settings window, which saves them on OK."""
     for key, value in values.items():
         addon.setSetting(key, value)
     return True
