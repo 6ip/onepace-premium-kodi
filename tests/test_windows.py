@@ -394,6 +394,14 @@ for _ in range(len(_nav)):
 assert _at == "2060" and len(set(_seen)) == len(_nav), f"left does not cycle: {_seen}"
 print("  every control is reachable from either arrow  OK")
 
+_default = _re.search(r"<defaultcontrol[^>]*>(\d+)</defaultcontrol>", _xml).group(1)
+_buttons = _re.findall(r'<control type="button" id="(\d+)">', _xml)
+_oninit = _re.search(r"self\.setFocusId\((\d+)\)",
+                     (harness.ADDON / "lib" / "changelog.py").read_text(encoding="utf-8")).group(1)
+print(f"  opens focused on {_default}, onInit focuses {_oninit}, buttons {_buttons}")
+assert _default in _buttons and _oninit in _buttons, \
+    "the scrollbar hides itself on short text, and then nothing can take focus"
+
 print()
 print("=== the donation QR follows the address ===")
 # It used to be cached under one fixed name, so moving the page would have left

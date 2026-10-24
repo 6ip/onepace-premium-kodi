@@ -26,8 +26,8 @@ class ChangelogDialog(xbmcgui.WindowXMLDialog):
         self.setProperty("pp.text", self._text)
         self.setProperty("pp.version", self._version)
         self.setProperty("pp.icon", self._icon_path)
-        # Focus the scrollbar so up and down scroll straight away.
-        self.setFocusId(2060)
+        # The scrollbar hides itself when the text fits, so focus a button.
+        self.setFocusId(10)
 
     def onClick(self, control_id):
         if control_id == _DONATE_BUTTON:
