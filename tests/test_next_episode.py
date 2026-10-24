@@ -14,6 +14,9 @@ episode_routes.episode_has_stream = lambda ct, vid: PLAYABLE[0]
 PLAYABLE = [True]
 WATCHED = [set()]
 pb._watched.get_watched = lambda sid: WATCHED[0]
+from lib import downloads
+downloads.path_for = lambda eid: HELD[0].get(eid, "")
+HELD = [{}]
 
 ORDER = [v["id"] for v in harness.episodes(ONEPACE) if v["season"]]
 
@@ -67,6 +70,15 @@ print("=== an episode with no stream is not offered ===")
 PLAYABLE[0] = False
 print(f"  no stream -> {nxt(ORDER[0])}")
 assert nxt(ORDER[0]) is None
+PLAYABLE[0] = True
+
+print()
+print("=== a copy on disk is offered even with no stream ===")
+PLAYABLE[0] = False
+HELD[0] = {ORDER[1]: "/media/One Pace Premium/ep2.mkv"}
+print(f"  no stream, held on disk -> {nxt(ORDER[0])}")
+assert nxt(ORDER[0]) == ORDER[1]
+HELD[0] = {}
 PLAYABLE[0] = True
 
 print()

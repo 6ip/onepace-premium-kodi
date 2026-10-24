@@ -83,6 +83,7 @@ def _next_episode(series_id, episode_id):
     from .episode_routes import _NOTICE_ID_PREFIX, episode_has_stream
     from .provider_api import _fetch_provider_meta, episode_play_url
     from .art import _episode_number
+    from .downloads import path_for
 
     meta = _fetch_provider_meta("series", series_id)
     if not meta:
@@ -112,8 +113,8 @@ def _next_episode(series_id, episode_id):
     else:
         return None
 
-    # Check it can play first, or the card stops on click.
-    if not episode_has_stream("series", nxt["id"]):
+    # A copy on disk plays with no connection, so ask the server only without one.
+    if not path_for(nxt["id"]) and not episode_has_stream("series", nxt["id"]):
         log(f"[autoplay] {nxt['id']} has no playable stream, not offering it")
         return None
 
