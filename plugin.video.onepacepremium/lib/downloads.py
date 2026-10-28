@@ -1179,9 +1179,33 @@ _FILE_MANAGERS = (
 )
 
 
+def _ask_where(series, season):
+    """The folder they meant, out of the ones this row actually spans."""
+    files = read_index()["files"]
+    paths = [p for p, meta in files.items()
+             if (meta.get("series_name") or "Downloads") == series
+             and (season is None or _season_of(meta) == int(season))]
+    here = [(where, count) for where, count in _destinations(paths, files)
+            if xbmcvfs.exists(where + "/")]
+    if not here:
+        _notify_error("That folder is not there any more")
+        return ""
+    if len(here) == 1:
+        return here[0][0]
+    pick = xbmcgui.Dialog().select(
+        "Which folder?",
+        [f"{where}  [COLOR FF888899]({count})[/COLOR]" for where, count in here])
+    return here[pick][0] if pick >= 0 else ""
+
+
 def browse(params):
     """Open the folder in the desktop's file manager, or Kodi's if there is none."""
     directory = _normalised(params.get("dir", "")).rstrip("/")
+    if not directory and params.get("series") is not None:
+        # It says what is wrong, or they backed out of choosing.
+        directory = _ask_where(params["series"], params.get("season"))
+        if not directory:
+            return
     if not directory:
         path = params.get("path") or path_for(params.get("episode_id", ""))
         directory = os.path.dirname(_normalised(path)) if path else ""
@@ -1531,6 +1555,22 @@ def _shared_folder(paths):
     seasons = {f for f in folders if f == home or f.startswith(home + "/")}
     # All of it in one season: open that. Spread over several: open the series.
     return seasons.pop() if len(seasons) == 1 else home
+
+def _destinations(paths, files=None):
+    """Folders worth opening: ours collapsed into one, theirs each its own."""
+    rows = files if files is not None else read_index()["files"]
+    ours = [p for p in paths if p and not imported(p, rows)]
+    found = []
+    shared = _shared_folder(ours)
+    if shared:
+        found.append((shared, len(ours)))
+    theirs = {}
+    for path in paths:
+        if path and imported(path, rows):
+            here = _normalised(path).rsplit("/", 1)[0]
+            theirs[here] = theirs.get(here, 0) + 1
+    return found + sorted(theirs.items())
+
 
 def _empty(message):
     """Dressed like the root menu, since that is what an empty section is."""
@@ -1886,9 +1926,10 @@ def list_on_device(params=None):
                 _set_show_tags(tags, show, actors=_cast_list(show))
                 _set_art(item, show)
                 _counts(item, metas)
+                spots = _destinations(paths[name], files)
                 item.addContextMenuItems([
-                    ("[B]Browse Folder[/B]",
-                     f"RunPlugin({build_url('browse_download', dir=_shared_folder(paths[name]))})"),
+                    (f"[B]Browse Folder{'s' if len(spots) > 1 else ''}[/B]",
+                     f"RunPlugin({build_url('browse_download', series=name)})"),
                     ("[B]Delete Series[/B]",
                      f"RunPlugin({build_url('delete_download', series=name)})"),
                 ])
@@ -1927,9 +1968,10 @@ def list_on_device(params=None):
                 _set_show_tags(tags, show, premiered=False, trailer=False, actors=actors)
                 _set_season_art(item, show, _season_art(show, metas))
                 _counts(item, metas)
+                spots = _destinations(paths[number], files)
                 item.addContextMenuItems([
-                    ("[B]Browse Folder[/B]",
-                     f"RunPlugin({build_url('browse_download', dir=_shared_folder(paths[number]))})"),
+                    (f"[B]Browse Folder{'s' if len(spots) > 1 else ''}[/B]",
+                     f"RunPlugin({build_url('browse_download', series=series, season=number)})"),
                     (f"[B]Delete {label}[/B]",
                      f"RunPlugin({build_url('delete_download', series=series, season=number)})"),
                 ])

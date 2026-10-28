@@ -1506,9 +1506,13 @@ downloads.list_on_device({"series": "One Pace"})
 _, season_row, _ = kodistub.recorder.directories[0]
 print(f"  season :  {[c[0] for c in season_row.context]}")
 assert any("Delete Specials" in t for t, _ in season_row.context), season_row.context
-# A season folder holds every episode of it, so that is what the row opens.
+# The row carries the scope, not a folder: a mixed season has two answers,
+# and which one is meant can only be asked at the moment it is clicked.
 season_browse = next(c for t, c in season_row.context if "Browse Folder" in t)
-assert "dir=" in season_browse and "Season+00" in season_browse, season_browse
+assert "series=One+Pace" in season_browse and "season=0" in season_browse, season_browse
+assert "dir=" not in season_browse, "a folder settled too early cannot ask"
+# A season folder holds every episode of it, so that is what it resolves to.
+assert downloads._ask_where("One Pace", "0").endswith("Season 00"),     downloads._ask_where("One Pace", "0")
 
 kodistub.recorder.reset()
 downloads.list_on_device(None)
@@ -1518,8 +1522,50 @@ assert any("Delete Series" in t for t, _ in series_row.context), series_row.cont
 # The deepest folder holding everything of that series: with one season
 # that is the season itself, which saves opening a folder to find one folder.
 series_browse = next(c for t, c in series_row.context if "Browse Folder" in t)
-assert "dir=" in series_browse, series_browse
-print(f"  series folder: {series_browse.split('dir=')[1].rstrip(')')}")
+assert "series=" in series_browse and "season=" not in series_browse, series_browse
+_who = series_browse.split("series=")[1].rstrip(")").replace("+", " ")
+print(f"  series folder: {downloads._ask_where(_who, None)}")
+assert downloads._ask_where(_who, None), "the series row would open nothing"
+
+print()
+print("=== a row spanning two folders asks which one ===")
+_was_read, _was_dialog = downloads.read_index, downloads.xbmcgui.Dialog
+MIXED = {
+    "C:/dl/One Pace/Season 01/1x01 - A.mkv":
+        {"series_name": "One Pace", "season": "1", "episode": "1"},
+    "C:/dl/One Pace/Season 01/1x02 - B.mkv":
+        {"series_name": "One Pace", "season": "1", "episode": "2"},
+    "E:/Their Stuff/One Pace 1x03.mkv":
+        {"series_name": "One Pace", "season": "1", "episode": "3", "imported": True},
+}
+downloads.read_index = lambda: {"files": dict(MIXED), "series": {}}
+spots = downloads._destinations(list(MIXED))
+print(f"  destinations: {spots}")
+assert spots == [("C:/dl/One Pace/Season 01", 2), ("E:/Their Stuff", 1)], spots
+
+asked = []
+downloads.xbmcgui.Dialog = lambda: type("D", (), {
+    "select": lambda s, heading, items, **k: (asked.append((heading, list(items))), 1)[1],
+    "ok": lambda s, *a, **k: True,
+    "notification": lambda s, *a, **k: True})()
+picked = downloads._ask_where("One Pace", "1")
+print(f"  asked {asked[0][0]!r} about {len(asked[0][1])} folders -> {picked}")
+assert len(asked[0][1]) == 2, asked
+assert "(2)" in asked[0][1][0] and "(1)" in asked[0][1][1], asked[0][1]
+assert picked == "E:/Their Stuff", picked
+
+# Everything in one place needs no question.
+downloads.read_index = lambda: {"files": {k: v for k, v in MIXED.items()
+                                          if not v.get("imported")}, "series": {}}
+asked.clear()
+assert downloads._ask_where("One Pace", "1") == "C:/dl/One Pace/Season 01"
+assert not asked, "it asked about a single folder"
+
+# A row that spans two folders says so before it is pressed.
+browse_src = SRC[SRC.index("                spots = _destinations(paths[name]"):]
+assert "Browse Folder{'s' if len(spots) > 1 else ''}" in browse_src[:400],     "the label would promise one folder and offer two"
+downloads.read_index, downloads.xbmcgui.Dialog = _was_read, _was_dialog
+print("  one folder opens itself, two are offered with counts  OK")
 
 print()
 print("=== On Device is ordered the way Browse is, not alphabetically ===")
