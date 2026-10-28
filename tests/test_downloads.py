@@ -1528,6 +1528,60 @@ print(f"  series folder: {downloads._ask_where(_who, None)}")
 assert downloads._ask_where(_who, None), "the series row would open nothing"
 
 print()
+print("=== a right-to-left path goes to Kodi's own browser on Windows ===")
+for text, want in (("D:/Downloads/One Pace", False),
+                   ("D:/\u062a\u062d\u0645\u064a\u0644\u0627\u062a/Video", True),
+                   ("D:/\u05e1\u05e8\u05d8\u05d9\u05dd/One Pace", True)):
+    got = downloads._right_to_left(text)
+    shown = text.encode("unicode_escape").decode()
+    print(f"  {shown[:44]:<46} reorders: {got}")
+    assert got is want, text
+
+_was_cond = _xbmc.getCondVisibility
+for platform, path, wants_shell in (
+        ("System.Platform.Windows", "D:/Downloads/One Pace", True),
+        ("System.Platform.Windows",
+         "D:/\u062a\u062d\u0645\u064a\u0644\u0627\u062a/Video", False),
+        ("System.Platform.Linux",
+         "D:/\u062a\u062d\u0645\u064a\u0644\u0627\u062a/Video", True)):
+    _xbmc.getCondVisibility = lambda c, _p=platform: c == _p
+    kodistub.recorder.reset()
+    downloads.browse({"dir": path})
+    ran = kodistub.recorder.builtins[0]
+    print(f"  {platform.split('.')[-1]:<8} "
+          f"{path.encode('unicode_escape').decode()[:26]:<28} -> {ran.split('(')[0]}")
+    assert ran.startswith("System.Exec") is wants_shell, (platform, path, ran)
+    if not wants_shell:
+        assert '"' + path + '"' in ran, "the path would be cut at a comma"
+ARABIC = "D:/" + "".join(chr(c) for c in (0x62a, 0x62d, 0x645, 0x64a, 0x644, 0x627, 0x62a)) + "/Video"
+_xbmc.getCondVisibility = lambda c: c == "System.Platform.Windows"
+for choice, name, path, wants_shell in (
+        ("0", "latin", "D:/Downloads/One Pace", True),
+        ("0", "arabic", ARABIC, False),
+        ("1", "latin", "D:/Downloads/One Pace", False),
+        ("1", "arabic", ARABIC, False),
+        ("2", "latin", "D:/Downloads/One Pace", True),
+        ("2", "arabic", ARABIC, True)):
+    store["browse_with"] = choice
+    kodistub.recorder.reset()
+    downloads.browse({"dir": path})
+    ran = kodistub.recorder.builtins[0]
+    print(f"  {['Automatic', 'Kodi', 'File Manager'][int(choice)]:<13} "
+          f"{name:<7} -> {ran.split('(')[0]}")
+    assert ran.startswith("System.Exec") is wants_shell, (choice, name, ran)
+store["browse_with"] = "0"
+_xbmc.getCondVisibility = _was_cond
+print("  Kodi and File Manager are honoured, Automatic decides  OK")
+
+_pick = next(x for x in _ETree.parse(harness.ADDON / "resources" / "settings.xml")
+             .getroot().iter("setting") if x.get("id") == "browse_with")
+assert _pick.get("values") == "Automatic|Kodi|File Manager", _pick.get("values")
+assert _pick.get("default") == "0", "it would not start on Automatic"
+assert _pick.get("enable") == "eq(-24,true)", _pick.get("enable")
+assert set(downloads._BROWSE_WITH) == {"0", "1", "2"},     "the code and the row disagree about how many choices there are"
+print("  the row offers three, starting on Automatic  OK")
+
+print()
 print("=== a row spanning two folders asks which one ===")
 _was_read, _was_dialog = downloads.read_index, downloads.xbmcgui.Dialog
 MIXED = {
@@ -1541,7 +1595,8 @@ MIXED = {
 downloads.read_index = lambda: {"files": dict(MIXED), "series": {}}
 spots = downloads._destinations(list(MIXED))
 print(f"  destinations: {spots}")
-assert spots == [("C:/dl/One Pace/Season 01", 2), ("E:/Their Stuff", 1)], spots
+assert spots == [("C:/dl/One Pace/Season 01", 2, True),
+                 ("E:/Their Stuff", 1, False)], spots
 
 asked = []
 downloads.xbmcgui.Dialog = lambda: type("D", (), {
@@ -1552,6 +1607,9 @@ picked = downloads._ask_where("One Pace", "1")
 print(f"  asked {asked[0][0]!r} about {len(asked[0][1])} folders -> {picked}")
 assert len(asked[0][1]) == 2, asked
 assert "(2)" in asked[0][1][0] and "(1)" in asked[0][1][1], asked[0][1]
+# A path in another script can draw as empty boxes, so say which side it is.
+assert asked[0][1][0].startswith("Downloaded"), asked[0][1]
+assert asked[0][1][1].startswith("Imported"), asked[0][1]
 assert picked == "E:/Their Stuff", picked
 
 # Everything in one place needs no question.

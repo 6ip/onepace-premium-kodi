@@ -78,6 +78,9 @@
         <setting type="lsep" label="Import" />
         <setting label="Import from a Folder" id="import_folder" type="action" enable="eq(-20,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=import_folder)" />
         <setting label="Fetch Missing Artwork" id="fetch_artwork" type="action" enable="eq(-21,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=fetch_artwork)" />
+        <setting type="sep" />
+        <setting type="lsep" label="Opening Folders" />
+        <setting label="Browse Folder With" id="browse_with" type="enum" default="0" values="Automatic|Kodi|File Manager" enable="eq(-24,true)" />
     </category>
     <category label="Tools">
         <setting type="lsep" label="Backup" />

@@ -1171,6 +1171,20 @@ def _prune(path, extra=""):
         directory = os.path.dirname(directory).rstrip("/")
 
 
+# Kodi flips right-to-left text for display on its way to the shell, and a
+# path cannot survive that. Hebrew, Arabic, Syriac, Thaana and their forms.
+_RTL = (("\u0590", "\u08ff"), ("\ufb1d", "\ufdff"), ("\ufe70", "\ufeff"))
+
+
+def _right_to_left(text):
+    """Whether handing this path to the shell would reorder it."""
+    return any(low <= ch <= high for ch in text for low, high in _RTL)
+
+
+# The setting stores an index, like every other enum we ship.
+_BROWSE_WITH = {"0": "auto", "1": "kodi", "2": "system"}
+
+
 # Whatever opens a folder on this desktop.
 _FILE_MANAGERS = (
     ("System.Platform.Windows", 'explorer.exe "{win}"'),
@@ -1185,16 +1199,17 @@ def _ask_where(series, season):
     paths = [p for p, meta in files.items()
              if (meta.get("series_name") or "Downloads") == series
              and (season is None or _season_of(meta) == int(season))]
-    here = [(where, count) for where, count in _destinations(paths, files)
-            if xbmcvfs.exists(where + "/")]
+    here = [spot for spot in _destinations(paths, files)
+            if xbmcvfs.exists(spot[0] + "/")]
     if not here:
         _notify_error("That folder is not there any more")
         return ""
     if len(here) == 1:
         return here[0][0]
-    pick = xbmcgui.Dialog().select(
-        "Which folder?",
-        [f"{where}  [COLOR FF888899]({count})[/COLOR]" for where, count in here])
+    # Named by side first: a path in another script may draw as empty boxes.
+    pick = xbmcgui.Dialog().select("Which folder?", [
+        f"{'Downloaded' if mine else 'Imported'} — {where}"
+        f"  [COLOR FF888899]({count})[/COLOR]" for where, count, mine in here])
     return here[pick][0] if pick >= 0 else ""
 
 
@@ -1213,16 +1228,25 @@ def browse(params):
         _notify_error("That folder is not there any more")
         return
 
+    # Only Windows converts the command for the shell, so only it is affected.
+    flipped = (_right_to_left(directory)
+               and xbmc.getCondVisibility("System.Platform.Windows"))
+    choice = _BROWSE_WITH.get(get_setting("browse_with"), "auto")
+    # Automatic keeps the desktop's own, except where it could not work.
+    desktop = choice != "kodi" and (choice == "system" or not flipped)
     for condition, template in _FILE_MANAGERS:
-        if xbmc.getCondVisibility(condition):
+        if desktop and xbmc.getCondVisibility(condition):
             command = template.format(path=directory,
                                       win=directory.replace("/", chr(92)))
             log(f"[downloads] opening {directory!r} with the file manager")
             xbmc.executebuiltin(f"System.Exec({command})")
             return
 
-    log(f"[downloads] no file manager here, showing {directory!r} in Kodi")
-    xbmc.executebuiltin(f"ActivateWindow(Videos,{directory},return)")
+    log(f"[downloads] showing {directory!r} in Kodi"
+        + (", as asked" if choice == "kodi" else
+           ", which reads right to left" if flipped else ", with no file manager"))
+    # Quoted, or a folder with a comma in its name is cut in half.
+    xbmc.executebuiltin(f'ActivateWindow(Videos,"{directory}",return)')
 
 
 _REPORT = "last_download.txt"
@@ -1557,19 +1581,19 @@ def _shared_folder(paths):
     return seasons.pop() if len(seasons) == 1 else home
 
 def _destinations(paths, files=None):
-    """Folders worth opening: ours collapsed into one, theirs each its own."""
+    """Folders worth opening, each with how many are in it and whose it is."""
     rows = files if files is not None else read_index()["files"]
     ours = [p for p in paths if p and not imported(p, rows)]
     found = []
     shared = _shared_folder(ours)
     if shared:
-        found.append((shared, len(ours)))
+        found.append((shared, len(ours), True))
     theirs = {}
     for path in paths:
         if path and imported(path, rows):
             here = _normalised(path).rsplit("/", 1)[0]
             theirs[here] = theirs.get(here, 0) + 1
-    return found + sorted(theirs.items())
+    return found + [(where, count, False) for where, count in sorted(theirs.items())]
 
 
 def _empty(message):

@@ -64,7 +64,7 @@ groups = {c.get("label"): [x.get("label") for x in c if x.get("type") == "lsep"]
 print(f"  Downloads: {groups['Downloads']}")
 print(f"  Tools:     {groups['Tools']}")
 assert groups["Downloads"] == ["Where They Go", "In the Lists", "Updates",
-                               "History", "Import"]
+                               "History", "Import", "Opening Folders"]
 rows = list(next(c for c in SETTINGS.iter("category") if c.get("label") == "Downloads"))
 actions = [r.get("id") for r in rows if r.get("type") == "action"]
 print(f"  Downloads actions: {actions}")
