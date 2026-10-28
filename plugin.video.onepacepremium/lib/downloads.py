@@ -683,7 +683,9 @@ def fill_artwork(only=(), progress=None):
                             meta.get("episode_title", ""))
         name = meta.get("series_name") or "Downloads"
         show = data["series"].get(name) or {}
-        if (meta.get("artwork") or {}).get("thumb"):
+        art = meta.get("artwork") or {}
+        if not (bool(meta.get("thumb")) and not art.get("thumb")) and not (
+                bool(meta.get("season_poster")) and not art.get("season_poster")):
             continue
         kept = show.get("art") or {}
         if kept and all(xbmcvfs.exists(p) for p in kept.values() if p):
@@ -706,6 +708,61 @@ def fill_artwork(only=(), progress=None):
         _write_index(data)
     log(f"[art] filled in {filled} of {len(rows)} row(s)")
     return filled
+
+
+def refresh_artwork(progress=None):
+    """Forget a picture whose link has moved, so it is fetched again."""
+    from .provider_api import _fetch_provider_meta
+
+    data = read_index()
+    rows = [(p, m) for p, m in data["files"].items() if m.get("episode_id")]
+    shows, moved = {}, 0
+    for number, (path, meta) in enumerate(rows, 1):
+        if progress:
+            progress.update(int(number * 100 / max(len(rows), 1)), "Artwork",
+                            meta.get("episode_title", ""))
+        series_id = meta.get("series_id") or ""
+        if series_id not in shows:
+            shows[series_id] = ((_fetch_provider_meta("series", series_id) or {})
+                                if series_id else {})
+        show = shows[series_id]
+        if not show:
+            continue
+        video = _video_entry(show, meta["episode_id"])
+        season = next((s.get("poster") for s in show.get("seasons", ())
+                       if s.get("season") == _season_of(meta) and s.get("poster")), "")
+        art = dict(meta.get("artwork") or {})
+        for key, now in (("thumb", video.get("thumbnail") or ""),
+                         ("season_poster", season)):
+            if not now or now == meta.get(key):
+                continue
+            meta[key] = now
+            old = art.pop(key, "")
+            if old:
+                xbmcvfs.delete(old)
+            moved += 1
+        meta["artwork"] = art
+
+    for name, entry in data["series"].items():
+        show = next((s for s in shows.values() if s and s.get("name") == name), {})
+        kept = dict(entry.get("art") or {})
+        for key, _ in _SERIES_ART:
+            now = (show or {}).get(key) or ""
+            if not now or now == entry.get(key):
+                continue
+            entry[key] = now
+            old = kept.pop(key, "")
+            if old:
+                xbmcvfs.delete(old)
+            moved += 1
+        if entry.get("art") is not None:
+            entry["art"] = kept
+
+    if moved:
+        _write_index(data)
+        fill_artwork(progress=progress)
+    log(f"[art] {moved} picture link(s) had moved")
+    return moved
 
 
 def sweep_artwork():
@@ -1083,11 +1140,14 @@ def check_updates(_params=None):
         if stale:
             changed += 1
             log(f"[updates] {episode_id} was re-released")
-    progress.close()
     _write_index(data)
+    pictures = refresh_artwork(progress)
+    progress.close()
 
     lines = [f"{changed} of {len(held)} look re-released",
              f"{checked} needed a closer look, {len(held) - checked} unchanged"]
+    if pictures:
+        lines.append(f"{pictures} picture(s) had changed and were fetched again")
     if failed:
         lines.append(f"{failed} could not be checked")
     write_report("Checked downloads", lines)
@@ -1763,6 +1823,10 @@ def list_manage(params=None):
     set_content("")
     set_category("Manage")
     _add_directory_items([
+        # Reading what the last run did comes before starting another.
+        _job("Last Download Summary", build_url("show_download_report"),
+             "What the last downloads, imports and scans actually did.",
+             art=f"{media}/info.png"),
         _job("Import from a Folder", build_url("import_folder"),
              "Add episodes you already have, from anywhere on your disk."),
         _job("Rescan Download Folder", build_url("rescan_downloads"),
@@ -1773,10 +1837,6 @@ def list_manage(params=None):
              "Keep the posters and thumbnails beside what you already have."),
         _job("Move Existing Downloads", build_url("move_downloads"),
              "Bring everything already downloaded into the current folder."),
-        # The one row that reports rather than does, so it looks different.
-        _job("Last Download Summary", build_url("show_download_report"),
-             "What the last downloads, imports and scans actually did.",
-             art=f"{media}/info.png"),
     ])
     # Never cached: each of these changes what the others would report.
     end_directory()

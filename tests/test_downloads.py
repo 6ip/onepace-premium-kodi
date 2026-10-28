@@ -688,6 +688,55 @@ assert "download_queue.busy()" in _fetch_src, "it would fight a transfer for the
 assert "write_report(" in _fetch_src, "the summary would vanish with the dialog"
 print("  reachable from the settings tab as well as Manage  OK")
 
+print()
+print("=== a picture whose link has moved is fetched again ===")
+from lib import provider_api as _api
+_was_meta = _api._fetch_provider_meta
+_was_profile = downloads._profile
+downloads._profile = lambda: "C:/profile/"
+downloads.folder = lambda: "C:/dl/"
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+moving = _art_fields(1, 6)
+moving["series_id"] = "pp_onepacee"
+moved_path = _held(moving)
+data = downloads.read_index()
+downloads.remember_into(data, moved_path, moving, ART_META,
+                        artwork=downloads.save_artwork(moved_path, moving, ART_META))
+downloads._write_index(data)
+was_thumb = _INDEX["files"][moved_path]["artwork"]["thumb"]
+assert was_thumb in _FS, was_thumb
+
+SHOW = {"name": "One Pace", "poster": ART_META["poster"],
+        "background": ART_META["background"], "logo": ART_META["logo"],
+        "seasons": [{"season": 1, "poster": moving["season_poster"]}],
+        "videos": [{"id": "RO_3", "thumbnail": "https://img/moved-t6.jpg",
+                    "season": 1, "episode": 6}]}
+_api._fetch_provider_meta = lambda kind, series_id: SHOW
+_ART_HITS[:] = []
+shifted = downloads.refresh_artwork()
+print(f"  links that had moved: {shifted}")
+print(f"  fetched: {[u for u in _ART_HITS]}")
+assert shifted == 1, shifted
+assert _INDEX["files"][moved_path]["thumb"] == "https://img/moved-t6.jpg"
+assert "https://img/moved-t6.jpg" in _ART_HITS, "the new picture was never fetched"
+assert _INDEX["files"][moved_path]["artwork"]["thumb"] == was_thumb,     "the row lost track of its own thumbnail"
+assert was_thumb in _FS, "the thumbnail was forgotten and never replaced"
+
+_ART_HITS[:] = []
+assert downloads.refresh_artwork() == 0, "an unchanged link counted as moved"
+assert not _ART_HITS, "nothing had changed, yet something was fetched"
+print("  changed once, and left alone after that  OK")
+_api._fetch_provider_meta = _was_meta
+downloads._profile = _was_profile
+
+upd = SRC[SRC.index("def check_updates("):SRC.index("def _prune(")]
+assert "refresh_artwork(progress)" in upd, "Check for Updates ignores the pictures"
+assert upd.index("_write_index(data)") < upd.index("refresh_artwork("),     "the release findings would be overwritten by the artwork pass"
+assert "picture(s) had changed" in upd, "the summary would not mention them"
+print("  and Check for Updates asks about them too  OK")
+
 
 for _k, _v in _WAS.items():
     setattr(downloads, _k, _v)
@@ -1211,6 +1260,7 @@ downloads.list_manage(None)
 jobs = kodistub.recorder.directories
 print("  Manage: " + ", ".join(repr(i.label) for _, i, _ in jobs))
 assert len(jobs) == 6, [i.label for _, i, _ in jobs]
+assert jobs[0][1].label == "Last Download Summary",     "what the last run did should be read before starting another"
 assert not any(f for _, _, f in jobs), "each one does a job, none navigates"
 ROUTES = set(re.findall(r'"([a-z_]+)":\s+"', (harness.ADDON / "lib" / "router.py")
                         .read_text(encoding="utf-8")))
