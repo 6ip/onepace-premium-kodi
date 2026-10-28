@@ -210,18 +210,25 @@ def _video_entry(meta, episode_id):
     return {}
 
 
-def _remember(path, params, meta=None, subtitles=()):
+def _remember(path, params, meta=None, subtitles=(), artwork=None):
     """The list reads this, so a download looks like the rest of the add-on."""
     data = read_index()
-    remember_into(data, path, params, meta, subtitles)
+    remember_into(data, path, params, meta, subtitles, artwork)
     _write_index(data)
 
 
-def remember_into(data, path, params, meta=None, subtitles=()):
+def remember_into(data, path, params, meta=None, subtitles=(), artwork=None):
     """Add one row to an index already in hand."""
     series = params.get("series_name") or "Downloads"
+    art = artwork or {}
     if meta:
+        # Fresh metadata must not forget the pictures already on disk.
+        kept = (data["series"].get(series) or {}).get("art")
         data["series"][series] = {k: meta[k] for k in _META_KEYS if k in meta}
+        if kept:
+            data["series"][series]["art"] = kept
+    if art.get("series"):
+        data["series"].setdefault(series, {})["art"] = art["series"]
     data["files"][path] = {
         "video": _video_entry(meta, params.get("episode_id") or params.get("video_id")),
         # videoSize is what tells us later that the episode was re-released.
@@ -232,6 +239,7 @@ def remember_into(data, path, params, meta=None, subtitles=()):
         "info_hash": _info_hash_of(params.get("video_url", "")),
         # Kept so they go when the episode goes, and travel when it moves.
         "subtitles": list(subtitles),
+        "artwork": art.get("episode") or {},
         # The provider composes this; it cannot be rebuilt offline.
         "stream_desc": params.get("stream_desc", ""),
         "series_name": params.get("series_name", ""),
@@ -281,6 +289,28 @@ def _other_cut(params):
                 and xbmcvfs.exists(path)):
             return path, held
     return "", ""
+
+
+def _row_artwork(path):
+    """What we kept on disk for one row, if anything."""
+    return (read_index()["files"].get(path) or {}).get("artwork") or {}
+
+
+def _drop_artwork(data, row):
+    """The episode's picture always, a shared one once no row needs it."""
+    art = row.get("artwork") or {}
+    if art.get("thumb"):
+        xbmcvfs.delete(art["thumb"])
+    series, season = row.get("series_name") or "Downloads", _season_of(row)
+    rows = list(data["files"].values())
+    mine = [m for m in rows if (m.get("series_name") or "Downloads") == series]
+    if art.get("season_poster") and not any(
+            _season_of(m) == season for m in mine):
+        xbmcvfs.delete(art["season_poster"])
+    if not mine:
+        for picture in ((data["series"].get(series) or {}).get("art") or {}).values():
+            if picture:
+                xbmcvfs.delete(picture)
 
 
 def _remove_rows(paths):
@@ -434,9 +464,13 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
     # Now the new file is in place, a cut under a different name can go.
     if already and already != destination and not imported(already):
         xbmcvfs.delete(already)
+        for picture in (_row_artwork(already).get("thumb"),):
+            if picture:
+                xbmcvfs.delete(picture)
         _remove_rows([already])
 
-    _remember(destination, params, meta, save_subtitles(destination, params))
+    _remember(destination, params, meta, save_subtitles(destination, params),
+              save_artwork(destination, params, meta))
     log(f"[downloads] saved {destination!r} ({written} bytes)")
     _notify_info(f"Downloaded {name}")
     if not params.get("in_season"):
@@ -492,6 +526,81 @@ def save_subtitles(destination, params):
             saved.append(path)
     log(f"[subs] kept {len(saved)} file(s) beside {os.path.basename(destination)}")
     return saved
+
+
+# Bigger than this is not a poster, whatever the server claims.
+_ART_MAX = 8 * 1024 * 1024
+
+
+def _art_ext(url):
+    """Keep the picture's own extension, falling back to the common one."""
+    ext = os.path.splitext(_normalised(url).split("?")[0])[1].lower()
+    return ext if ext in (".jpg", ".jpeg", ".png", ".webp") else ".jpg"
+
+
+def _fetch_art(url, path):
+    """One picture, written through a side name. Failing is never fatal."""
+    if not url:
+        return ""
+    if xbmcvfs.exists(path):
+        return path
+    partial = path + ".part"
+    try:
+        response = session().get(url, timeout=10)
+        response.raise_for_status()
+        content = response.content
+        if not content or len(content) > _ART_MAX:
+            log(f"[art] {url} came back as {len(content)} bytes, skipping")
+            return ""
+        with xbmcvfs.File(partial, "w") as handle:
+            handle.write(bytearray(content))
+        if not xbmcvfs.rename(partial, path):
+            xbmcvfs.delete(partial)
+            return ""
+    except Exception as exc:
+        log(f"[art] could not keep {url}: {exc}")
+        xbmcvfs.delete(partial)
+        return ""
+    return path
+
+
+def _season_art_name(season):
+    """Kodi's own name for a season's art, specials included."""
+    return "season-specials" if season == 0 else f"season{season:02d}"
+
+
+def save_artwork(destination, params, meta=None):
+    """Keep the pictures beside the video, in the names Kodi looks for."""
+    series_dir = os.path.dirname(os.path.dirname(_normalised(destination))) + "/"
+    try:
+        season = int(params.get("season"))
+    except (TypeError, ValueError):
+        season = 0
+
+    episode = {}
+    thumb = params.get("thumb", "")
+    if thumb:
+        stem = os.path.splitext(_normalised(destination))[0]
+        episode["thumb"] = _fetch_art(thumb, f"{stem}-thumb{_art_ext(thumb)}")
+    poster = params.get("season_poster", "")
+    if poster:
+        episode["season_poster"] = _fetch_art(
+            poster,
+            f"{series_dir}{_season_art_name(season)}-poster{_art_ext(poster)}")
+
+    # One set per series, and only for the seasons actually held.
+    show = {}
+    for key, name in (("poster", "poster"), ("background", "fanart"),
+                      ("logo", "clearlogo")):
+        kept = _fetch_art((meta or {}).get(key, ""),
+                          f"{series_dir}{name}{_art_ext((meta or {}).get(key, ''))}")
+        if kept:
+            show[key] = kept
+
+    episode = {k: v for k, v in episode.items() if v}
+    log(f"[art] kept {len(episode) + len(show)} picture(s) for "
+        f"{os.path.basename(destination)}")
+    return {"episode": episode, "series": show}
 
 
 # A public repo, so checking it costs our own server nothing.
@@ -916,11 +1025,14 @@ def _remove(paths):
             removed += 1
             continue
         if not xbmcvfs.exists(path) or xbmcvfs.delete(path):
-            for sidecar in data["files"].get(path, {}).get("subtitles", ()):
+            row = data["files"].get(path, {})
+            for sidecar in row.get("subtitles", ()):
                 xbmcvfs.delete(sidecar)
             # Empty now, and rmdir refuses it otherwise.
             xbmcvfs.rmdir(_subs_dir(path))
             data["files"].pop(path, None)
+            # Before the prune, or rmdir refuses the folder they sit in.
+            _drop_artwork(data, row)
             _prune(path)
             removed += 1
         else:
@@ -1327,8 +1439,33 @@ def _season_of(meta):
     return int(season) if str(season).lstrip("-").isdigit() else 0
 
 
+def _local_art(show):
+    """A series' own pictures from disk, where we kept them."""
+    art = (show or {}).get("art") or {}
+    if not art:
+        return show
+    local = dict(show)
+    for key, picture in art.items():
+        if picture and xbmcvfs.exists(picture):
+            local[key] = picture
+    return local
+
+
+def _drawn_art(meta):
+    """This episode's thumbnail and season poster, from disk when we have them."""
+    art = meta.get("artwork") or {}
+    thumb, poster = art.get("thumb") or "", art.get("season_poster") or ""
+    return (thumb if thumb and xbmcvfs.exists(thumb) else meta.get("thumb", ""),
+            poster if poster and xbmcvfs.exists(poster)
+            else meta.get("season_poster", ""))
+
+
 def _season_art(meta_for_series, metas):
-    """Prefer the dedicated season poster the provider gave us."""
+    """Prefer the season poster we kept, then the one the provider gave us."""
+    for meta in metas:
+        kept = (meta.get("artwork") or {}).get("season_poster")
+        if kept and xbmcvfs.exists(kept):
+            return kept
     for entry in meta_for_series.get("seasons", ()):
         if entry.get("season") == _season_of(metas[0]) and entry.get("poster"):
             return entry["poster"]
@@ -1436,7 +1573,7 @@ def list_on_device(params=None):
             items = []
             for name in order:
                 metas = by_series[name]
-                show = series_meta.get(name, {})
+                show = _local_art(series_meta.get(name, {}))
                 item = xbmcgui.ListItem(label=name, offscreen=True)
                 tags = item.getVideoInfoTag()
                 _set_video_tags(tags, show, name)
@@ -1461,7 +1598,7 @@ def list_on_device(params=None):
     if not mine:
         _empty("Nothing left under that name.")
         return
-    show = series_meta.get(series, {})
+    show = _local_art(series_meta.get(series, {}))
     actors = _cast_list(show)
 
     if season is None:

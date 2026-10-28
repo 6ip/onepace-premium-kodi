@@ -382,6 +382,98 @@ assert 'get_setting("preferred_service")' in dl_ep, \
     "a re-download would quietly ignore the preferred service"
 print("  Re-download asks the picker for the cut it is replacing  OK")
 
+
+print()
+print("=== pictures beside the video, in the names Kodi looks for ===")
+_ART_HITS = []
+
+
+class _Picture:
+    url, headers, content = "https://img/x.jpg", {"Content-Length": "4"}, b"img!"
+
+    def raise_for_status(self):
+        pass
+
+    def iter_content(self, chunk_size=0):
+        yield b"abcd"
+
+
+downloads.session = lambda: type("S", (), {
+    "get": lambda self, url, **k: (_ART_HITS.append(url), _Picture())[1]})()
+
+ART_META = {"name": "One Pace", "poster": "https://img/p.jpg",
+            "background": "https://img/b.jpg", "logo": "https://img/l.png"}
+
+
+def _art_fields(season, episode, title="Romance Dawn"):
+    fields = _fields(title, "standard")
+    fields["season"], fields["episode"] = str(season), str(episode)
+    fields["thumb"] = f"https://img/{title}-{episode}.jpg"
+    fields["season_poster"] = f"https://img/s{season}.jpg"
+    return fields
+
+
+def _held(fields):
+    """The episode's own path, with the file in place."""
+    directory, name = downloads._target(fields)
+    _FS.add(directory + name)
+    return directory + name
+
+
+_FS.clear()
+_ART_HITS[:] = []
+one = _art_fields(1, 3)
+kept = downloads.save_artwork(_held(one), one, ART_META)
+for shown in sorted(x.replace("C:/dl/", "") for x in _FS if x.endswith((".jpg", ".png"))):
+    print(f"  {shown}")
+assert "C:/dl/One Pace/Season 01/1x03 - Romance Dawn-thumb.jpg" in _FS
+assert "C:/dl/One Pace/season01-poster.jpg" in _FS
+for name in ("poster.jpg", "fanart.jpg", "clearlogo.png"):
+    assert f"C:/dl/One Pace/{name}" in _FS, name
+assert not any(x.endswith(".part") for x in _FS), "a side name was left behind"
+assert kept["episode"]["thumb"].endswith("-thumb.jpg"), kept
+assert kept["series"]["logo"].endswith("clearlogo.png"), kept
+
+_ART_HITS[:] = []
+two = _art_fields(1, 4)
+downloads.save_artwork(_held(two), two, ART_META)
+print(f"  a second episode of the season fetched {len(_ART_HITS)} picture(s)")
+assert len(_ART_HITS) == 1, "the shared pictures were fetched again"
+
+special = _art_fields(0, 1, "A Special")
+downloads.save_artwork(_held(special), special, ART_META)
+assert "C:/dl/One Pace/season-specials-poster.jpg" in _FS, sorted(_FS)
+print("  specials use Kodi's own season-specials name  OK")
+
+_FS.clear()
+_INDEX["files"].clear()
+for fields in (one, two):
+    path = _held(fields)
+    data = downloads.read_index()
+    downloads.remember_into(data, path, fields, ART_META,
+                            artwork=downloads.save_artwork(path, fields, ART_META))
+    downloads._write_index(data)
+downloads._remove([_held(one)])
+print(f"  one of two gone: its thumbnail "
+      f"{'kept' if 'C:/dl/One Pace/Season 01/1x03 - Romance Dawn-thumb.jpg' in _FS else 'gone'}"
+      f", season poster "
+      f"{'kept' if 'C:/dl/One Pace/season01-poster.jpg' in _FS else 'gone'}")
+assert "C:/dl/One Pace/Season 01/1x03 - Romance Dawn-thumb.jpg" not in _FS,     "the episode's own picture outlived it"
+assert "C:/dl/One Pace/season01-poster.jpg" in _FS,     "the season poster went while an episode still needed it"
+downloads._remove([_held(two)])
+assert "C:/dl/One Pace/season01-poster.jpg" not in _FS,     "the season poster would block the prune and sit there forever"
+assert "C:/dl/One Pace/poster.jpg" not in _FS, "the series pictures were orphaned"
+print("  the last one out takes the shared pictures with it  OK")
+
+art_src = SRC[SRC.index("def _fetch_art("):SRC.index("# A public repo")]
+assert "_ART_MAX" in art_src, "a picture of any size would be written"
+assert "timeout=10" in art_src, "a slow server would hold the download open"
+assert "except Exception" in art_src, "a failed picture would fail the download"
+assert SRC.index("_remember(destination, params, meta, save_subtitles") >     SRC.index("xbmcvfs.rename(partial, destination)"),     "artwork would be fetched before the video was safely in place"
+drop = SRC[SRC.index("def _remove(paths)"):SRC.index("def delete(params)")]
+assert drop.index("_drop_artwork(data, row)") < drop.index("_prune(path)"),     "rmdir refuses a folder with our pictures still in it"
+print("  fetched after the video lands, cleared before the prune  OK")
+
 for _k, _v in _WAS.items():
     setattr(downloads, _k, _v)
 for _k, _v in _WAS_VFS.items():
@@ -393,7 +485,8 @@ downloads.xbmcvfs.exists = lambda p: True
 
 print()
 print("=== a half-written file is never kept ===")
-dl = SRC[SRC.index("def download("):SRC.index("def _remove(")]
+# Only the transfer: the artwork below it writes through a .part file too.
+dl = SRC[SRC.index("def download("):SRC.index("SUBS_DIR = ")]
 assert 'xbmcvfs.File(partial, "w")' in dl, "a failed replacement would truncate the good copy"
 assert dl.count("xbmcvfs.delete(partial)") == 5, "errors, short reads, a cancel, a blocked swap and a failed swap"
 
