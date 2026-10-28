@@ -983,6 +983,12 @@ _tools_default = _tools_default.replace("{ADDON_ID}", "plugin.video.onepacepremi
 print(f"  tools.py      : {_tools_default}")
 assert _tools_default == downloads.DEFAULT_FOLDER, "the script and the module disagree"
 assert "browseSingle" in chooser, "Custom would have nothing to browse with"
+
+# Every script builds its own Addon object and reads the saved file, so an
+# uncommitted folder leaves Move and Rescan working on the old one.
+assert _chooser.get("option") == "close",     "the folder would only be shown, not saved, until OK was pressed"
+assert "Addon.OpenSettings" in chooser, "the viewer would be left outside Settings"
+assert chooser.index("_settled()") < chooser.index("_save_settings("),     "the value could land in a window that is still closing"
 assert '"download_folder_display"' in chooser, "the Showing row would go stale"
 print("  Default or Custom, and the stored path is never typed by hand  OK")
 from lib import utils

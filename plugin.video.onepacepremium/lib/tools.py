@@ -314,6 +314,18 @@ HIGHLIGHT_COLORS = (
 )
 
 
+def _settled():
+    """Wait out the window's closing animation, so a value reaches the disk."""
+    import xbmc
+    monitor = xbmc.Monitor()
+    for _ in range(30):
+        if not xbmc.getCondVisibility("Window.IsActive(addonsettings)"):
+            return True
+        if monitor.waitForAbort(0.1):
+            return False
+    return True
+
+
 def _save_settings(addon, values):
     """Kodi routes these into the open settings window, which saves them on OK."""
     for key, value in values.items():
@@ -371,6 +383,16 @@ def choose_highlight_color():
 
 def choose_download_folder():
     """Default or somewhere of your own — and a way back to default."""
+    try:
+        _pick_download_folder()
+    finally:
+        # Kodi shut the window to save it, so put the viewer back in it.
+        import xbmc
+        xbmc.executebuiltin(f"Addon.OpenSettings({ADDON_ID})")
+
+
+def _pick_download_folder():
+    """The pick itself, with the settings window already closed by Kodi."""
     addon = xbmcaddon.Addon(ADDON_ID)
     current = addon.getSetting("download_folder")
     is_default = not current or current == DEFAULT_DOWNLOAD_FOLDER
@@ -392,6 +414,8 @@ def choose_download_folder():
             return
         shown = path
 
+    # Rescan and Move read the folder off the disk, so it has to land there.
+    _settled()
     if _save_settings(addon, {"download_folder": path,
                               "download_folder_display": shown}):
         xbmcgui.Dialog().notification("Download Folder", shown,

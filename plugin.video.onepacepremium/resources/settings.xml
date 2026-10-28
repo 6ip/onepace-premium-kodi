@@ -59,7 +59,7 @@
         <setting label="Enable Downloads" id="downloads_enabled" type="bool" default="false" />
         <setting type="sep" />
         <setting type="lsep" label="Where They Go" />
-        <setting label="Download Folder" id="choose_download_folder" type="action" enable="eq(-3,true)" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_download_folder)" />
+        <setting label="Download Folder" id="choose_download_folder" type="action" enable="eq(-3,true)" option="close" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,choose_download_folder)" />
         <setting label="Showing" id="download_folder_display" type="text" default="Default" enable="false" subsetting="true" />
         <setting id="download_folder" type="text" default="special://profile/addon_data/plugin.video.onepacepremium/downloads/" visible="false" />
         <setting label="Move Existing Downloads" id="move_downloads" type="action" enable="eq(-6,true)" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=move_downloads)" />
