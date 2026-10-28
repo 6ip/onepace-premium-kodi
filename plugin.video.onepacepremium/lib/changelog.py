@@ -20,12 +20,16 @@ class ChangelogDialog(xbmcgui.WindowXMLDialog):
         self._text = kwargs.get("text", "")
         self._version = kwargs.get("version", "")
         self._icon_path = kwargs.get("icon_path", "")
+        self._heading = kwargs.get("heading", "What's New")
+        self._asking = kwargs.get("asking", True)
         self.donate = False
 
     def onInit(self):
         self.setProperty("pp.text", self._text)
         self.setProperty("pp.version", self._version)
         self.setProperty("pp.icon", self._icon_path)
+        self.setProperty("pp.heading", self._heading)
+        self.setProperty("pp.asking", "1" if self._asking else "")
         # The scrollbar hides itself when the text fits, so focus a button.
         self.setFocusId(10)
 
@@ -54,13 +58,13 @@ def _read_changelog(addon_path):
         return ""
 
 
-def show_text(text, version):
+def show_text(text, version, heading="What's New", asking=True):
     """Open the What's New window on any text, and honour its donate button."""
     addon = xbmcaddon.Addon(ADDON_ID)
     addon_path = xbmcvfs.translatePath(addon.getAddonInfo("path"))
     dialog = ChangelogDialog(
         "changelog.xml", addon_path, "Default", "1080i",
-        text=text, version=version,
+        text=text, version=version, heading=heading, asking=asking,
         icon_path=xbmcvfs.translatePath(addon.getAddonInfo("icon")),
     )
     donate = False

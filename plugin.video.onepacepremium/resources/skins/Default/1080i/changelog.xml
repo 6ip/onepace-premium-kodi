@@ -58,7 +58,7 @@
                 <textcolor>FFFFFFFF</textcolor>
                 <align>left</align>
                 <aligny>center</aligny>
-                <label>[B]What's New[/B]</label>
+                <label>[B]$INFO[Window.Property(pp.heading)][/B]</label>
             </control>
 
             <!-- Version pill, right aligned -->
@@ -118,6 +118,7 @@
             <!-- ── FOOTER ── -->
 
             <control type="button" id="11">
+                <visible>!String.IsEmpty(Window.Property(pp.asking))</visible>
                 <left>640</left><top>698</top>
                 <width>256</width><height>48</height>
                 <onleft>2060</onleft><onright>10</onright>

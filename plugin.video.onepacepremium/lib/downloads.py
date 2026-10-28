@@ -895,9 +895,9 @@ def show_report(_params=None):
         _notify_info("Nothing has been downloaded yet")
         return
 
-    # The same helper What's New uses, so the donate button works here too.
+    # The same window What's New uses, without the donation button.
     from .changelog import show_text
-    show_text(text, "Downloads")
+    show_text(text, "", heading="Last Download Summary", asking=False)
 
 
 def imported(path, files=None):

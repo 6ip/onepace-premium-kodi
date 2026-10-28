@@ -1777,7 +1777,12 @@ assert "Nothing has been downloaded yet" in report_src, "an empty file would ope
 changelog_src = (harness.ADDON / "lib" / "changelog.py").read_text(encoding="utf-8")
 shared = changelog_src[changelog_src.index("def show_text("):
                        changelog_src.index("def show_changelog(")]
-assert "dialog.donate" in shared and "show_donate()" in shared,     "the donate button on the report window would do nothing"
+assert "dialog.donate" in shared and "show_donate()" in shared,     "the donate button in What's New would do nothing"
+assert 'asking=False' in report_src and 'heading="Last Download Summary"' in report_src,     "a download receipt would be headed What's New and ask for money"
+_xml_src = (harness.ADDON / "resources" / "skins" / "Default" / "1080i"
+            / "changelog.xml").read_text(encoding="utf-8")
+assert "Window.Property(pp.heading)" in _xml_src, "the heading is still hardcoded"
+assert "String.IsEmpty(Window.Property(pp.asking))" in _xml_src,     "the donate button shows on every window that borrows this one"
 assert "show_text(" in changelog_src[changelog_src.index("def show_changelog("):],     "What's New and the report should open the same way"
 summary = STREAMS[STREAMS.index('parts = [f"downloaded {done}"]'):]
 assert "Cut used" in summary[:600], "the season summary never records which cut it took"

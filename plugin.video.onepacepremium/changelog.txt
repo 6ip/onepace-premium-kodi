@@ -1,3 +1,10 @@
+[B]v2.4.8[/B]  [COLOR FF888899]28 October 2026[/COLOR]
+
+[COLOR FF81A6C6][B]Fixes[/B][/COLOR]
+ •  Re-downloading an updated episode now replaces it instead of keeping both.
+ •  The download summary no longer calls itself What's New.
+
+
 [B]v2.4.7[/B]  [COLOR FF888899]24 October 2026[/COLOR]
 
 [COLOR FF81A6C6][B]Fixes[/B][/COLOR]
