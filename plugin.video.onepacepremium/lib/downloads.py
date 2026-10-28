@@ -296,21 +296,43 @@ def _row_artwork(path):
     return (read_index()["files"].get(path) or {}).get("artwork") or {}
 
 
+def _rehome_series_art(data, series):
+    """No copy of ours is left to sit beside, so bring the pictures home."""
+    art = (data["series"].get(series) or {}).get("art") or {}
+    if not art:
+        return
+    here = _art_dir()
+    xbmcvfs.mkdirs(here)
+    stem, names = safe_name(series, "series"), dict(_SERIES_ART)
+    brought = {}
+    for key, picture in art.items():
+        if not picture or picture.startswith(here):
+            brought[key] = picture
+            continue
+        brought[key] = _moved_to(
+            picture, f"{here}{stem}-{names[key]}{os.path.splitext(picture)[1]}")
+    data["series"][series]["art"] = brought
+
+
 def _drop_artwork(data, row):
-    """The episode's picture always, a shared one once no row needs it."""
-    art = row.get("artwork") or {}
-    if art.get("thumb"):
-        xbmcvfs.delete(art["thumb"])
-    series, season = row.get("series_name") or "Downloads", _season_of(row)
+    """A picture goes once no row and no series still points at it."""
+    series = row.get("series_name") or "Downloads"
     rows = list(data["files"].values())
     mine = [m for m in rows if (m.get("series_name") or "Downloads") == series]
-    if art.get("season_poster") and not any(
-            _season_of(m) == season for m in mine):
-        xbmcvfs.delete(art["season_poster"])
+    # Their copies outlive ours, and our pictures must not outlive our folder.
+    if mine and not any(not m.get("imported") for m in mine):
+        _rehome_series_art(data, series)
+    going = list((row.get("artwork") or {}).values())
     if not mine:
-        for picture in ((data["series"].get(series) or {}).get("art") or {}).values():
-            if picture:
-                xbmcvfs.delete(picture)
+        going += list(((data["series"].get(series) or {}).get("art") or {}).values())
+        if series in data["series"]:
+            data["series"][series].pop("art", None)
+    still = {p for m in rows for p in (m.get("artwork") or {}).values() if p}
+    still |= {p for entry in data["series"].values()
+              for p in (entry.get("art") or {}).values() if p}
+    for picture in going:
+        if picture and picture not in still:
+            xbmcvfs.delete(picture)
 
 
 def _remove_rows(paths):
@@ -663,6 +685,11 @@ def fill_artwork(only=(), progress=None):
         show = data["series"].get(name) or {}
         if (meta.get("artwork") or {}).get("thumb"):
             continue
+        kept = show.get("art") or {}
+        if kept and all(xbmcvfs.exists(p) for p in kept.values() if p):
+            # One set per series: a second copy would be drawn by nothing.
+            show = {k: v for k, v in show.items()
+                    if k not in {key for key, _ in _SERIES_ART}}
         if meta.get("imported"):
             art = save_imported_artwork(meta, show)
         elif xbmcvfs.exists(path):
@@ -679,6 +706,53 @@ def fill_artwork(only=(), progress=None):
         _write_index(data)
     log(f"[art] filled in {filled} of {len(rows)} row(s)")
     return filled
+
+
+def sweep_artwork():
+    """Our own art folder, cleared of pictures nothing points at."""
+    here = _art_dir()
+    try:
+        _, names = xbmcvfs.listdir(here)
+    except Exception as exc:
+        log(f"[art] could not read {here!r}: {exc}")
+        return 0
+    data = read_index()
+    keep = {p for m in data["files"].values()
+            for p in (m.get("artwork") or {}).values() if p}
+    keep |= {p for entry in data["series"].values()
+             for p in (entry.get("art") or {}).values() if p}
+    gone = 0
+    for name in names:
+        if here + name not in keep and xbmcvfs.delete(here + name):
+            gone += 1
+    if gone:
+        log(f"[art] removed {gone} picture(s) nothing points at")
+    return gone
+
+
+def fetch_artwork(_params=None):
+    """Fill in the pictures every episode is missing, and tidy up after it."""
+    if download_queue.busy():
+        _said("Artwork", "Wait for the downloads to finish first")
+        return
+    if not read_index()["files"]:
+        _said("Artwork", "Nothing downloaded or imported yet")
+        return
+
+    progress = xbmcgui.DialogProgressBG()
+    progress.create("Artwork", "Looking for missing pictures")
+    try:
+        filled = fill_artwork(progress=progress)
+        swept = sweep_artwork()
+    finally:
+        progress.close()
+
+    lines = [f"{filled} episode(s) given their pictures"]
+    if swept:
+        lines.append(f"{swept} picture(s) nothing wanted were removed")
+    write_report("Artwork", lines)
+    _said("Artwork", chr(10).join(lines))
+    refresh_container()
 
 
 # A public repo, so checking it costs our own server nothing.
@@ -1695,6 +1769,8 @@ def list_manage(params=None):
              "Find downloads the list has lost, and forget ones that moved."),
         _job("Check for Updates", build_url("check_updates"),
              "See which downloads One Pace has re-released since."),
+        _job("Fetch Missing Artwork", build_url("fetch_artwork"),
+             "Keep the posters and thumbnails beside what you already have."),
         _job("Move Existing Downloads", build_url("move_downloads"),
              "Bring everything already downloaded into the current folder."),
         # The one row that reports rather than does, so it looks different.

@@ -610,6 +610,84 @@ _imported_drop = SRC[SRC.index("def _remove(paths)"):SRC.index("def delete(param
 assert "_drop_artwork(data, data[\"files\"].pop(path, None) or {})" in _imported_drop,     "forgetting an adopted row would orphan the pictures we fetched for it"
 print("  the import keeps them, and forgetting a row drops them  OK")
 
+print()
+print("=== a season held both ways keeps one set of shared pictures ===")
+_was_profile = downloads._profile
+_was_listdir = downloads.xbmcvfs.listdir
+downloads._profile = lambda: "C:/profile/"
+downloads.folder = lambda: "C:/dl/"
+downloads.xbmcvfs.listdir = lambda d: ([], [x[len(d):] for x in _FS
+                                            if x.startswith(d)
+                                            and "/" not in x[len(d):]])
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+
+
+def _unwanted():
+    """Pictures on disk that no row and no series points at."""
+    keep = {p for m in _INDEX["files"].values()
+            for p in (m.get("artwork") or {}).values() if p}
+    keep |= {p for e in _INDEX["series"].values()
+             for p in (e.get("art") or {}).values() if p}
+    return sorted(x for x in _FS if x.endswith((".jpg", ".png")) and x not in keep)
+
+
+for number in (1, 2):
+    fields = _art_fields(1, number)
+    path = _held(fields)
+    data = downloads.read_index()
+    downloads.remember_into(data, path, fields, ART_META,
+                            artwork=downloads.save_artwork(path, fields, ART_META))
+    downloads._write_index(data)
+adopted = _art_fields(1, 3)
+adopted["imported"] = True
+their_one = "E:/Their Stuff/One Pace 1x03.mkv"
+_FS.add(their_one)
+data = downloads.read_index()
+downloads.remember_into(data, their_one, adopted, ART_META)
+downloads._write_index(data)
+
+_ART_HITS[:] = []
+downloads.fill_artwork(only={their_one})
+print(f"  the import fetched {len(_ART_HITS)} picture(s), unwanted: {len(_unwanted())}")
+assert len(_ART_HITS) == 2, "it fetched a second set of the series' pictures"
+assert _unwanted() == [], _unwanted()
+
+for path in [x for x in list(_INDEX["files"]) if not _INDEX["files"][x].get("imported")]:
+    downloads._remove([path])
+print(f"  every download gone, unwanted: {len(_unwanted())}")
+assert _unwanted() == [], _unwanted()
+assert not any(x.startswith("C:/dl/") for x in _FS),     "our pictures were left in a folder with nothing of ours in it"
+assert all(p.startswith("C:/profile/art/")
+           for p in _INDEX["series"]["One Pace"]["art"].values()),     "the series' pictures still point at a folder we have left"
+print("  the series' pictures came home with the imported episode  OK")
+
+downloads._remove([their_one])
+assert their_one in _FS and not any(x.endswith((".jpg", ".png")) for x in _FS),     sorted(_FS)
+print("  and the last row out takes every picture with it  OK")
+
+print()
+print("=== the art folder is swept of pictures nothing wants ===")
+_FS.add("C:/profile/art/stray-thumb.jpg")
+_FS.add("C:/profile/art/One Pace-poster.jpg")
+print(f"  before: {len([x for x in _FS if '/art/' in x])} picture(s) in the folder")
+assert downloads.sweep_artwork() == 2, "it left pictures nothing points at"
+assert not any("/art/" in x for x in _FS), sorted(_FS)
+print("  swept, and only ever inside our own folder  OK")
+downloads._profile = _was_profile
+downloads.xbmcvfs.listdir = _was_listdir
+
+import xml.etree.ElementTree as _ETree
+_art_row = next(x for x in _ETree.parse(harness.ADDON / "resources" / "settings.xml")
+                .getroot().iter("setting") if x.get("id") == "fetch_artwork")
+assert "fetch_artwork" in _art_row.get("action", ""), _art_row.get("action")
+assert _art_row.get("enable") == "eq(-21,true)", _art_row.get("enable")
+_fetch_src = SRC[SRC.index("def fetch_artwork("):SRC.index("# A public repo")]
+assert "download_queue.busy()" in _fetch_src, "it would fight a transfer for the disk"
+assert "write_report(" in _fetch_src, "the summary would vanish with the dialog"
+print("  reachable from the settings tab as well as Manage  OK")
+
 
 for _k, _v in _WAS.items():
     setattr(downloads, _k, _v)
@@ -1132,7 +1210,7 @@ kodistub.recorder.reset()
 downloads.list_manage(None)
 jobs = kodistub.recorder.directories
 print("  Manage: " + ", ".join(repr(i.label) for _, i, _ in jobs))
-assert len(jobs) == 5, [i.label for _, i, _ in jobs]
+assert len(jobs) == 6, [i.label for _, i, _ in jobs]
 assert not any(f for _, _, f in jobs), "each one does a job, none navigates"
 ROUTES = set(re.findall(r'"([a-z_]+)":\s+"', (harness.ADDON / "lib" / "router.py")
                         .read_text(encoding="utf-8")))

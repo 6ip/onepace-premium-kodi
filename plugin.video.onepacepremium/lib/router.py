@@ -39,6 +39,7 @@ _ACTIONS = {
     "browse_download":     "downloads:browse",
     "show_download_report": "downloads:show_report",
     "check_updates":       "downloads:check_updates",
+    "fetch_artwork":       "downloads:fetch_artwork",
     "rescan_downloads":    "downloads:rescan",
     "import_folder":       "import_folder:run",
 }
