@@ -268,6 +268,21 @@ def _existing(params, destination):
     return destination if xbmcvfs.exists(destination) else ""
 
 
+def _other_cut(params):
+    """A flagged copy of this episode in a different cut, and which cut that is."""
+    episode_id = params.get("episode_id") or params.get("video_id")
+    if not episode_id:
+        return "", ""
+    variant = cut_of(variant_of(params))
+    for path, meta in read_index()["files"].items():
+        held = cut_of(meta.get("variant"))
+        if (meta.get("episode_id") == episode_id and meta.get("outdated")
+                and not meta.get("imported") and held != variant
+                and xbmcvfs.exists(path)):
+            return path, held
+    return "", ""
+
+
 def _remove_rows(paths):
     data = read_index()
     if any(data["files"].pop(x, None) is not None for x in paths):
@@ -317,6 +332,17 @@ def download(params, meta=None, ticket=None):
                 os.path.basename(already) + chr(10) + chr(10) + question,
                 nolabel="Keep", yeslabel=yeslabel):
             return CANCELLED
+    else:
+        # The cut we flagged is gone, so replacing it is a choice, not a guess.
+        other, other_cut = _other_cut(params)
+        if other and xbmcgui.Dialog().yesno(
+                "Download",
+                os.path.basename(other) + chr(10) + chr(10)
+                + f"You hold the {variant_label(other_cut)} cut, and this one is "
+                  f"{variant_label(cut_of(variant_of(params)))}." + chr(10) + chr(10)
+                + "Replace it, or keep both?",
+                nolabel="Keep both", yeslabel="Replace"):
+            already = other
     if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
         _notify_error("Could not create the download folder")
         return FAILED
@@ -1185,6 +1211,17 @@ def outdated_ids():
         return set()
     return {m.get("episode_id") for m in read_index()["files"].values()
             if m.get("outdated") and m.get("episode_id")}
+
+
+def held_cut(episode_id):
+    """The flagged copy's cut, spelled as the provider spells it, or nothing."""
+    if not episode_id or not enabled():
+        return ""
+    for meta in read_index()["files"].values():
+        if (meta.get("episode_id") == episode_id and meta.get("outdated")
+                and not meta.get("imported")):
+            return variant_of(meta)
+    return ""
 
 
 def mark(label, episode_id, on_disk, plain=False, stale=(), mine=()):

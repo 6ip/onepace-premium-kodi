@@ -245,6 +245,149 @@ assert not _q.busy()
 print("  nothing kept, slot released  OK")
 kodistub._WINDOW_PROPS.clear()
 
+print()
+print("=== Re-download replaces the copy it was flagged for ===")
+import json as _json
+
+_WAS = {k: getattr(downloads, k) for k in
+        ("read_index", "_write_index", "folder", "save_subtitles", "write_report",
+         "refresh_container", "session")}
+_WAS_VFS = {k: getattr(downloads.xbmcvfs, k) for k in
+            ("File", "exists", "delete", "mkdirs", "rename")}
+_WAS_DIALOG = downloads.xbmcgui.Dialog
+
+_INDEX = {"files": {}, "series": {}}
+_FS = set()
+_ANSWER = [True]
+_ASKED = []
+
+
+class _FsHandle:
+    def __init__(self, path, mode="r"):
+        self.path = path
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        _FS.add(self.path)
+        return False
+
+    def write(self, blob):
+        return True
+
+
+class _Four:
+    url, headers = "https://srv/real.mkv", {"Content-Length": "4"}
+
+    def raise_for_status(self):
+        pass
+
+    def iter_content(self, chunk_size=0):
+        yield b"abcd"
+
+
+class _Asking:
+    def yesno(self, *a, **k):
+        _ASKED.append(a[1] if len(a) > 1 else "")
+        return _ANSWER[0]
+
+    def ok(self, *a, **k):
+        return True
+
+    def notification(self, *a, **k):
+        return True
+
+
+def _rename_fs(a, b):
+    if a not in _FS:
+        return False
+    _FS.discard(a)
+    _FS.add(b)
+    return True
+
+
+downloads.read_index = lambda: _json.loads(_json.dumps(_INDEX))
+downloads._write_index = lambda d: (_INDEX.clear(),
+                                    _INDEX.update(_json.loads(_json.dumps(d))))
+downloads.folder = lambda: "C:/dl/"
+downloads.xbmcvfs.File = _FsHandle
+downloads.xbmcvfs.exists = lambda path: path in _FS
+downloads.xbmcvfs.delete = lambda path: (_FS.discard(path), True)[1]
+downloads.xbmcvfs.mkdirs = lambda path: True
+downloads.xbmcvfs.rename = _rename_fs
+downloads.xbmcgui.Dialog = _Asking
+downloads.session = lambda: type("S", (), {"get": lambda s, *a, **k: _Four()})()
+downloads.save_subtitles = lambda destination, params: []
+downloads.write_report = lambda *a, **k: None
+downloads.refresh_container = lambda: None
+
+
+def _fields(title, variant):
+    return {"video_url": "https://srv/play/k/" + "a" * 40 + "/4/realdebrid/RO_3",
+            "episode_id": "RO_3", "series_name": "One Pace", "episode_title": title,
+            "season": "1", "episode": "3", "filename": "x.mkv",
+            "video_size": 4, "variant": variant}
+
+
+def _seed(cuts):
+    """Episodes already on disk, every one of them flagged as re-released."""
+    _INDEX["files"].clear()
+    _FS.clear()
+    for variant in cuts:
+        fields = _fields("Romance Dawn", variant)
+        directory, name = downloads._target(fields)
+        _FS.add(directory + name)
+        data = downloads.read_index()
+        downloads.remember_into(data, directory + name, fields)
+        data["files"][directory + name]["outdated"] = True
+        downloads._write_index(data)
+
+
+def _marker():
+    on_disk = {m["episode_id"] for m in downloads.read_index()["files"].values()
+               if m.get("episode_id")}
+    return downloads.mark("1x03. Romance Dawn", "RO_3", on_disk, plain=True,
+                          stale=downloads.outdated_ids())
+
+
+store["downloads_enabled"], store["download_marker"] = "true", "true"
+HELD, FLAGGED = "[COLOR FFA8E6A3]", "[COLOR FFFFD166]"
+for note, cuts, fetch, answer, files, want in (
+        ("same title", ("standard",), ("Romance Dawn", "standard"), True, 1, HELD),
+        ("renamed, Replace", ("standard",), ("Romance Dawn Again", "standard"), True, 1, HELD),
+        ("renamed, Keep", ("standard",), ("Romance Dawn Again", "standard"), False, 1, FLAGGED),
+        ("another cut, Replace", ("standard",), ("Romance Dawn", "extended"), True, 1, HELD),
+        ("another cut, Keep both", ("standard",), ("Romance Dawn", "extended"), False, 2, FLAGGED),
+        ("one of two cuts", ("standard", "extended"), ("Romance Dawn", "standard"), True, 2, FLAGGED)):
+    _seed(cuts)
+    assert _marker().startswith(FLAGGED), note
+    _ANSWER[0], _ASKED[:] = answer, []
+    downloads.download(_fields(*fetch))
+    got = _marker()
+    print(f"  {note:<22} files={len(_FS)}  asked={'yes' if _ASKED else 'no'}  "
+          f"marker={got[:16]}")
+    assert len(_FS) == files, (note, sorted(_FS))
+    assert got.startswith(want), (note, got)
+print("  a replaced copy clears its own flag, a kept one keeps it  OK")
+
+_seed(("extended",))
+print(f"  the flagged cut here is {downloads.held_cut('RO_3')!r}")
+assert downloads.held_cut("RO_3") == "extended", "Re-download cannot ask for the right cut"
+assert downloads.held_cut("NOPE") == "", "a first download would be narrowed to nothing"
+dl_ep = ER_SRC[ER_SRC.index("def download_episode("):ER_SRC.index("def get_streams(")]
+assert "held_cut" in dl_ep and "prefer=" in dl_ep, \
+    "Re-download still takes whatever stream comes first"
+assert 'get_setting("preferred_service")' in dl_ep, \
+    "a re-download would quietly ignore the preferred service"
+print("  Re-download asks the picker for the cut it is replacing  OK")
+
+for _k, _v in _WAS.items():
+    setattr(downloads, _k, _v)
+for _k, _v in _WAS_VFS.items():
+    setattr(downloads.xbmcvfs, _k, _v)
+downloads.xbmcgui.Dialog = _WAS_DIALOG
+
 downloads.folder = _REAL_FOLDER          # the rest of the suite needs the real one
 downloads.xbmcvfs.exists = lambda p: True
 

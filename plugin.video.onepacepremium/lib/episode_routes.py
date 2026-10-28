@@ -823,10 +823,14 @@ def download_season(params):
 
 def download_episode(params):
     """Context-menu target on an episode row: pick a stream, then keep it."""
-    chosen = _choose_stream(params, downloadable_only=True)
+    from .downloads import download, held_cut
+    # Re-download replaces one copy, so ask for the cut that copy is in.
+    cut = held_cut(params.get("video_id", ""))
+    chosen = _choose_stream(
+        params, downloadable_only=True,
+        prefer=(get_setting("preferred_service"), cut) if cut else None)
     if chosen is None:
         return
-    from .downloads import download
     # Fetched while certainly online, so the list survives going off.
     meta = _fetch_provider_meta(params.get("catalog_type", "series"),
                                 params.get("parent_id", "")) or {}
