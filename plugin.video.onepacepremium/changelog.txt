@@ -1,8 +1,21 @@
-[B]v2.4.8[/B]  [COLOR FF888899]28 October 2026[/COLOR]
+[B]v2.4.8[/B]  [COLOR FF888899]29 October 2026[/COLOR]
+
+[COLOR FF81A6C6][B]New[/B][/COLOR]
+  •  Posters and thumbnails are kept beside your downloads, so lists look right offline.
+  •  Imported episodes get their pictures too, kept in the add-on's own folder.
+  •  Fetch Missing Artwork, under Manage, fills in what earlier downloads never had.
+  •  Browse Folder With, under Downloads, if you would rather folders opened in Kodi.
+
+[COLOR FF81A6C6][B]Changed[/B][/COLOR]
+  •  Browse Folder asks which one when a season has downloads and imports in different places.
+  •  Last Download Summary sits at the top of Manage.
 
 [COLOR FF81A6C6][B]Fixes[/B][/COLOR]
- •  Re-downloading an updated episode now replaces it instead of keeping both.
- •  The download summary no longer calls itself What's New.
+  •  Re-downloading an updated episode now replaces it instead of keeping both.
+  •  Changing the download folder now takes effect before Move and Rescan read it.
+  •  Moving your library no longer leaves empty folders behind.
+  •  A folder whose name reads right to left now opens, instead of landing in Documents.
+  •  The download summary no longer calls itself What's New.
 
 
 [B]v2.4.7[/B]  [COLOR FF888899]24 October 2026[/COLOR]
