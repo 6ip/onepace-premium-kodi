@@ -22,7 +22,7 @@ _ROW = {"episode_id": "RO_1", "series_name": "One Pace", "variant": "",
         "season": "1", "episode": "1", "subtitles": []}
 
 downloads.folder = lambda: "C:/kodi/downloads/"
-downloads._prune = lambda path: None
+downloads._prune = lambda path, extra="": None
 downloads.xbmcvfs.rmdir = lambda path: True
 
 present, deleted, written = set(), [], []

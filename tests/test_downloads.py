@@ -471,7 +471,7 @@ assert "timeout=10" in art_src, "a slow server would hold the download open"
 assert "except Exception" in art_src, "a failed picture would fail the download"
 assert SRC.index("_remember(destination, params, meta, save_subtitles") >     SRC.index("xbmcvfs.rename(partial, destination)"),     "artwork would be fetched before the video was safely in place"
 drop = SRC[SRC.index("def _remove(paths)"):SRC.index("def delete(params)")]
-assert drop.index("_drop_artwork(data, row)") < drop.index("_prune(path)"),     "rmdir refuses a folder with our pictures still in it"
+assert drop.index("_drop_artwork(data, row)") < drop.index("_prune(path"),     "rmdir refuses a folder with our pictures still in it"
 print("  fetched after the video lands, cleared before the prune  OK")
 
 print()
@@ -524,6 +524,32 @@ assert not _ART_HITS, "a rescan fetched pictures it already had"
 rescan_art = SRC[SRC.index("def rescan("):SRC.index("def _dead_imported(")]
 assert "_adopted_art(entry[\"path\"]" in rescan_art,     "a rescan would forget every picture on disk"
 print("  found on disk, nothing fetched  OK")
+
+print()
+print("=== moving out of a folder of our own clears it ===")
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+downloads.folder = lambda: "D:/media/One Pace Premium/"
+leaving = _art_fields(1, 5)
+left_behind = _held(leaving)
+data = downloads.read_index()
+downloads.remember_into(data, left_behind, leaving, ART_META,
+                        artwork=downloads.save_artwork(left_behind, leaving, ART_META))
+downloads._write_index(data)
+downloads.folder = lambda: "C:/dl/"
+kodistub.recorder.reset()
+_ANSWER[0] = True
+downloads.move_downloads()
+for shown in kodistub.recorder.rmdirs:
+    print(f"  removed {shown}")
+assert "C:/dl/One Pace/Season 01/1x05 - Romance Dawn.mkv" in _FS, sorted(_FS)
+assert not any(x.startswith("D:/media/") for x in _FS), sorted(_FS)
+for folder_gone in ("D:/media/One Pace Premium/One Pace/Season 01",
+                    "D:/media/One Pace Premium/One Pace",
+                    "D:/media/One Pace Premium"):
+    assert folder_gone in kodistub.recorder.rmdirs, folder_gone
+print("  the season, the series and our own folder all go  OK")
 
 
 for _k, _v in _WAS.items():
@@ -951,8 +977,32 @@ pr = SRC[SRC.index("def _prune("):SRC.index("def _remove(")]
 assert "for _ in range(2)" in pr, "an unbounded walk can spin on a drive root"
 assert 'startswith(r + "/")' in pr, "it could climb above a download folder"
 assert "directory in roots" in pr, "a root itself could be removed"
-assert "_prune(path)" in SRC[SRC.index("def _remove("):SRC.index("def delete(")], "delete leaves shells"
-assert "_prune(path)" in SRC[SRC.index("def move_downloads("):], "moving leaves the old shells"
+assert "_prune(path" in SRC[SRC.index("def _remove("):SRC.index("def delete(")], "delete leaves shells"
+assert "_prune(path" in SRC[SRC.index("def move_downloads("):], "moving leaves the old shells"
+# A library moved out of a folder of ours is outside every current root, so
+# the prune has to be told where it came from or the shells stand forever.
+store["download_folder"] = ""
+_left = "D:/Media/One Pace Premium/"
+_was_file = _left + "One Pace/Season 01/x.mkv"
+print(f"  root of a folder we have left: {downloads._root_of(_was_file)}")
+assert downloads._root_of(_was_file) == _left
+assert downloads._root_of(downloads._profile_root() + "One Pace/Season 01/x.mkv") ==     downloads._profile_root(), "the folder downloads start in is a root too"
+assert downloads._root_of("D:/Videos/holiday.mkv") == "", "a stranger's folder is not ours"
+kodistub.recorder.reset()
+downloads._prune(_was_file)
+assert kodistub.recorder.rmdirs == [], "it pruned a folder it was not told about"
+kodistub.recorder.reset()
+downloads._prune(_was_file, downloads._root_of(_was_file))
+print(f"  told where it came from: {kodistub.recorder.rmdirs}")
+assert kodistub.recorder.rmdirs == [_left + "One Pace/Season 01",
+                                    _left.rstrip("/") + "/One Pace"],     kodistub.recorder.rmdirs
+mv3 = SRC[SRC.index("def move_downloads("):SRC.index("def _sweep(")]
+assert "_root_of(path)" in mv3, "Move would not know which folder it emptied"
+assert "left - set(_roots())" in mv3, "our own folder would stand there empty"
+assert "xbmcvfs.rmdir(root" in mv3 and "xbmcvfs.delete" not in mv3,     "Move must never delete a file to tidy a folder up"
+assert "still" in mv3, "a folder it could not clear would go unmentioned"
+print("  and Move clears the tree it emptied  OK")
+
 store["download_folder"] = ""
 print("  season then series, never the root, never outside it  OK")
 

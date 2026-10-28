@@ -655,11 +655,25 @@ _NAMED = re.compile(r"^(\d+)x(\d+) - (.+?)(?: \(([^)]+)\))?$")
 _VIDEO_EXTS = (".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".webm")
 
 
+def _profile_root():
+    """Where downloads start out, before anyone chooses somewhere else."""
+    return _profile().rstrip("/" + chr(92)).replace(chr(92), "/") + "/downloads/"
+
+
 def _roots():
     """Where downloads can be, not only where they go now."""
-    here = folder()
-    was = _profile().rstrip("/" + chr(92)).replace(chr(92), "/") + "/downloads/"
+    here, was = folder(), _profile_root()
     return [here] + ([was] if was != here else [])
+
+
+def _root_of(path):
+    """The download root this file sits under, including one we have left."""
+    here = _normalised(path)
+    marker = "/" + CONTAINER + "/"
+    if marker in here:
+        return here[:here.index(marker) + len(marker)]
+    was = _profile_root()
+    return was if here.startswith(was) else ""
 
 
 def _walk_downloads():
@@ -937,10 +951,10 @@ def check_updates(_params=None):
     refresh_container()
 
 
-def _prune(path):
+def _prune(path, extra=""):
     """Drop the season and series folders once nothing is left in them."""
-    # Both roots: the old folder keeps its empty shells, which Move clears.
-    roots = [r.rstrip("/") for r in _roots()]
+    # The folder being left behind counts too, or its shells stand forever.
+    roots = [r.rstrip("/") for r in _roots() + ([extra] if extra else [])]
     directory = os.path.dirname(_normalised(path)).rstrip("/")
     # Series and season, and nothing above them, however the paths compare.
     for _ in range(2):
@@ -1061,7 +1075,7 @@ def _remove(paths):
             data["files"].pop(path, None)
             # Before the prune, or rmdir refuses the folder they sit in.
             _drop_artwork(data, row)
-            _prune(path)
+            _prune(path, _root_of(path))
             removed += 1
         else:
             log(f"[downloads] could not delete {path!r}")
@@ -1211,7 +1225,7 @@ def move_downloads(_params=None):
 
     progress = xbmcgui.DialogProgressBG()
     progress.create("Moving downloads")
-    moved, failed = 0, 0
+    moved, failed, left = 0, 0, set()
     for index, (path, directory, name) in enumerate(planned, 1):
         progress.update(int(index * 100 / len(planned)), "Moving downloads", name)
         if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
@@ -1228,17 +1242,37 @@ def move_downloads(_params=None):
         entry["artwork"] = _move_artwork(entry.get("artwork"), path, destination)
         _move_series_art(data, entry.get("series_name") or "Downloads", destination)
         data["files"][destination] = entry
-        _prune(path)
+        was = _root_of(path)
+        _prune(path, was)
+        if was:
+            left.add(was)
         moved += 1
     progress.close()
+
+    # Only ever rmdir: anything of theirs in there keeps its folder, and the
+    # summary says so rather than leaving them to find it.
+    stayed = 0
+    for root in sorted(left - set(_roots())):
+        if xbmcvfs.rmdir(root.rstrip("/")):
+            log(f"[downloads] removed the empty {root!r}")
+        else:
+            stayed += 1
+            log(f"[downloads] {root!r} still has files in it")
 
     if moved:
         _write_index(data)
     log(f"[downloads] moved {moved}, failed {failed}")
+    note = ""
+    if stayed:
+        note = (chr(10) + chr(10)
+                + f"{stayed} old folder{'s' if stayed != 1 else ''} still "
+                  f"{'have' if stayed != 1 else 'has'} other files in "
+                  f"{'them' if stayed != 1 else 'it'}.")
     if failed:
-        _said("Move Downloads", f"Moved {moved}, could not move {failed}")
+        _said("Move Downloads", f"Moved {moved}, could not move {failed}" + note)
     else:
-        _said("Move Downloads", f"Moved {moved} file{'s' if moved != 1 else ''}")
+        _said("Move Downloads",
+              f"Moved {moved} file{'s' if moved != 1 else ''}" + note)
     refresh_container()
 
 
