@@ -355,11 +355,27 @@ def _add(root, sure, guessed, clash, unknown, already, metas, by_hand, replace):
                                        metas.get(series_name) or {}),
                       metas.get(series_name), _sidecars(path))
     _write_index(data)
+    _keep_art([path for path, _, _ in sure + guessed + by_hand])
     added = len(sure) + len(guessed) + len(by_hand)
     log(f"[import] adopted {added} file(s) from {root!r}"
         + (f", {len(by_hand)} chosen by hand" if by_hand else ""))
     _notify_info(f"Imported {added} episode{'s' if added != 1 else ''}")
     refresh_container()
+
+
+def _keep_art(paths):
+    """The pictures for what we just adopted, so the list reads offline."""
+    if not paths:
+        return
+    from .downloads import fill_artwork
+    progress = xbmcgui.DialogProgressBG()
+    progress.create("Importing", "Keeping the pictures")
+    try:
+        fill_artwork(only=set(paths), progress=progress)
+    except Exception as exc:
+        log(f"[import] could not keep the pictures: {exc}")
+    finally:
+        progress.close()
 
 
 def _report(root, sure, guessed, clash, unknown, already, by_hand=()):

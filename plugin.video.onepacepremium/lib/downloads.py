@@ -611,6 +611,76 @@ def save_artwork(destination, params, meta=None):
     return {"episode": episode, "series": show}
 
 
+def _art_dir():
+    """Our own folder, for pictures that cannot sit beside the video."""
+    return _profile() + "art/"
+
+
+def save_imported_artwork(params, meta=None):
+    """Their file stays untouched, so our pictures live in our own folder."""
+    here = _art_dir()
+    xbmcvfs.mkdirs(here)
+    stem = safe_name(params.get("episode_id") or "", "episode")
+    series = safe_name(params.get("series_name") or "", "series")
+    try:
+        season = int(params.get("season"))
+    except (TypeError, ValueError):
+        season = 0
+
+    episode = {}
+    thumb = params.get("thumb", "")
+    if thumb:
+        episode["thumb"] = _fetch_art(thumb, f"{here}{stem}-thumb{_art_ext(thumb)}")
+    poster = params.get("season_poster", "")
+    if poster:
+        episode["season_poster"] = _fetch_art(
+            poster,
+            f"{here}{series}-{_season_art_name(season)}-poster{_art_ext(poster)}")
+
+    show = {}
+    for key, name in _SERIES_ART:
+        url = (meta or {}).get(key, "")
+        kept = _fetch_art(url, f"{here}{series}-{name}{_art_ext(url)}")
+        if kept:
+            show[key] = kept
+
+    episode = {k: v for k, v in episode.items() if v}
+    log(f"[art] kept {len(episode) + len(show)} picture(s) for "
+        f"{params.get('episode_id') or 'an imported file'}")
+    return {"episode": episode, "series": show}
+
+
+def fill_artwork(only=(), progress=None):
+    """Fetch what any row is missing: ours beside it, theirs in our folder."""
+    data = read_index()
+    rows = [(p, m) for p, m in data["files"].items() if not only or p in only]
+    filled = 0
+    for number, (path, meta) in enumerate(rows, 1):
+        if progress:
+            progress.update(int(number * 100 / max(len(rows), 1)), "Artwork",
+                            meta.get("episode_title", ""))
+        name = meta.get("series_name") or "Downloads"
+        show = data["series"].get(name) or {}
+        if (meta.get("artwork") or {}).get("thumb"):
+            continue
+        if meta.get("imported"):
+            art = save_imported_artwork(meta, show)
+        elif xbmcvfs.exists(path):
+            art = save_artwork(path, meta, show)
+        else:
+            continue
+        if art["episode"]:
+            meta["artwork"] = dict(meta.get("artwork") or {}, **art["episode"])
+            filled += 1
+        # A download's pictures sit beside the video, so they are the keeper.
+        if art["series"] and not show.get("art"):
+            data["series"].setdefault(name, {})["art"] = art["series"]
+    if filled:
+        _write_index(data)
+    log(f"[art] filled in {filled} of {len(rows)} row(s)")
+    return filled
+
+
 # A public repo, so checking it costs our own server nothing.
 _TREE_URL = ("https://api.github.com/repos/6ip/onepace-streams/git/trees/"
              "main?recursive=1")
@@ -1063,7 +1133,8 @@ def _remove(paths):
     removed = 0
     for path in paths:
         if imported(path, data["files"]):
-            data["files"].pop(path, None)
+            # Their file is theirs; the pictures we fetched are ours to drop.
+            _drop_artwork(data, data["files"].pop(path, None) or {})
             removed += 1
             continue
         if not xbmcvfs.exists(path) or xbmcvfs.delete(path):

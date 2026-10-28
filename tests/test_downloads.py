@@ -551,6 +551,65 @@ for folder_gone in ("D:/media/One Pace Premium/One Pace/Season 01",
     assert folder_gone in kodistub.recorder.rmdirs, folder_gone
 print("  the season, the series and our own folder all go  OK")
 
+print()
+print("=== an imported file's pictures live in our folder, never theirs ===")
+_was_profile = downloads._profile
+downloads._profile = lambda: "C:/profile/"
+downloads.folder = lambda: "C:/dl/"
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+theirs = _art_fields(1, 9)
+theirs["imported"] = True
+their_file = "E:/Their Stuff/One Pace 1x09.mkv"
+_FS.add(their_file)
+data = downloads.read_index()
+downloads.remember_into(data, their_file, theirs, ART_META)
+downloads._write_index(data)
+
+_ART_HITS[:] = []
+filled = downloads.fill_artwork(only={their_file})
+for shown in sorted(x for x in _FS if "/art/" in x):
+    print(f"  {shown}")
+assert filled == 1, filled
+assert sorted(_FS) == sorted([their_file] + [x for x in _FS if "/art/" in x]),     "something was written into their folder"
+their_row = _INDEX["files"][their_file]
+assert their_row["artwork"]["thumb"] == "C:/profile/art/RO_3-thumb.jpg", their_row["artwork"]
+assert their_row["artwork"]["season_poster"].endswith("One Pace-season01-poster.jpg"),     their_row["artwork"]
+
+_ART_HITS[:] = []
+assert downloads.fill_artwork(only={their_file}) == 0, "it fetched them all again"
+assert not _ART_HITS, "a row that already has its pictures was fetched again"
+print("  fetched once, and never again  OK")
+
+downloads._remove([their_file])
+print(f"  after forgetting it: their file {'kept' if their_file in _FS else 'GONE'}, "
+      f"our pictures {'kept' if any('/art/' in x for x in _FS) else 'gone'}")
+assert their_file in _FS, "their own file was deleted"
+assert not any("/art/" in x for x in _FS), "our pictures were left behind"
+
+# Ours still go beside the video, which is the copy an update reaches.
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+ours = _art_fields(1, 2)
+our_file = _held(ours)
+data = downloads.read_index()
+downloads.remember_into(data, our_file, ours, ART_META)
+downloads._write_index(data)
+assert downloads.fill_artwork(only={our_file}) == 1
+assert _INDEX["files"][our_file]["artwork"]["thumb"] ==     "C:/dl/One Pace/Season 01/1x02 - Romance Dawn-thumb.jpg",     _INDEX["files"][our_file]["artwork"]
+print("  and ours still sit beside the video  OK")
+downloads._profile = _was_profile
+
+_imp_src = (harness.ADDON / "lib" / "import_folder.py").read_text(encoding="utf-8")
+assert "_keep_art(" in _imp_src and "fill_artwork" in _imp_src,     "an import would adopt episodes with no pictures at all"
+_add_src = _imp_src[_imp_src.index("def _add("):_imp_src.index("def _keep_art(")]
+assert _add_src.index("_write_index(data)") < _add_src.index("_keep_art("),     "the rows have to be written before anything slow happens to them"
+_imported_drop = SRC[SRC.index("def _remove(paths)"):SRC.index("def delete(params)")]
+assert "_drop_artwork(data, data[\"files\"].pop(path, None) or {})" in _imported_drop,     "forgetting an adopted row would orphan the pictures we fetched for it"
+print("  the import keeps them, and forgetting a row drops them  OK")
+
 
 for _k, _v in _WAS.items():
     setattr(downloads, _k, _v)
