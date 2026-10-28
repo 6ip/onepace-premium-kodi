@@ -530,12 +530,21 @@ def save_subtitles(destination, params):
 
 # Bigger than this is not a poster, whatever the server claims.
 _ART_MAX = 8 * 1024 * 1024
+_ART_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+# Our key for it, and the name Kodi looks for.
+_SERIES_ART = (("poster", "poster"), ("background", "fanart"),
+               ("logo", "clearlogo"))
+
+
+def _series_dir(path):
+    """The series folder, one above the season the episode sits in."""
+    return os.path.dirname(os.path.dirname(_normalised(path))) + "/"
 
 
 def _art_ext(url):
     """Keep the picture's own extension, falling back to the common one."""
     ext = os.path.splitext(_normalised(url).split("?")[0])[1].lower()
-    return ext if ext in (".jpg", ".jpeg", ".png", ".webp") else ".jpg"
+    return ext if ext in _ART_EXTS else ".jpg"
 
 
 def _fetch_art(url, path):
@@ -571,7 +580,7 @@ def _season_art_name(season):
 
 def save_artwork(destination, params, meta=None):
     """Keep the pictures beside the video, in the names Kodi looks for."""
-    series_dir = os.path.dirname(os.path.dirname(_normalised(destination))) + "/"
+    series_dir = _series_dir(destination)
     try:
         season = int(params.get("season"))
     except (TypeError, ValueError):
@@ -590,8 +599,7 @@ def save_artwork(destination, params, meta=None):
 
     # One set per series, and only for the seasons actually held.
     show = {}
-    for key, name in (("poster", "poster"), ("background", "fanart"),
-                      ("logo", "clearlogo")):
+    for key, name in _SERIES_ART:
         kept = _fetch_art((meta or {}).get(key, ""),
                           f"{series_dir}{name}{_art_ext((meta or {}).get(key, ''))}")
         if kept:
@@ -748,7 +756,8 @@ def rescan(_params=None):
             log(f"[rescan] {real!r} is the title, not a cut")
             entry["variant"] = ""
         _remember(entry["path"], _rebuilt(entry, video, meta), meta,
-                  _sidecars(entry["path"]))
+                  _sidecars(entry["path"]),
+                  _adopted_art(entry["path"], entry["season"]))
         added += 1
     progress.close()
 
@@ -829,6 +838,25 @@ def _sidecars(path):
     found = sorted(n for n in names
                    if n.startswith(stem + ".") and n.lower().endswith(".vtt"))
     return tuple(directory + n for n in sorted(found, key=lambda n: n.count(".")))
+
+
+def _adopted_art(path, season):
+    """Pictures already beside a file the rescan just found."""
+    def _first(stem):
+        for ext in _ART_EXTS:
+            if xbmcvfs.exists(stem + ext):
+                return stem + ext
+        return ""
+
+    series_dir = _series_dir(path)
+    episode = {
+        "thumb": _first(os.path.splitext(_normalised(path))[0] + "-thumb"),
+        "season_poster": _first(
+            f"{series_dir}{_season_art_name(season)}-poster"),
+    }
+    series = {key: _first(series_dir + name) for key, name in _SERIES_ART}
+    return {"episode": {k: v for k, v in episode.items() if v},
+            "series": {k: v for k, v in series.items() if v}}
 
 
 def _rebuilt(entry, video, meta):
@@ -1101,6 +1129,39 @@ def _relocate(src, dst):
     return False
 
 
+def _moved_to(picture, target):
+    """The new home if it got there, and the old one if it did not."""
+    if xbmcvfs.exists(target) or _relocate(picture, target):
+        return target
+    log(f"[art] could not move {picture!r}")
+    return picture
+
+
+def _move_artwork(artwork, was, now):
+    """A picture only helps where the video is, so it goes with it."""
+    art = artwork or {}
+    moved = {}
+    thumb = art.get("thumb")
+    if thumb:
+        tail = _normalised(thumb)[len(os.path.splitext(_normalised(was))[0]):]
+        moved["thumb"] = _moved_to(thumb, os.path.splitext(_normalised(now))[0] + tail)
+    poster = art.get("season_poster")
+    if poster:
+        moved["season_poster"] = _moved_to(
+            poster, _series_dir(now) + os.path.basename(_normalised(poster)))
+    return moved
+
+
+def _move_series_art(data, series, now):
+    """The series' own pictures, once one of its episodes has moved."""
+    art = (data["series"].get(series) or {}).get("art") or {}
+    if not art:
+        return
+    data["series"][series]["art"] = {
+        key: _moved_to(picture, _series_dir(now) + os.path.basename(_normalised(picture)))
+        for key, picture in art.items() if picture}
+
+
 def _move_subtitles(paths, was, now):
     """Move each sidecar into the Subs folder beside the video's new home."""
     old_stem = _subs_dir(was) + os.path.splitext(os.path.basename(was))[0]
@@ -1164,6 +1225,8 @@ def move_downloads(_params=None):
         entry = data["files"].pop(path)
         # Subtitles only work where the video is, so they go with it.
         entry["subtitles"] = _move_subtitles(entry.get("subtitles", ()), path, destination)
+        entry["artwork"] = _move_artwork(entry.get("artwork"), path, destination)
+        _move_series_art(data, entry.get("series_name") or "Downloads", destination)
         data["files"][destination] = entry
         _prune(path)
         moved += 1

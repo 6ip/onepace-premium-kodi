@@ -474,6 +474,58 @@ drop = SRC[SRC.index("def _remove(paths)"):SRC.index("def delete(params)")]
 assert drop.index("_drop_artwork(data, row)") < drop.index("_prune(path)"),     "rmdir refuses a folder with our pictures still in it"
 print("  fetched after the video lands, cleared before the prune  OK")
 
+print()
+print("=== the pictures travel with the library ===")
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+mover = _art_fields(1, 3)
+start = _held(mover)
+data = downloads.read_index()
+downloads.remember_into(data, start, mover, ART_META,
+                        artwork=downloads.save_artwork(start, mover, ART_META))
+downloads._write_index(data)
+
+downloads.folder = lambda: "D:/media/"
+_ANSWER[0] = True
+downloads.move_downloads()
+downloads.folder = lambda: "C:/dl/"
+for shown in sorted(x for x in _FS if x.startswith("D:/")):
+    print(f"  {shown}")
+assert "D:/media/One Pace/Season 01/1x03 - Romance Dawn.mkv" in _FS
+assert "D:/media/One Pace/Season 01/1x03 - Romance Dawn-thumb.jpg" in _FS
+assert "D:/media/One Pace/season01-poster.jpg" in _FS
+assert "D:/media/One Pace/clearlogo.png" in _FS
+assert not any(x.startswith("C:/dl/") for x in _FS), sorted(_FS)
+row = _INDEX["files"]["D:/media/One Pace/Season 01/1x03 - Romance Dawn.mkv"]
+assert row["artwork"]["thumb"].startswith("D:/media/"), row["artwork"]
+assert row["artwork"]["season_poster"].startswith("D:/media/"), row["artwork"]
+assert _INDEX["series"]["One Pace"]["art"]["logo"].startswith("D:/media/")
+print("  nothing is left behind, and the index points at the new home  OK")
+
+print()
+print("=== a rescan adopts the pictures already there ===")
+_FS.clear()
+found = _art_fields(2, 7)
+downloads.folder = lambda: "C:/dl/"
+there = _held(found)
+for name in ("C:/dl/One Pace/Season 02/2x07 - Romance Dawn-thumb.jpg",
+             "C:/dl/One Pace/season02-poster.jpg",
+             "C:/dl/One Pace/poster.jpg", "C:/dl/One Pace/clearlogo.png"):
+    _FS.add(name)
+_ART_HITS[:] = []
+adopted = downloads._adopted_art(there, 2)
+print(f"  episode: {sorted(adopted['episode'])}   series: {sorted(adopted['series'])}")
+assert adopted["episode"]["thumb"].endswith("2x07 - Romance Dawn-thumb.jpg")
+assert adopted["episode"]["season_poster"].endswith("season02-poster.jpg")
+assert adopted["series"]["logo"].endswith("clearlogo.png"), "a png logo was missed"
+assert "background" not in adopted["series"], "fanart was invented"
+assert not _ART_HITS, "a rescan fetched pictures it already had"
+rescan_art = SRC[SRC.index("def rescan("):SRC.index("def _dead_imported(")]
+assert "_adopted_art(entry[\"path\"]" in rescan_art,     "a rescan would forget every picture on disk"
+print("  found on disk, nothing fetched  OK")
+
+
 for _k, _v in _WAS.items():
     setattr(downloads, _k, _v)
 for _k, _v in _WAS_VFS.items():
