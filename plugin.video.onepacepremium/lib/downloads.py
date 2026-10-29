@@ -1818,12 +1818,11 @@ def _local_art(show):
 
 
 def _drawn_art(meta):
-    """This episode's thumbnail and season poster, from disk when we have them."""
+    """This episode's own pictures, only while they are still on disk."""
     art = meta.get("artwork") or {}
     thumb, poster = art.get("thumb") or "", art.get("season_poster") or ""
-    return (thumb if thumb and xbmcvfs.exists(thumb) else meta.get("thumb", ""),
-            poster if poster and xbmcvfs.exists(poster)
-            else meta.get("season_poster", ""))
+    return (thumb if thumb and xbmcvfs.exists(thumb) else "",
+            poster if poster and xbmcvfs.exists(poster) else "")
 
 
 def _season_art(meta_for_series, metas):
@@ -2060,8 +2059,12 @@ def list_on_device(params=None):
             tags.setGenres(show["genres"])
         _set_episode_rating(tags, video)
         _set_show_tags(tags, show, premiered=False, trailer=False, actors=actors)
-        _set_episode_art(item, video or {"thumbnail": meta.get("thumb")}, show,
-                         meta.get("season_poster"))
+        held_thumb, held_poster = _drawn_art(meta)
+        drawn = dict(video) if video else {}
+        drawn["thumbnail"] = (held_thumb or drawn.get("thumbnail")
+                              or meta.get("thumb", ""))
+        _set_episode_art(item, drawn, show,
+                         held_poster or meta.get("season_poster"))
 
         # The same watched tick and resume bar the episode list draws.
         episode_id = meta.get("episode_id", "")

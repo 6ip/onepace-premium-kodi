@@ -611,6 +611,36 @@ assert "_drop_artwork(data, data[\"files\"].pop(path, None) or {})" in _imported
 print("  the import keeps them, and forgetting a row drops them  OK")
 
 print()
+print("=== the episode row draws the picture, not the link ===")
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+shown = _art_fields(1, 7)
+shown_path = _held(shown)
+data = downloads.read_index()
+downloads.remember_into(data, shown_path, shown, ART_META,
+                        artwork=downloads.save_artwork(shown_path, shown, ART_META))
+downloads._write_index(data)
+row = _INDEX["files"][shown_path]
+on_disk, poster_on_disk = downloads._drawn_art(row)
+print(f"  held     -> {on_disk.rsplit('/', 1)[-1]}")
+assert on_disk.endswith("1x07 - Romance Dawn-thumb.jpg"), on_disk
+assert poster_on_disk.endswith("season01-poster.jpg"), poster_on_disk
+
+# Deleted by hand: the row keeps the path, so it has to check before drawing.
+_FS.discard(on_disk)
+missing, _ = downloads._drawn_art(row)
+print(f"  deleted  -> {missing!r}, so the caller falls back to the link")
+assert missing == "", missing
+
+drawer = SRC[SRC.index("        held_thumb, held_poster = _drawn_art(meta)"):]
+drawer = drawer[:drawer.index("_set_episode_art(item, drawn, show,") + 200]
+assert "held_thumb or drawn.get(\"thumbnail\")" in drawer,     "a kept thumbnail would lose to the link"
+assert "held_poster or meta.get(\"season_poster\")" in drawer,     "a kept season poster would lose to the link"
+assert "_drawn_art(meta)" in SRC[SRC.index("def list_on_device("):],     "the pictures would be saved and never drawn"
+print("  the kept file wins, and a link is only the fallback  OK")
+
+print()
 print("=== a season held both ways keeps one set of shared pictures ===")
 _was_profile = downloads._profile
 _was_listdir = downloads.xbmcvfs.listdir
