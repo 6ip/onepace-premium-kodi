@@ -291,11 +291,6 @@ def _other_cut(params):
     return "", ""
 
 
-def _row_artwork(path):
-    """What we kept on disk for one row, if anything."""
-    return (read_index()["files"].get(path) or {}).get("artwork") or {}
-
-
 def _rehome_series_art(data, series):
     """No copy of ours is left to sit beside, so bring the pictures home."""
     art = (data["series"].get(series) or {}).get("art") or {}
@@ -486,10 +481,15 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
 
     # Now the new file is in place, a cut under a different name can go.
     if already and already != destination and not imported(already):
+        gone = read_index()["files"].get(already) or {}
         xbmcvfs.delete(already)
-        for picture in (_row_artwork(already).get("thumb"),):
-            if picture:
-                xbmcvfs.delete(picture)
+        for sidecar in gone.get("subtitles", ()):
+            xbmcvfs.delete(sidecar)
+        # Empty now, and rmdir refuses it otherwise.
+        xbmcvfs.rmdir(_subs_dir(already))
+        picture = (gone.get("artwork") or {}).get("thumb")
+        if picture:
+            xbmcvfs.delete(picture)
         _remove_rows([already])
 
     _remember(destination, params, meta, save_subtitles(destination, params),
@@ -880,7 +880,8 @@ def _root_of(path):
     here = _normalised(path)
     marker = "/" + CONTAINER + "/"
     if marker in here:
-        return here[:here.index(marker) + len(marker)]
+        # The last one: a folder of theirs may carry the name as well.
+        return here[:here.rindex(marker) + len(marker)]
     was = _profile_root()
     return was if here.startswith(was) else ""
 
@@ -1591,11 +1592,16 @@ def _shared_folder(paths):
 def _destinations(paths, files=None):
     """Folders worth opening, each with how many are in it and whose it is."""
     rows = files if files is not None else read_index()["files"]
-    ours = [p for p in paths if p and not imported(p, rows)]
+    mine = {}
+    for path in paths:
+        if path and not imported(path, rows):
+            mine.setdefault(_root_of(path), []).append(path)
     found = []
-    shared = _shared_folder(ours)
-    if shared:
-        found.append((shared, len(ours), True))
+    for group in mine.values():
+        shared = _shared_folder(group)
+        if shared:
+            found.append((shared, len(group), True))
+    found.sort()
     theirs = {}
     for path in paths:
         if path and imported(path, rows):

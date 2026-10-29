@@ -382,6 +382,21 @@ assert len(_FS) == 1, sorted(_FS)
 assert "params.get(\"in_season\") or xbmcgui.Dialog().yesno(" in SRC,     "the prompt is not suppressed for a run"
 print("  it replaces its own stale cut and carries on  OK")
 
+# The old cut's subtitles are no more use than the old cut.
+_seed(("standard",))
+old_path = next(iter(_INDEX["files"]))
+sidecar = downloads._subs_dir(old_path) + "1x03 - Romance Dawn.eng.vtt"
+_FS.add(sidecar)
+data = downloads.read_index()
+data["files"][old_path]["subtitles"] = [sidecar]
+downloads._write_index(data)
+_ANSWER[0] = True
+downloads.download(_fields("Romance Dawn", "extended"))
+print(f"  the old cut's subtitle: {'kept' if sidecar in _FS else 'gone'}")
+assert sidecar not in _FS, "its subtitles outlived the episode they belong to"
+assert old_path not in _FS and len(_FS) == 1, sorted(_FS)
+print("  replaced, with its subtitles and its picture  OK")
+
 _seed(("extended",))
 print(f"  the flagged cut here is {downloads.held_cut('RO_3')!r}")
 assert downloads.held_cut("RO_3") == "extended", "Re-download cannot ask for the right cut"
@@ -1264,6 +1279,9 @@ print(f"  root of a folder we have left: {downloads._root_of(_was_file)}")
 assert downloads._root_of(_was_file) == _left
 assert downloads._root_of(downloads._profile_root() + "One Pace/Season 01/x.mkv") ==     downloads._profile_root(), "the folder downloads start in is a root too"
 assert downloads._root_of("D:/Videos/holiday.mkv") == "", "a stranger's folder is not ours"
+_nested = "D:/One Pace Premium/One Pace Premium/"
+print(f"  theirs named like ours: {downloads._root_of(_nested + 'One Pace/S01/x.mkv')}")
+assert downloads._root_of(_nested + "One Pace/S01/x.mkv") == _nested,     "it would try to clear a folder of theirs that happens to share the name"
 kodistub.recorder.reset()
 downloads._prune(_was_file)
 assert kodistub.recorder.rmdirs == [], "it pruned a folder it was not told about"
@@ -1687,6 +1705,20 @@ spots = downloads._destinations(list(MIXED))
 print(f"  destinations: {spots}")
 assert spots == [("C:/dl/One Pace/Season 01", 2, True),
                  ("E:/Their Stuff", 1, False)], spots
+
+SPLIT = {
+    "C:/old/One Pace Premium/One Pace/Season 01/1x01 - A.mkv":
+        {"series_name": "One Pace", "season": "1", "episode": "1"},
+    "D:/new/One Pace Premium/One Pace/Season 01/1x02 - B.mkv":
+        {"series_name": "One Pace", "season": "1", "episode": "2"},
+}
+downloads.read_index = lambda: {"files": dict(SPLIT), "series": {}}
+halves = downloads._destinations(list(SPLIT))
+print(f"  a half-finished move: {[(w.split('/')[1], n) for w, n, _ in halves]}")
+assert len(halves) == 2, halves
+assert all(mine for _, _, mine in halves), "both halves are ours"
+assert sum(n for _, n, _ in halves) == 2, "the counts do not add up"
+downloads.read_index = lambda: {"files": dict(MIXED), "series": {}}
 
 asked = []
 downloads.xbmcgui.Dialog = lambda: type("D", (), {
