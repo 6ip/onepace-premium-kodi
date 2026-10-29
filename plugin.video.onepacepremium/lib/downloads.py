@@ -676,35 +676,42 @@ def fill_artwork(only=(), progress=None):
     """Fetch what any row is missing: ours beside it, theirs in our folder."""
     data = read_index()
     rows = [(p, m) for p, m in data["files"].items() if not only or p in only]
-    filled = 0
+    filled, changed = 0, False
     for number, (path, meta) in enumerate(rows, 1):
         if progress:
             progress.update(int(number * 100 / max(len(rows), 1)), "Artwork",
                             meta.get("episode_title", ""))
         name = meta.get("series_name") or "Downloads"
         show = data["series"].get(name) or {}
-        art = meta.get("artwork") or {}
-        if not (bool(meta.get("thumb")) and not art.get("thumb")) and not (
-                bool(meta.get("season_poster")) and not art.get("season_poster")):
+        art, kept = meta.get("artwork") or {}, show.get("art") or {}
+        # Recorded is not enough: one deleted by hand is missing as well.
+        wants = [key for key in ("thumb", "season_poster")
+                 if meta.get(key)
+                 and not (art.get(key) and xbmcvfs.exists(art[key]))]
+        lacks = [key for key, _ in _SERIES_ART
+                 if show.get(key)
+                 and not (kept.get(key) and xbmcvfs.exists(kept[key]))]
+        if not wants and not lacks:
             continue
-        kept = show.get("art") or {}
-        if kept and all(xbmcvfs.exists(p) for p in kept.values() if p):
+        if not lacks:
             # One set per series: a second copy would be drawn by nothing.
             show = {k: v for k, v in show.items()
                     if k not in {key for key, _ in _SERIES_ART}}
         if meta.get("imported"):
-            art = save_imported_artwork(meta, show)
+            got = save_imported_artwork(meta, show)
         elif xbmcvfs.exists(path):
-            art = save_artwork(path, meta, show)
+            got = save_artwork(path, meta, show)
         else:
             continue
-        if art["episode"]:
-            meta["artwork"] = dict(meta.get("artwork") or {}, **art["episode"])
+        if got["episode"] and dict(art, **got["episode"]) != art:
+            meta["artwork"] = dict(art, **got["episode"])
+            changed = True
+        if wants:
             filled += 1
-        # A download's pictures sit beside the video, so they are the keeper.
-        if art["series"] and not show.get("art"):
-            data["series"].setdefault(name, {})["art"] = art["series"]
-    if filled:
+        if got["series"] and dict(kept, **got["series"]) != kept:
+            data["series"].setdefault(name, {})["art"] = dict(kept, **got["series"])
+            changed = True
+    if changed:
         _write_index(data)
     log(f"[art] filled in {filled} of {len(rows)} row(s)")
     return filled

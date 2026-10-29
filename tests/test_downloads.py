@@ -641,6 +641,55 @@ assert "_drawn_art(meta)" in SRC[SRC.index("def list_on_device("):],     "the pi
 print("  the kept file wins, and a link is only the fallback  OK")
 
 print()
+print("=== every picture a row is missing, not only its thumbnail ===")
+_was_profile = downloads._profile
+downloads._profile = lambda: "C:/profile/"
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+whole = _art_fields(1, 8)
+whole_path = _held(whole)
+data = downloads.read_index()
+downloads.remember_into(data, whole_path, whole, ART_META,
+                        artwork=downloads.save_artwork(whole_path, whole, ART_META))
+downloads._write_index(data)
+
+# Nothing missing: no questions asked of the server.
+_ART_HITS[:] = []
+assert downloads.fill_artwork() == 0, "it refetched a row that had everything"
+assert not _ART_HITS, _ART_HITS
+
+# A thumbnail someone deleted by hand comes back.
+thumb = _INDEX["files"][whole_path]["artwork"]["thumb"]
+_FS.discard(thumb)
+_ART_HITS[:] = []
+print(f"  thumbnail deleted by hand -> filled {downloads.fill_artwork()}")
+assert thumb in _FS, "Fetch Missing Artwork could not restore it"
+assert len(_ART_HITS) == 1, _ART_HITS
+
+# A series picture deleted by hand comes back.
+poster = _INDEX["series"]["One Pace"]["art"]["poster"]
+_FS.discard(poster)
+_ART_HITS[:] = []
+again = downloads.fill_artwork()
+print(f"  series poster deleted     -> filled {again}, fetched {len(_ART_HITS)}")
+assert poster in _FS, "the series poster could never be fetched again"
+assert len(_ART_HITS) == 1, _ART_HITS
+
+# Pictures on disk the index has lost: nothing to fetch, but it must be
+# written down again, or the sweep bins files that are still in use.
+_INDEX["series"]["One Pace"].pop("art")
+_ART_HITS[:] = []
+downloads.fill_artwork()
+print(f"  index lost the series set -> fetched {len(_ART_HITS)}, "
+      f"recorded {len((_INDEX['series']['One Pace'].get('art') or {}))}")
+assert not _ART_HITS, "it fetched pictures that were already on disk"
+assert (_INDEX["series"]["One Pace"].get("art") or {}).get("poster") == poster,     "fetched or found, it was never written down"
+assert downloads.sweep_artwork() == 0, "the sweep removed pictures still in use"
+downloads._profile = _was_profile
+print("  fetched again, written down, and the sweep leaves it alone  OK")
+
+print()
 print("=== a season held both ways keeps one set of shared pictures ===")
 _was_profile = downloads._profile
 _was_listdir = downloads.xbmcvfs.listdir
