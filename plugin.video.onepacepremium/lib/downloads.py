@@ -387,13 +387,14 @@ def download(params, meta=None, ticket=None):
     else:
         # The cut we flagged is gone, so replacing it is a choice, not a guess.
         other, other_cut = _other_cut(params)
-        if other and xbmcgui.Dialog().yesno(
+        # A run picked its cut at the start, so it replaces without stopping.
+        if other and (params.get("in_season") or xbmcgui.Dialog().yesno(
                 "Download",
                 os.path.basename(other) + chr(10) + chr(10)
                 + f"You hold the {variant_label(other_cut)} cut, and this one is "
                   f"{variant_label(cut_of(variant_of(params)))}." + chr(10) + chr(10)
                 + "Replace it, or keep both?",
-                nolabel="Keep both", yeslabel="Replace"):
+                nolabel="Keep both", yeslabel="Replace")):
             already = other
     if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
         _notify_error("Could not create the download folder")

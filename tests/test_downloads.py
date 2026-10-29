@@ -371,6 +371,17 @@ for note, cuts, fetch, answer, files, want in (
     assert got.startswith(want), (note, got)
 print("  a replaced copy clears its own flag, a kept one keeps it  OK")
 
+# Twenty-four modal questions in the middle of a run is not a question.
+_seed(("standard",))
+_ANSWER[0], _ASKED[:] = False, []
+downloads.download(dict(_fields("Romance Dawn", "extended"), in_season=True))
+print(f"  inside a season run: asked={'yes' if _ASKED else 'no'}, "
+      f"files={len(_FS)}")
+assert not _ASKED, "a season run would stop on every episode it re-cut"
+assert len(_FS) == 1, sorted(_FS)
+assert "params.get(\"in_season\") or xbmcgui.Dialog().yesno(" in SRC,     "the prompt is not suppressed for a run"
+print("  it replaces its own stale cut and carries on  OK")
+
 _seed(("extended",))
 print(f"  the flagged cut here is {downloads.held_cut('RO_3')!r}")
 assert downloads.held_cut("RO_3") == "extended", "Re-download cannot ask for the right cut"
