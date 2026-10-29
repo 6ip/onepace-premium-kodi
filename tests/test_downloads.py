@@ -397,6 +397,17 @@ assert sidecar not in _FS, "its subtitles outlived the episode they belong to"
 assert old_path not in _FS and len(_FS) == 1, sorted(_FS)
 print("  replaced, with its subtitles and its picture  OK")
 
+downloads.folder = lambda: "D:/old/One Pace Premium/"
+_seed(("standard",))
+downloads.folder = lambda: "C:/dl/"
+kodistub.recorder.reset()
+_ANSWER[0] = True
+downloads.download(_fields("Romance Dawn", "extended"))
+print("  cleared: " + ", ".join(x.replace("D:/old/", "") for x in kodistub.recorder.rmdirs))
+assert "D:/old/One Pace Premium/One Pace/Season 01" in kodistub.recorder.rmdirs,     "the folder the old cut sat in would stand there forever"
+assert "D:/old/One Pace Premium/One Pace" in kodistub.recorder.rmdirs,     kodistub.recorder.rmdirs
+print("  and the folders it sat in go with it  OK")
+
 _seed(("extended",))
 print(f"  the flagged cut here is {downloads.held_cut('RO_3')!r}")
 assert downloads.held_cut("RO_3") == "extended", "Re-download cannot ask for the right cut"
@@ -714,6 +725,53 @@ assert (_INDEX["series"]["One Pace"].get("art") or {}).get("poster") == poster, 
 assert downloads.sweep_artwork() == 0, "the sweep removed pictures still in use"
 downloads._profile = _was_profile
 print("  fetched again, written down, and the sweep leaves it alone  OK")
+
+print()
+print("=== with no connection it stops instead of grinding ===")
+_FS.clear()
+_INDEX["files"].clear()
+_INDEX["series"].clear()
+for number in range(1, 11):
+    waiting = _art_fields(1, number)
+    data = downloads.read_index()
+    downloads.remember_into(data, _held(waiting), waiting, ART_META)
+    downloads._write_index(data)
+assert len(_INDEX["files"]) == 10, len(_INDEX["files"])
+
+
+def _no_connection(url, **kwargs):
+    _ART_HITS.append(url)
+    raise OSError("no connection")
+
+
+_was_session = downloads.session
+downloads.session = lambda: type("S", (), {
+    "get": lambda self, url, **k: _no_connection(url, **k)})()
+_ART_HITS[:] = []
+kodistub.recorder.reset()
+bar = downloads.xbmcgui.DialogProgressBG()
+stopped = downloads.fill_artwork(progress=bar)
+tried = len([p for p in kodistub.recorder.progress if p[0] == "update"])
+print(f"  10 rows, no connection -> looked at {tried}, filled {stopped}")
+assert tried == 3, f"it went through {tried} of 10 rows with nothing working"
+assert stopped == 0, "it counted pictures it never got"
+assert not any(x.endswith((".jpg", ".png")) for x in _FS), sorted(_FS)
+
+# A modal bar has a Cancel, and it has to be read.
+downloads.session = _was_session
+_ART_HITS[:] = []
+kodistub.recorder.reset()
+downloads.xbmcgui.DialogProgress.cancel_after = 2
+try:
+    downloads.fill_artwork(progress=downloads.xbmcgui.DialogProgress())
+finally:
+    downloads.xbmcgui.DialogProgress.cancel_after = None
+asked_for = len([p for p in kodistub.recorder.progress if p[0] == "update"])
+print(f"  cancelled on the third row -> looked at {asked_for} of 10")
+assert asked_for == 2, f"Cancel was ignored for {asked_for} rows"
+fetcher = SRC[SRC.index("def fetch_artwork("):SRC.index("# A public repo")]
+assert "xbmcgui.DialogProgress()" in fetcher,     "a background bar has no Cancel, so the viewer could not stop it"
+print("  Cancel is honoured, and three dead rows end it  OK")
 
 print()
 print("=== a season held both ways keeps one set of shared pictures ===")

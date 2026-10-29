@@ -491,6 +491,8 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
         if picture:
             xbmcvfs.delete(picture)
         _remove_rows([already])
+        # Its folders are ours too, wherever that cut happened to be kept.
+        _prune(already, _root_of(already))
 
     _remember(destination, params, meta, save_subtitles(destination, params),
               save_artwork(destination, params, meta))
@@ -673,15 +675,36 @@ def save_imported_artwork(params, meta=None):
     return {"episode": episode, "series": show}
 
 
+# Three in a row is the connection, not three unlucky pictures.
+_ART_GIVE_UP = 3
+
+
+def _cancelled(progress):
+    """Only a modal bar has a Cancel; a background one has no button at all."""
+    return bool(progress) and hasattr(progress, "iscanceled") and progress.iscanceled()
+
+
+def _say(progress, percent, text):
+    """A modal bar takes one message, a background one a heading as well."""
+    if hasattr(progress, "iscanceled"):
+        progress.update(percent, text)
+    else:
+        progress.update(percent, "Artwork", text)
+
+
 def fill_artwork(only=(), progress=None):
     """Fetch what any row is missing: ours beside it, theirs in our folder."""
+    monitor = xbmc.Monitor()
     data = read_index()
     rows = [(p, m) for p, m in data["files"].items() if not only or p in only]
-    filled, changed = 0, False
+    filled, changed, in_a_row = 0, False, 0
     for number, (path, meta) in enumerate(rows, 1):
+        if monitor.abortRequested() or _cancelled(progress):
+            log("[art] stopped before it had been through them all")
+            break
         if progress:
-            progress.update(int(number * 100 / max(len(rows), 1)), "Artwork",
-                            meta.get("episode_title", ""))
+            _say(progress, int(number * 100 / max(len(rows), 1)),
+                 meta.get("episode_title", ""))
         name = meta.get("series_name") or "Downloads"
         show = data["series"].get(name) or {}
         art, kept = meta.get("artwork") or {}, show.get("art") or {}
@@ -707,11 +730,23 @@ def fill_artwork(only=(), progress=None):
         if got["episode"] and dict(art, **got["episode"]) != art:
             meta["artwork"] = dict(art, **got["episode"])
             changed = True
-        if wants:
-            filled += 1
         if got["series"] and dict(kept, **got["series"]) != kept:
             data["series"].setdefault(name, {})["art"] = dict(kept, **got["series"])
             changed = True
+        # What was owed and has really arrived, rather than what we asked for.
+        mine = [key for key in wants
+                if got["episode"].get(key) and xbmcvfs.exists(got["episode"][key])]
+        shared = [key for key in lacks
+                  if got["series"].get(key) and xbmcvfs.exists(got["series"][key])]
+        if mine:
+            filled += 1
+        if mine or shared:
+            in_a_row = 0
+            continue
+        in_a_row += 1
+        if in_a_row >= _ART_GIVE_UP:
+            log(f"[art] gave up after {in_a_row} failures in a row")
+            break
     if changed:
         _write_index(data)
     log(f"[art] filled in {filled} of {len(rows)} row(s)")
@@ -804,7 +839,7 @@ def fetch_artwork(_params=None):
         _said("Artwork", "Nothing downloaded or imported yet")
         return
 
-    progress = xbmcgui.DialogProgressBG()
+    progress = xbmcgui.DialogProgress()
     progress.create("Artwork", "Looking for missing pictures")
     try:
         filled = fill_artwork(progress=progress)
