@@ -2,7 +2,7 @@
 
 Watch the complete One Pace catalog in Kodi through your Debrid service, or over P2P.
 
-**Requirements:** Kodi 19 (Matrix) or newer, and either a Debrid account (Real-Debrid, Premiumize, Debrid-Link, TorBox or AllDebrid) or [Elementum](#torrent-support-elementum) to play over P2P.
+**Requirements:** Kodi 19 (Matrix) or newer, and either an account with any of ten supported Debrid services or [Elementum](#torrent-support-elementum) to play over P2P.
 
 ## What you get
 

@@ -34,6 +34,11 @@ SERVICES = (
     ("debridlink", "dl",  "DebridLink"),
     ("torbox",     "tb",  "TorBox"),
     ("alldebrid",  "ad",  "AllDebrid"),
+    ("debrider",   "db",  "Debrider"),
+    ("offcloud",   "oc",  "Offcloud"),
+    ("easydebrid", "ed",  "EasyDebrid"),
+    ("pikpak",     "pp",  "PikPak"),
+    ("torrin",     "tr",  "Torrin"),
     ("p2p",        "p2p", "Torrent"),
 )
 

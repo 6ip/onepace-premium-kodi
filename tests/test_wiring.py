@@ -191,4 +191,27 @@ assert block.index("set_defaults_for_new_install") < block.index("_downloads_ena
 print("  set before the row is decided  OK")
 
 print()
+print("=== both service lists say the same thing ===")
+
+
+def _assigned(module, name):
+    """A module-level list, read without caring how it is laid out."""
+    tree = ast.parse((LIB / module).read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                getattr(t, "id", "") == name for t in node.targets):
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"{name} is not defined in {module}")
+
+
+# Two hand-kept lists: tools.py drives the pickers and the config parser,
+# episode_routes.py names and orders them in a season run.
+_tools = _assigned("tools.py", "SERVICES")
+_routes = _assigned("episode_routes.py", "_SERVICES")
+print(f"  tools.py: {len(_tools)} services   episode_routes.py: {len(_routes)}")
+assert [(code, label) for _, code, label in _tools] == list(_routes), \
+    "the two service lists have drifted apart"
+print("  same services, same order, same names  OK")
+
+print()
 print("all assertions passed")

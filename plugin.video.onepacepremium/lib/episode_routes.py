@@ -34,8 +34,11 @@ _VERSION_BY_INDEX = {"1": "standard", "2": "extended"}
 
 
 # Service codes and names, in the order the picker lists them.
+# Kept in step with SERVICES in tools.py, which test_wiring checks.
 _SERVICES = (("rd", "Real-Debrid"), ("pm", "Premiumize"), ("dl", "DebridLink"),
-             ("tb", "TorBox"), ("ad", "AllDebrid"), ("p2p", "Torrent"))
+             ("tb", "TorBox"), ("ad", "AllDebrid"), ("db", "Debrider"),
+             ("oc", "Offcloud"), ("ed", "EasyDebrid"), ("pp", "PikPak"),
+             ("tr", "Torrin"), ("p2p", "Torrent"))
 _SERVICE_NAMES = dict(_SERVICES)
 _SERVICE_ORDER = {code: i for i, (code, _) in enumerate(_SERVICES)}
 
