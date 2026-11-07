@@ -176,4 +176,36 @@ assert not _hard, f"a fanart path is still hardcoded in {_hard}"
 print("  all our menus go through it  OK")
 
 print()
+print("=== a one-season show carries Download Season on its series row ===")
+# The season row is where that item lives, and flattening removes the row,
+# so the series row has to stand in for it.
+for meta, specials, want in ((KUMA, "true", 1), (KUMA, "false", 1),
+                             (MUHN, "true", 14), (ONEPACE, "true", 34),
+                             (ONEPACE, "false", 33)):
+    S["show_specials"] = specials
+    got = provider_api.listed_seasons(meta)
+    print(f"  {meta['name']:<28} specials={specials:<5} -> {len(got)} season(s)"
+          f"{'  <- stands in' if len(got) == 1 else ''}")
+    assert len(got) == want, (meta["name"], specials, len(got))
+S["show_specials"] = "true"
+
+# Specials last, so the season list reads 1, 2, 3 ... Specials.
+assert provider_api.listed_seasons(ONEPACE)[-1] == 0, "Specials moved to the front"
+S["show_specials"] = "false"
+assert 0 not in provider_api.listed_seasons(ONEPACE), "hidden means hidden"
+S["show_specials"] = "true"
+
+_cat = (harness.ADDON / "lib" / "catalog_routes.py").read_text(encoding="utf-8")
+_row = _cat[_cat.index("series_ctx = ["):_cat.index("addContextMenuItems(series_ctx)")]
+assert "listed_seasons(s_meta)" in _row, "it would need a second way to count seasons"
+assert "len(only) == 1" in _row, "every series row would offer it, One Pace included"
+assert 'get_setting("downloads_enabled")' in _row, "it would show with downloads off"
+assert "season=only[0]" in _row, "the run would not know which season to fetch"
+
+# One helper, or the row and the list can disagree about what flattens.
+_er = (harness.ADDON / "lib" / "episode_routes.py").read_text(encoding="utf-8")
+assert "seasons = listed_seasons(meta)" in _er, "list_seasons counts its own way again"
+print("  same count on both sides, and only when there is one  OK")
+
+print()
 print("all assertions passed")

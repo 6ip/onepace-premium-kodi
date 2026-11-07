@@ -12,7 +12,7 @@ from .art import (_cast_list, _episode_number, _season_thumbnails,
                    _stream_tagline)
 from .parser import parse_stream_info
 from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode_ids,
-                            episode_params, episode_play_url,
+                            episode_params, episode_play_url, listed_seasons,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
 from .route_common import (_add_directory_items, _notify_error, _notify_info,
@@ -110,18 +110,7 @@ def list_seasons(params):
         if str(s.get("season")).lstrip("-").isdigit() and s.get("poster")
     }
 
-    seasons = sorted(
-        {
-            season
-            for video in videos
-            for season in [video.get("season")]
-            if season is not None
-        }
-    )
-    if get_setting("show_specials") == "false":
-        seasons = [season for season in seasons if season != 0]
-    elif 0 in seasons:
-        seasons = [season for season in seasons if season != 0] + [0]
+    seasons = listed_seasons(meta)
 
     show_title = meta.get("name") or ""
     series_watched = _watched.get_watched(video_id)

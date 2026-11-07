@@ -145,6 +145,21 @@ def countable_episode_ids(meta: dict):
     ]
 
 
+def listed_seasons(meta: dict):
+    """The seasons a series shows, in order, with specials last or hidden."""
+    seasons = sorted({
+        season for v in meta.get("videos", ())
+        for season in [v.get("season")]
+        if season is not None
+    })
+    if get_setting("show_specials") == "false":
+        return [s for s in seasons if s != 0]
+    if 0 in seasons:
+        # Specials sit after the numbered seasons, not in front of them.
+        return [s for s in seasons if s != 0] + [0]
+    return seasons
+
+
 def _catalog_url(catalog_type: str, catalog_id: str, extra: str):
     _, provider_base_url = _provider_context()
     return _compose_url(

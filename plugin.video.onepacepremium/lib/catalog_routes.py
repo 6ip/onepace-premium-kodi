@@ -7,11 +7,11 @@ from .art import _set_art, _set_ids, _set_show_tags, _set_video_tags
 from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
                             _fetch_catalog, _fetch_provider_manifest,
                             _fetch_provider_meta, _prefetch_metas,
-                            countable_episode_ids)
+                            countable_episode_ids, listed_seasons)
 from .route_common import (_add_directory_items, _notify_error, end_directory,
                            set_category, set_content)
 from .utils import (ADDON_ID, background, build_url, ensure_configured,
-                    fetch_data, set_defaults_for_new_install)
+                    fetch_data, get_setting, set_defaults_for_new_install)
 
 CATALOG_PAGE_SIZE = 25
 SUPPORTED_CATALOG_TYPES = {"movie", "series", "anime"}
@@ -152,10 +152,18 @@ def list_browse(params):
                 tags.setPlaycount(1)
         tags.setMediaType("tvshow")
         series_ctx_label = "[B]Mark Unwatched[/B]" if (total and watched_count >= total) else "[B]Mark Watched[/B]"
-        list_item.addContextMenuItems([(
+        series_ctx = [(
             series_ctx_label,
             f"RunPlugin({build_url('mark_watched', scope='series', series_id=video_id, catalog_type=catalog_type)})",
-        )])
+        )]
+        # With one season there is no season row to carry this, so it sits here.
+        only = listed_seasons(s_meta) if s_meta else []
+        if len(only) == 1 and get_setting("downloads_enabled") == "true":
+            series_ctx.append((
+                "[B]Download Season[/B]",
+                f"RunPlugin({build_url('download_season', catalog_type=catalog_type, video_id=video_id, season=only[0])})",
+            ))
+        list_item.addContextMenuItems(series_ctx)
         items.append(
             (
                 build_url("list_seasons", catalog_type=catalog_type, video_id=video_id),
