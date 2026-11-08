@@ -140,10 +140,41 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
     return sort_key, url, list_item
 
 
+def _from_downloads(series_id):
+    """What we hold of a series, for when the provider cannot be reached."""
+    from .downloads import _drawn_art, _local_art, enabled, read_index
+
+    if not enabled():
+        return None, {}, {}, ""
+    data = read_index()
+    rows = [m for m in data["files"].values() if m.get("series_id") == series_id]
+    if not rows:
+        return None, {}, {}, ""
+
+    name = next((m.get("series_name") for m in rows if m.get("series_name")), "")
+    meta = _local_art(data["series"].get(name) or {})
+    video_map, season_poster_map = {}, {}
+    for row in rows:
+        episode_id, video = row.get("episode_id"), row.get("video")
+        thumb, poster = _drawn_art(row)
+        if episode_id and video:
+            video_map[episode_id] = dict(video, thumbnail=thumb) if thumb else video
+        season = row.get("season")
+        if str(season).lstrip("-").isdigit():
+            kept = poster or row.get("season_poster")
+            if kept:
+                season_poster_map.setdefault(int(season), kept)
+    if not video_map:
+        return None, {}, {}, ""
+    log(f"[my_lists] {name or series_id}: {len(video_map)} episode(s) from the index")
+    return meta, video_map, season_poster_map, meta.get("name") or name
+
+
 def _get_series_meta(series_id):
     meta = _fetch_provider_meta(_CATALOG_TYPE, series_id)
     if not meta:
-        return None, {}, {}, ""
+        # Offline, what is on disk is the only thing worth offering anyway.
+        return _from_downloads(series_id)
     video_map = {v.get("id"): v for v in meta.get("videos", []) if v.get("id")}
     season_poster_map = {
         int(s["season"]): s["poster"]

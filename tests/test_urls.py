@@ -105,4 +105,64 @@ utils.session = _was_session
 print("  one message a call, and the next call may speak again  OK")
 
 print()
+print("=== My Lists falls back to what is on disk ===")
+from lib import downloads, my_lists
+
+_HELD = {
+    "files": {
+        "C:/dl/One Pace/Season 01/1x03 - Romance Dawn.mkv": {
+            "series_id": "pp_onepacee", "series_name": "One Pace",
+            "episode_id": "RO_3", "season": "1", "episode": "3",
+            "episode_title": "Romance Dawn",
+            "thumb": "https://img/t3.jpg",
+            "season_poster": "https://img/s1.jpg",
+            "artwork": {"thumb": "C:/dl/One Pace/Season 01/1x03 - Romance Dawn-thumb.jpg",
+                        "season_poster": "C:/dl/One Pace/season01-poster.jpg"},
+            "video": {"id": "RO_3", "season": 1, "episode": 3,
+                      "title": "Romance Dawn", "thumbnail": "https://img/t3.jpg"},
+        },
+    },
+    "series": {"One Pace": {"name": "One Pace", "poster": "https://img/p.jpg",
+                            "art": {"poster": "C:/dl/One Pace/poster.jpg"}}},
+}
+_ON_DISK = {"C:/dl/One Pace/Season 01/1x03 - Romance Dawn-thumb.jpg",
+            "C:/dl/One Pace/season01-poster.jpg", "C:/dl/One Pace/poster.jpg"}
+
+_was_read, _was_exists = downloads.read_index, downloads.xbmcvfs.exists
+_was_meta, _was_enabled = my_lists._fetch_provider_meta, downloads.enabled
+downloads.read_index = lambda: _HELD
+downloads.xbmcvfs.exists = lambda path: path in _ON_DISK
+downloads.enabled = lambda: True
+
+# Online, nothing changes: the provider still answers first.
+my_lists._fetch_provider_meta = lambda ct, sid: ONEPACE
+meta, videos, posters, title = my_lists._get_series_meta("pp_onepacee")
+print(f"  online  -> {len(videos)} episode(s) from the provider")
+assert len(videos) > 1, "the provider's own list should be used when it answers"
+
+# Offline, the rows we hold are the only ones worth offering.
+my_lists._fetch_provider_meta = lambda ct, sid: None
+meta, videos, posters, title = my_lists._get_series_meta("pp_onepacee")
+print(f"  offline -> {len(videos)} episode(s) from the index, title {title!r}")
+assert list(videos) == ["RO_3"], videos
+assert title == "One Pace", title
+assert videos["RO_3"]["thumbnail"].endswith("-thumb.jpg"),     "it drew the link when the picture was beside the video"
+assert posters[1].endswith("season01-poster.jpg"), posters
+assert meta["poster"].endswith("One Pace/poster.jpg"), "the series poster was not the kept one"
+
+# A series we hold nothing of stays skipped, as it was before.
+meta, videos, posters, title = my_lists._get_series_meta("pp_muhnpace")
+print(f"  offline, nothing held -> meta={meta!r}")
+assert meta is None and videos == {}, (meta, videos)
+
+# With downloads switched off there is no index to fall back on.
+downloads.enabled = lambda: False
+assert my_lists._get_series_meta("pp_onepacee")[0] is None, "it read the index anyway"
+
+(downloads.read_index, downloads.xbmcvfs.exists,
+ my_lists._fetch_provider_meta, downloads.enabled) = (_was_read, _was_exists,
+                                                      _was_meta, _was_enabled)
+print("  held episodes offline, nothing invented, and off means off  OK")
+
+print()
 print("all assertions passed")
