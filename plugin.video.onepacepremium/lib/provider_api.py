@@ -76,11 +76,12 @@ def _fetch_provider_meta(catalog_type: str, video_id: str):
     url = _meta_url(catalog_type, video_id)
     cached = _cache.get(url)
     if cached is not None:
-        return cached
+        return cached or None
     response = fetch_data(url)
     meta = response["meta"] if response else None
-    if meta is not None:
-        _cache.set(url, meta, 21600)
+    # A short memory of failure: the prefetch and the per-series call would
+    # otherwise both pay for it, and the second one tells us nothing new.
+    _cache.set(url, meta if meta is not None else False, 21600 if meta else 60)
     return meta
 
 

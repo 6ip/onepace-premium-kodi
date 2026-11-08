@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import threading
 from typing import List
 from urllib import parse
 
@@ -90,13 +91,16 @@ def fetch_data(url: str):
         status_code = resp.status_code if resp is not None else None
         target = parse.urlparse(url).netloc or url
         log(f"Request failed for {url}: {exc}", xbmc.LOGERROR)
-        xbmcgui.Dialog().notification(
-            ADDON_NAME,
-            f"Request failed ({status_code}) on {target}"
-            if status_code
-            else f"Request failed on {target}",
-            xbmcgui.NOTIFICATION_ERROR, 5000, True,
-        )
+        with _TOLD_LOCK:
+            first, _TOLD[0] = not _TOLD[0], True
+        if first:
+            xbmcgui.Dialog().notification(
+                ADDON_NAME,
+                f"Request failed ({status_code}) on {target}"
+                if status_code
+                else f"Request failed on {target}",
+                xbmcgui.NOTIFICATION_ERROR, 5000, False,
+            )
         return None
 
 
@@ -168,6 +172,11 @@ def refresh_container():
 # Climbs past 1 only when Kodi reuses the interpreter.
 _INVOCATIONS = [0]
 
+# A list of failures is no more use than one, and the prefetch fails in
+# parallel, so the first thread through takes the message.
+_TOLD = [False]
+_TOLD_LOCK = threading.Lock()
+
 
 def reset_for_invocation():
     """Drop anything that must not outlive one plugin call."""
@@ -175,6 +184,7 @@ def reset_for_invocation():
     ADDON = xbmcaddon.Addon()
     _DEBUG = None
     _INVOCATIONS[0] += 1
+    _TOLD[0] = False
     log(f"[boot] invocation {_INVOCATIONS[0]} in pid {os.getpid()}")
     from . import bookmarks as _b, watched as _w
     _b.invalidate()

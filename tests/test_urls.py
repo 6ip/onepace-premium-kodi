@@ -49,4 +49,60 @@ for label, path, season, want in cases:
     assert got is want, label
 
 print()
+print("=== a provider that cannot be reached fails once, and quietly ===")
+import kodistub
+import requests as _requests
+from lib import utils
+
+# A failure is remembered, so the prefetch and the per-series call after it
+# do not both pay for the same timeout.
+_store = {}
+_was = (provider_api._cache.get, provider_api._cache.set,
+        provider_api.fetch_data, provider_api._meta_url)
+provider_api._cache.get = lambda key: _store.get(key)
+provider_api._cache.set = lambda key, value, ttl: _store.__setitem__(key, value)
+provider_api._meta_url = lambda ct, vid: f"https://srv/meta/{ct}/{vid}.json"
+_asked = []
+provider_api.fetch_data = lambda url: _asked.append(url) or None
+
+assert provider_api._fetch_provider_meta("series", "pp_gone") is None
+assert provider_api._fetch_provider_meta("series", "pp_gone") is None
+print(f"  asked twice for one series -> {len(_asked)} request(s)")
+assert len(_asked) == 1, "the failure was not remembered"
+
+provider_api._prefetch_metas("series", ["pp_gone", "pp_new", "pp_other"])
+print(f"  a prefetch with one known bad -> {len(_asked)} request(s) in all")
+assert len(_asked) == 3, _asked
+assert _asked.count(_asked[0]) == 1, "it went back for one it knew had gone"
+
+# A real answer still lasts, so this is a short memory and not a blockade.
+provider_api.fetch_data = lambda url: {"meta": {"name": "One Pace"}}
+assert provider_api._fetch_provider_meta("series", "pp_back")["name"] == "One Pace"
+(provider_api._cache.get, provider_api._cache.set,
+ provider_api.fetch_data, provider_api._meta_url) = _was
+
+
+def _no_connection(self, *a, **k):
+    raise _requests.RequestException("no connection")
+
+
+# Eight parallel failures are one problem, so they get one message.
+_was_session = utils.session
+utils.session = lambda: type("S", (), {"get": _no_connection})()
+kodistub.recorder.reset()
+utils.reset_for_invocation()
+for _n in range(5):
+    assert utils.fetch_data(f"https://srv/meta/series/pp_{_n}.json") is None
+_said = [m for m, _ in kodistub.recorder.notifications if "Request failed" in m]
+print(f"  five failures in one plugin call -> {len(_said)} message(s)")
+assert len(_said) == 1, _said
+
+utils.reset_for_invocation()
+assert utils.fetch_data("https://srv/meta/series/pp_x.json") is None
+_said = [m for m, _ in kodistub.recorder.notifications if "Request failed" in m]
+assert len(_said) == 2, "the next plugin call should be allowed to speak"
+utils.session = _was_session
+print("  one message a call, and the next call may speak again  OK")
+
+print()
 print("all assertions passed")
