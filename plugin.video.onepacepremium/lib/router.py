@@ -42,6 +42,7 @@ _ACTIONS = {
     "fetch_artwork":       "downloads:fetch_artwork",
     "rescan_downloads":    "downloads:rescan",
     "import_folder":       "import_folder:run",
+    "choose_invoker":      "invoker:choose",
 }
 
 

@@ -64,6 +64,8 @@ def list_root():
     # Before the items are built, or a new viewer's first screen would be the
     # one without the row.
     set_defaults_for_new_install()
+    from .invoker import reapply
+    reapply()
 
     set_content("")
     items = [
@@ -81,7 +83,10 @@ def list_root():
 
     # After the menu is drawn, so a new version never delays the first run.
     from .changelog import maybe_show_on_update
-    maybe_show_on_update()
+    from .invoker import maybe_offer
+    # A changelog and a question back to back is a lot to meet at once.
+    if not maybe_show_on_update():
+        maybe_offer()
 
 
 def list_browse(params):

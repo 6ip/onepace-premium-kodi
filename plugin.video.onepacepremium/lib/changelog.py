@@ -98,9 +98,11 @@ def maybe_show_on_update():
         addon = xbmcaddon.Addon(ADDON_ID)
         version = addon.getAddonInfo("version")
         if addon.getSetting("last_seen_version") == version:
-            return
+            return False
         addon.setSetting("last_seen_version", version)
         log(f"[changelog] first run of v{version}, showing what's new")
         show_changelog()
+        return True
     except Exception as exc:
         log(f"[changelog] skipped on-update display: {exc}")
+    return False

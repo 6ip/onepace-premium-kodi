@@ -93,6 +93,12 @@
         <setting label="Clear Bookmarks" id="clear_bookmarks" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_bookmarks)" />
         <setting label="Clear Watched History" id="clear_watched" type="action" action="RunScript(special://home/addons/plugin.video.onepacepremium/lib/tools.py,clear_watched)" />
         <setting type="sep" />
+        <setting type="lsep" label="Reuse Language Invoker" />
+        <setting label="Current Status" id="invoker_display" type="text" default="Off" enable="false" />
+        <setting label="Change This" id="choose_invoker" type="action" option="close" action="RunPlugin(plugin://plugin.video.onepacepremium/?action=choose_invoker)" />
+        <setting id="invoker_reuse" type="text" default="false" visible="false" />
+        <setting id="invoker_asked" type="text" default="false" visible="false" />
+        <setting type="sep" />
         <setting type="lsep" label="Advanced" />
         <setting label="Menu Caching" id="menu_cache" type="bool" default="true" />
         <setting label="Debug Logging" id="debug_logging" type="bool" default="false" />

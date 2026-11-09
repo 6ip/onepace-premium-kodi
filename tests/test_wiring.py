@@ -73,7 +73,8 @@ assert "rescan_downloads" in actions, "no way back after a reinstall"
 # heading that describes our own download folder.
 assert "import_folder" in actions, "no way to adopt a folder of your own"
 assert groups["Downloads"].index("Import") > groups["Downloads"].index("Where They Go")
-assert groups["Tools"] == ["Backup", "Cache", "Advanced"]
+assert groups["Tools"] == ["Backup", "Cache", "Reuse Language Invoker",
+                           "Advanced"]
 
 # Every row in the Downloads tab greys out with the feature turned off.
 rows = list(next(c for c in SETTINGS.iter("category") if c.get("label") == "Downloads"))
