@@ -1,3 +1,21 @@
+[B]v2.4.9[/B]  [COLOR FF888899]9 November 2026[/COLOR]
+
+[COLOR FF81A6C6][B]New[/B][/COLOR]
+  •  Five more debrid services: Debrider, Offcloud, EasyDebrid, PikPak and Torrin.
+  •  Reuse Language Invoker, under Tools, for quicker menus. Offered once, and off by default.
+  •  Download Season on the series row, for a show with only one season.
+
+[COLOR FF81A6C6][B]Changed[/B][/COLOR]
+  •  What's New opens on the newest version, with the full changelog a button away.
+  •  My Lists, In Progress and Next Episodes now fill from your downloads with no connection.
+  •  Arrowing down past the end of the text now reaches the buttons.
+
+[COLOR FF81A6C6][B]Fixes[/B][/COLOR]
+  •  A provider that cannot be reached now says so once, quietly, instead of six times.
+  •  The episode list redraws once the player has closed, so the right thumbnail is kept.
+  •  A failed lookup is remembered briefly, so the same one is not fetched twice.
+
+
 [B]v2.4.8[/B]  [COLOR FF888899]29 October 2026[/COLOR]
 
 [COLOR FF81A6C6][B]New[/B][/COLOR]
