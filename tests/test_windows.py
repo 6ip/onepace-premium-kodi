@@ -137,7 +137,7 @@ class Probe(ChangelogDialog):
 
 Action = type("Action", (), {"__init__": lambda s, i: setattr(s, "_i", i),
                              "getId": lambda s: s._i})
-SCROLLBAR, DONATE, CLOSE = 2060, 11, 10
+SCROLLBAR, DONATE, CLOSE, TOGGLE = 2060, 11, 10, 12
 for label, focus, action, want in [
         ("Enter on the scrollbar", SCROLLBAR, 7, True),
         ("Back on the scrollbar", SCROLLBAR, 92, True),
@@ -157,6 +157,94 @@ d.onClick(DONATE)
 assert d.donate and d.closed
 print("  the Donate click still gets through  OK")
 
+d = Probe(TOGGLE)
+d.onAction(Action(7))
+assert not d.closed, "Enter on the corner button would close the window"
+print("  Enter on the corner button is a click, not a close  OK")
+
+print()
+print("=== What's New carries one version, the corner button carries the rest ===")
+from lib.changelog import split_latest
+
+TWO = ("[B]v2.0[/B]  [COLOR FF888899]today[/COLOR]\n\n  - the new thing\n\n\n"
+       "[B]v1.0[/B]  [COLOR FF888899]before[/COLOR]\n\n  - the first one\n")
+latest, more = split_latest(TWO)
+print(f"  two blocks -> {len(latest.splitlines())} lines, more={more}")
+assert more and "v2.0" in latest and "v1.0" not in latest, latest
+assert split_latest(latest) == (latest, False), "one block has nothing behind it"
+assert split_latest("") == ("", False), "an empty file should not claim more"
+
+
+class Pages(ChangelogDialog):
+    """A dialog whose properties and scrolling can be read back."""
+
+    def __init__(self, text, full, heading="What's New"):
+        self.props, self.scrolled = {}, []
+        self.closed = self.donate = False
+        self._text, self._full = text, full
+        self._version = self._icon_path = ""
+        self._heading, self._asking = heading, True
+        self._list_icon, self._note_icon = "x/lists2.png", "x/sticky-note.png"
+        self._showing_full = False
+
+    def setProperty(self, key, value): self.props[key] = value
+    def setFocusId(self, control_id): self.props["focus"] = control_id
+    def close(self): self.closed = True
+
+    def getControl(self, control_id):
+        outer = self
+        return type("Box", (), {
+            "scroll": lambda _s, n: outer.scrolled.append((control_id, n))})()
+
+
+d = Pages("NEW ONLY", "EVERYTHING")
+d.onInit()
+print(f"  opens on {d.props['pp.heading']!r}, icon "
+      f"{os.path.basename(d.props['pp.alticon'])}")
+assert d.props["pp.text"] == "NEW ONLY"
+assert d.props["pp.heading"] == "What's New"
+assert d.props["pp.alticon"].endswith("lists2.png"), d.props["pp.alticon"]
+assert d.props["pp.toggle"] == "1", "there is more to show and no way to reach it"
+
+d.onClick(TOGGLE)
+print(f"  one press -> {d.props['pp.heading']!r}, icon "
+      f"{os.path.basename(d.props['pp.alticon'])}")
+assert not d.closed, "the corner button closed the window"
+assert d.props["pp.text"] == "EVERYTHING"
+assert d.props["pp.heading"] == "Full Changelog"
+assert d.props["pp.alticon"].endswith("sticky-note.png"), d.props["pp.alticon"]
+
+d.onClick(TOGGLE)
+assert d.props["pp.text"] == "NEW ONLY", "it would not come back"
+assert d.props["pp.alticon"].endswith("lists2.png")
+assert not d.closed
+print("  and presses back again  OK")
+
+# The heading is the only wording; the corner button carries a picture alone.
+_btn = re.search(r'<control type="button" id="12">(.*?)</control>',
+                 (SKINS / "changelog.xml").read_text(encoding="utf-8"), re.S)
+assert "<label>" not in _btn.group(1), "the corner button grew words again"
+print("  the button is the icon and nothing else  OK")
+
+# Scrolled down the full list, the newest block must not open mid-way.
+assert len(d.scrolled) == 3 and all(n == 0 for _, n in d.scrolled), d.scrolled
+assert all(c == 2000 for c, _ in d.scrolled), d.scrolled
+print("  every swap starts at the top of the text  OK")
+
+d = Pages("a receipt", "", heading="Last Download Summary")
+d.onInit()
+assert d.props["pp.toggle"] == "", "the download summary offered a changelog"
+assert d.props["pp.heading"] == "Last Download Summary"
+print("  the download summary borrows the window without the button  OK")
+
+_src = (harness.ADDON / "lib" / "changelog.py").read_text(encoding="utf-8")
+_opens = _src[_src.index("def show_text("):_src.index("def show_changelog(")]
+for _kw in ("full_text=full_text", "list_icon=", "note_icon="):
+    assert _kw in _opens, f"show_text never passes {_kw}"
+assert "split_latest(text)" in _src[_src.index("def show_changelog("):],     "What's New would still show every version at once"
+print("  wired through show_text  OK")
+
+print()
 print("=== the next-episode card's progress bar ===")
 from lib.next_episode_card import NextEpisodeCard
 
@@ -393,6 +481,21 @@ for _ in range(len(_nav)):
     _at = _nav[_at][0]
 assert _at == "2060" and len(set(_seen)) == len(_nav), f"left does not cycle: {_seen}"
 print("  every control is reachable from either arrow  OK")
+
+_ud = {}
+for _m in _re.finditer(r'<control type="(?:scrollbar|button)" id="(\d+)">(.*?)</control>',
+                       _xml, _re.S):
+    _u = _re.search(r"<onup>(\d+)</onup>", _m.group(2))
+    _dn = _re.search(r"<ondown>(\d+)</ondown>", _m.group(2))
+    _ud[_m.group(1)] = (_u.group(1) if _u else "", _dn.group(1) if _dn else "")
+for _who, (_u, _dn) in sorted(_ud.items()):
+    print(f"  {_who:>5}: up -> {_u:<5} down -> {_dn}")
+# Kodi follows this only once the text will not scroll further, so it is the
+# way out of a long changelog rather than a shortcut past it.
+assert _ud["2060"][1] in _ud and _ud["2060"][1] != "2060",     "down at the end of the text has nowhere to go"
+for _b in sorted(b for b in _ud if b != "2060"):
+    assert _ud[_b][0] == "2060", f"up from button {_b} should return to the text"
+print("  down leaves the text at its end, up returns to it  OK")
 
 _default = _re.search(r"<defaultcontrol[^>]*>(\d+)</defaultcontrol>", _xml).group(1)
 _buttons = _re.findall(r'<control type="button" id="(\d+)">', _xml)
