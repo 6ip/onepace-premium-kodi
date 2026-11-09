@@ -164,9 +164,11 @@ def ping_widgets():
 
 def refresh_container():
     """Redraw whatever is showing what we just changed."""
-    if not is_widget():
-        xbmc.executebuiltin("Container.Refresh")
-    ping_widgets()
+    if is_widget():
+        ping_widgets()
+        return
+    # A refresh redraws our own list; nudging as well just builds it twice.
+    xbmc.executebuiltin("Container.Refresh")
 
 
 # Climbs past 1 only when Kodi reuses the interpreter.

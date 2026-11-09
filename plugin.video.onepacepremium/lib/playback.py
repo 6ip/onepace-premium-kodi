@@ -23,7 +23,6 @@ _START_CAP_HANDOFF = 900
 # Polls to wait before trusting the player's clock after a file switch.
 _SETTLE_POLLS = 5
 # Long enough for a new list to be taken before the scan starts.
-_REDRAW_SETTLE = 2.0
 # Kodi 21 exits when two busy dialogs overlap.
 _BUSY = "Window.IsActive(busydialog) | Window.IsActive(busydialognocancel)"
 _BUSY_CLEAR = 0.5
@@ -406,6 +405,16 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
         # Skipped on hand-off: the incoming monitor owns the list.
         path = ""
         if not play_next_url:
+            # A refresh that lands while the player is still up redraws the row
+            # we just played with the player's own art instead of its thumbnail.
+            for _ in range(20):
+                if not (player.isPlaying() or xbmc.getCondVisibility(
+                        "Window.IsActive(fullscreenvideo)")):
+                    break
+                if kodi_monitor.waitForAbort(0.25):
+                    return
+            else:
+                log("[monitor] the player window never closed, redrawing anyway")
             # Kodi restores the list while the player tears down.
             for _ in range(15):
                 path = xbmc.getInfoLabel("Container.FolderPath")
@@ -423,10 +432,8 @@ def _monitor_playback(series_id, episode_id, video_url="", autoplay=False,
             else:
                 xbmc.executebuiltin("Container.Refresh")
                 log(f"[monitor] refreshed list for {episode_id!r}")
-        if not play_next_url:
+        if not play_next_url and not ours:
             # The resume point moved, so every shelf showing it is now stale.
-            if ours and kodi_monitor.waitForAbort(_REDRAW_SETTLE):
-                return
             ping_widgets()
         if marked or was_watched:
             _keep_resume_cleared(episode_id, kodi_monitor)

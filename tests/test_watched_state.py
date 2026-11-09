@@ -80,8 +80,11 @@ print("=== refreshing from a widget must not touch the skin's container ===")
 from lib.utils import refresh_container
 from kodistub import recorder
 
+# Measured: each nudge costs a whole extra plugin call (~0.5s of interpreter),
+# because Kodi re-requests the directory on screen. A refresh already redrew
+# our own list, so doing both built it twice.
 for plugin_name, expected in (
-        ("plugin.video.onepacepremium", ["Container.Refresh", "UpdateLibrary(video,special://skin/foo)"]),
+        ("plugin.video.onepacepremium", ["Container.Refresh"]),
         ("", ["UpdateLibrary(video,special://skin/foo)"]),
         ("skin.arctic.fuse.3", ["UpdateLibrary(video,special://skin/foo)"])):
     recorder.reset()
@@ -100,16 +103,14 @@ print("  mark_watched and clear_progress both go through it  OK")
 # Stopping an episode moves the resume point, so shelves are stale too.
 mon = PLAY[PLAY.index("def _monitor_playback"):]
 assert "ping_widgets()" in mon, "shelves stay stale after playback"
-# The nudge is a library scan, and Kodi silently drops a Container.Refresh that
-# lands while one is running — "OnMessage - updating in progress". Ours went
-# first in the log and was thrown away, so the row we had just played kept the
-# player's art instead of its watched tick. Our container redraws first now,
-# and the nudge waits for it.
-assert mon.index('executebuiltin("Container.Refresh")') < mon.index("ping_widgets()"),     "the shelves are nudged first, so our own refresh gets dropped"
-assert "_REDRAW_SETTLE" in mon, "the nudge follows too closely to let the listing land"
-handoff = "if not play_next_url:" + chr(10) + "            # The resume point moved"
-assert handoff in mon, "autoplay would ping between every episode"
-print("  stopping an episode nudges the shelves too, but a handoff does not")
+# A refresh that lands while the player is still up redraws the played row
+# with the player's art instead of its thumbnail. A late nudge used to cover
+# that by accident; waiting for the window to close fixes it on purpose.
+assert "Window.IsActive(fullscreenvideo)" in mon,     "the refresh can land before the player window has gone"
+assert mon.index("Window.IsActive(fullscreenvideo)") < mon.index('executebuiltin("Container.Refresh")'),     "the wait has to come before the redraw to be worth anything"
+assert "_REDRAW_SETTLE" not in mon,     "that delay only spaced the refresh and the nudge apart"
+assert "not play_next_url and not ours" in mon,     "autoplay would ping between episodes, and our own list twice over"
+print("  the redraw waits for the player to go, and only shelves are nudged")
 
 # A widget's FolderPath is our plugin URL, so that test alone lets the
 # post-playback redraw fire straight at the skin's container.
