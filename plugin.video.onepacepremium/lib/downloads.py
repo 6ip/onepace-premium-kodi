@@ -2027,6 +2027,8 @@ def list_on_device(params=None):
         if len(seasons) > 1:
             set_content("seasons")
             set_category(series)
+            from .provider_api import season_overviews
+            held_overviews = season_overviews(show)
             items = []
             for number in sorted(seasons):
                 metas = seasons[number]
@@ -2034,6 +2036,8 @@ def list_on_device(params=None):
                 item = xbmcgui.ListItem(label=label, offscreen=True)
                 tags = item.getVideoInfoTag()
                 _set_video_tags(tags, show, label)
+                if held_overviews.get(number):
+                    tags.setPlot(held_overviews[number])
                 tags.setTvShowTitle(series)
                 tags.setSeason(number)
                 tags.setMediaType("season")

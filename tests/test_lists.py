@@ -208,4 +208,78 @@ assert "seasons = listed_seasons(meta)" in _er, "list_seasons counts its own way
 print("  same count on both sides, and only when there is one  OK")
 
 print()
+print("=== a season says its own piece, or the show speaks for it ===")
+from lib.provider_api import season_overviews
+
+# The two shapes the feed really sends: a key with nothing in it (Muhn Pace)
+# and no key at all (Onigashima, Kuma). Neither may reach .strip() bare.
+_odd = {"seasons": [{"season": 1, "overview": "Real text."},
+                    {"season": 2, "overview": None},
+                    {"season": 3},
+                    {"season": 4, "overview": "   "},
+                    {"season": "5", "overview": "Arrived as a string."},
+                    {"season": "x", "overview": "Not a season."}]}
+_got = season_overviews(_odd)
+print(f"  odd shapes -> {sorted(_got)}")
+assert sorted(_got) == [1, 5], _got
+assert _got[1] == "Real text." and _got[5] == "Arrived as a string."
+assert season_overviews({}) == {} and season_overviews({"seasons": None}) == {}
+
+
+def _plots(meta):
+    """season number -> the plot its row ended up with."""
+    rec = seasons(meta=meta)
+    out = {}
+    for url, li, _ in rec.directories:
+        found = _re.search(r"season=(\d+)", url)
+        if found:
+            out[int(found.group(1))] = li._tag.calls.get("setPlot")
+    return out
+
+
+_show = ONEPACE["description"]
+_one = _plots(ONEPACE)
+_own = {s for s, p in _one.items() if p and p != _show}
+print(f"  One Pace: {len(_own)}/{len(_one)} seasons with their own text")
+assert len(_own) == len(_one), "a season fell back although the feed had text"
+assert len({_one[s] for s in _one}) == len(_one), "seasons are sharing one plot"
+assert _one[1] == next(s["overview"] for s in ONEPACE["seasons"]
+                       if s["season"] == 1), "the wrong season's text"
+
+# Kuma has a season name but no overview, so the show has to speak for it.
+_k = _plots(KUMA)
+print(f"  Kuma: {len(_k)} season(s), plot is the show's -> "
+      f"{all(p == KUMA['description'] for p in _k.values())}")
+assert _k and all(p == KUMA["description"] for p in _k.values()),     "a season with no overview should keep the series description"
+
+# A second series, to show it is not One Pace's shape doing the work.
+_m, _mshow = _plots(MUHN), MUHN["description"]
+_mown = sorted(s for s, p in _m.items() if p and p != _mshow)
+_expect = sorted(int(s["season"]) for s in MUHN["seasons"]
+                 if (s.get("overview") or "").strip()
+                 and int(s["season"]) in _m)
+print(f"  Muhn Pace: own text on {_mown}")
+assert _mown == _expect, (_mown, _expect)
+
+# One list carrying both, since no fixture mixes them: the feed drops the key
+# on some series and sends it empty on others, and both must fall back.
+_mixed = copy.deepcopy(ONEPACE)
+for _s in _mixed["seasons"]:
+    if _s["season"] == 2:
+        _s["overview"] = None
+    elif _s["season"] == 5:
+        _s.pop("overview", None)
+    elif _s["season"] == 7:
+        _s["overview"] = "   "
+_mix = _plots(_mixed)
+_fell = sorted(s for s, p in _mix.items() if p == _mixed["description"])
+print(f"  mixed list: fell back on {_fell}, kept own text on "
+      f"{len(_mix) - len(_fell)}")
+assert _fell == [2, 5, 7], _fell
+assert len(_mix) - len(_fell) == len(_mix) - 3, "others were dragged down too"
+assert all(_mix[s] for s in _mix), "a season ended up with no plot at all"
+META[0] = ONEPACE
+print("  own text when there is some, the show's when there is not  OK")
+
+print()
 print("all assertions passed")

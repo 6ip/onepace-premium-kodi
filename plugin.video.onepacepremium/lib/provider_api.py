@@ -161,6 +161,17 @@ def listed_seasons(meta: dict):
     return seasons
 
 
+def season_overviews(meta: dict):
+    """Each season's own description, for the seasons the feed writes one for."""
+    # Some series carry the key with nothing in it, others leave it out.
+    return {
+        int(s["season"]): (s.get("overview") or "").strip()
+        for s in meta.get("seasons") or ()
+        if str(s.get("season")).lstrip("-").isdigit()
+        and (s.get("overview") or "").strip()
+    }
+
+
 def _catalog_url(catalog_type: str, catalog_id: str, extra: str):
     _, provider_base_url = _provider_context()
     return _compose_url(

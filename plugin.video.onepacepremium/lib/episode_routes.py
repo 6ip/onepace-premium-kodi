@@ -13,6 +13,7 @@ from .art import (_cast_list, _episode_number, _season_thumbnails,
 from .parser import parse_stream_info
 from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode_ids,
                             episode_params, episode_play_url, listed_seasons,
+                            season_overviews,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
 from .route_common import (_add_directory_items, _notify_error, _notify_info,
@@ -111,6 +112,7 @@ def list_seasons(params):
     }
 
     seasons = listed_seasons(meta)
+    season_overview_map = season_overviews(meta)
 
     show_title = meta.get("name") or ""
     series_watched = _watched.get_watched(video_id)
@@ -162,6 +164,9 @@ def list_seasons(params):
         list_item = xbmcgui.ListItem(label=label, offscreen=True)
         tags = list_item.getVideoInfoTag()
         _set_video_tags(tags, meta, label)
+        # Set after, so a season with none of its own keeps the show's.
+        if season_overview_map.get(season):
+            tags.setPlot(season_overview_map[season])
         tags.setTvShowTitle(show_title)
         tags.setSeason(season)
         _set_show_tags(tags, meta, premiered=False, trailer=False,

@@ -1613,6 +1613,38 @@ assert "_set_show_tags" in SRC and "_set_season_art" in SRC,     "the download l
 print("  same tag and art helpers as normal browsing  OK")
 
 print()
+print("=== a held season shows its own text, with no connection ===")
+# The index already keeps the whole seasons array (_META_KEYS), so this needs
+# neither a fetch nor a new field on the rows.
+_held = {}
+for _season, _count in ((1, 2), (2, 1)):
+    for _n in range(1, _count + 1):
+        _held[f"/d/One Pace/S{_season}/e{_n}.mkv"] = {
+            "season": _season, "episode": _n, "series_name": "One Pace",
+            "episode_title": f"E{_n}", "episode_id": f"pp_{_season}_{_n}",
+            "series_id": "pp", "variant": "standard"}
+_offline_show = {"name": "One Pace", "description": "The show's own words.",
+                 "seasons": [{"season": 1, "overview": "Just this season."},
+                             {"season": 2, "overview": None}]}
+_real_read = downloads.read_index
+_real_exists_d = downloads.xbmcvfs.exists
+downloads.read_index = lambda: {"files": dict(_held),
+                                "series": {"One Pace": _offline_show}}
+downloads._write_index = lambda data: None
+downloads.xbmcvfs.exists = lambda p: True
+kodistub.recorder.reset()
+downloads.list_on_device({"series": "One Pace"})
+_season_plots = {i.label: i._tag.calls.get("setPlot")
+                 for _, i, _ in kodistub.recorder.directories}
+for _lab in sorted(_season_plots):
+    print(f"  {_lab:<10} {_season_plots[_lab]!r}")
+assert _season_plots.get("Season 1") == "Just this season.", _season_plots
+assert _season_plots.get("Season 2") == "The show's own words.", _season_plots
+downloads.read_index = _real_read
+downloads.xbmcvfs.exists = _real_exists_d
+print("  its own where the feed wrote one, the show's where it did not  OK")
+
+print()
 print("=== a downloaded episode carries what the online one does ===")
 kodistub.recorder.reset()
 downloads.list_on_device({"series": "One Pace", "season": "1"})
