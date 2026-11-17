@@ -172,6 +172,35 @@ def season_overviews(meta: dict):
     }
 
 
+_SEASON_LABELS = {"0": "number", "1": "arc", "2": "both"}
+
+
+def season_names(meta: dict):
+    """Each season's arc name, for the seasons the feed names."""
+    return {
+        int(s["season"]): (s.get("name") or "").strip()
+        for s in meta.get("seasons") or ()
+        if str(s.get("season")).lstrip("-").isdigit()
+        and (s.get("name") or "").strip()
+    }
+
+
+def season_labeller(meta: dict):
+    """Names seasons the way the viewer asked, read once for the whole list."""
+    names = season_names(meta or {})
+    mode = _SEASON_LABELS.get(get_setting("season_labels"), "number")
+
+    def label(season):
+        plain = "Specials" if int(season) == 0 else f"Season {season}"
+        arc = names.get(int(season), "")
+        # An unnamed season, or one the feed calls what we already call it.
+        if mode == "number" or not arc or arc == plain:
+            return plain
+        return arc if mode == "arc" else f"{plain} · {arc}"
+
+    return label
+
+
 def _catalog_url(catalog_type: str, catalog_id: str, extra: str):
     _, provider_base_url = _provider_context()
     return _compose_url(

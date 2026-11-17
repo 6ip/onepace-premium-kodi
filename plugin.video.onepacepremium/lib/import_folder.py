@@ -8,6 +8,7 @@ from . import cache as _cache
 from . import download_queue, import_index, import_match
 from .downloads import (_sidecars, _size_on_disk, _write_index, enabled,
                         folder, read_index, remember_into, write_report)
+from .provider_api import season_labeller
 from .route_common import _notify_error, _notify_info
 from .utils import log, refresh_container
 
@@ -231,7 +232,8 @@ def _ask_episode(metas):
         return None
 
     seasons = sorted({int(v.get("season") or 0) for v in videos})
-    labels = ["Specials" if s == 0 else f"Season {s}" for s in seasons]
+    name_season = season_labeller(metas[series] or {})
+    labels = [name_season(s) for s in seasons]
     at = xbmcgui.Dialog().select(f"{series} — which season?", labels)
     if at < 0:
         return None

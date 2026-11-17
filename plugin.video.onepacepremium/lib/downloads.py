@@ -1388,7 +1388,8 @@ def delete(params):
     path = params.get("path")
     series = params.get("series")
     season = params.get("season")
-    files = read_index()["files"]
+    index = read_index()
+    files = index["files"]
 
     if path:
         targets, what = [path], os.path.basename(path)
@@ -1399,7 +1400,8 @@ def delete(params):
         if season is None:
             what = f"all {len(targets)} downloaded from {series}"
         else:
-            label = "Specials" if int(season) == 0 else f"Season {season}"
+            from .provider_api import season_labeller
+            label = season_labeller(index["series"].get(series) or {})(season)
             what = f"all {len(targets)} from {series} {label}"
 
     if not targets:
@@ -2027,12 +2029,13 @@ def list_on_device(params=None):
         if len(seasons) > 1:
             set_content("seasons")
             set_category(series)
-            from .provider_api import season_overviews
+            from .provider_api import season_labeller, season_overviews
             held_overviews = season_overviews(show)
+            name_season = season_labeller(show)
             items = []
             for number in sorted(seasons):
                 metas = seasons[number]
-                label = "Specials" if number == 0 else f"Season {number}"
+                label = name_season(number)
                 item = xbmcgui.ListItem(label=label, offscreen=True)
                 tags = item.getVideoInfoTag()
                 _set_video_tags(tags, show, label)
@@ -2069,7 +2072,8 @@ def list_on_device(params=None):
     # Only an imported row can be missing here: the sweep drops any of ours.
     attached = _folders_present(chosen)
     set_content("episodes")
-    label = "Specials" if int(season) == 0 else f"Season {season}"
+    from .provider_api import season_labeller
+    label = season_labeller(show)(season)
     set_category(f"{series} - {label}")
     items = []
     for path, meta in sorted(chosen.items(),

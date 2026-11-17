@@ -1640,9 +1640,35 @@ for _lab in sorted(_season_plots):
     print(f"  {_lab:<10} {_season_plots[_lab]!r}")
 assert _season_plots.get("Season 1") == "Just this season.", _season_plots
 assert _season_plots.get("Season 2") == "The show's own words.", _season_plots
+
+# The same rows, named the way the viewer asked. The names ride in the index,
+# so this works with nothing to fetch.
+_offline_show["seasons"][0]["name"] = "Romance Dawn"
+_offline_show["seasons"][1]["name"] = "Orange Town"
+_label_modes = {}
+for _mode in ("0", "1", "2"):
+    store["season_labels"] = _mode
+    kodistub.recorder.reset()
+    downloads.list_on_device({"series": "One Pace"})
+    _label_modes[_mode] = [i.label for _, i, _ in kodistub.recorder.directories]
+    print(f"  mode {_mode} -> {_label_modes[_mode]}")
+assert _label_modes["0"] == ["Season 1", "Season 2"], _label_modes["0"]
+assert _label_modes["1"] == ["Romance Dawn", "Orange Town"], _label_modes["1"]
+assert _label_modes["2"] == ["Season 1 · Romance Dawn",
+                             "Season 2 · Orange Town"], _label_modes["2"]
+
+# The breadcrumb inside a season has to agree with the row that opened it.
+store["season_labels"] = "1"
+kodistub.recorder.reset()
+downloads.list_on_device({"series": "One Pace", "season": "1"})
+print(f"  breadcrumb -> {kodistub.recorder.category!r}")
+assert kodistub.recorder.content == "episodes"
+assert kodistub.recorder.category == "One Pace - Romance Dawn",     f"the breadcrumb disagrees with the row that opened it: "     f"{kodistub.recorder.category!r}"
+store["season_labels"] = "0"
+
 downloads.read_index = _real_read
 downloads.xbmcvfs.exists = _real_exists_d
-print("  its own where the feed wrote one, the show's where it did not  OK")
+print("  named from the index, with no connection and no new field  OK")
 
 print()
 print("=== a downloaded episode carries what the online one does ===")
@@ -2271,7 +2297,8 @@ print()
 print("=== a season goes one episode at a time, and stops when refused ===")
 from lib import episode_routes as er
 
-META = {"name": "One Pace", "seasons": [{"season": 6, "poster": "s6.jpg"}],
+META = {"name": "One Pace",
+        "seasons": [{"season": 6, "name": "Arlong Park", "poster": "s6.jpg"}],
         "videos": [{"id": f"AR_{n}", "season": 6, "episode": n, "name": f"Arlong Park {n:02d}"}
                    for n in range(1, 5)]}
 picks = er._season_episodes(META, "pp_onepacee", "series", 6)
@@ -2329,6 +2356,25 @@ assert attempts == ["AR_1", "AR_2", "AR_4"], "AR_3 has no stream, so it is skipp
 # Asked once, up front, then never during the run.
 print(f"  quiet on each call: {asked_quiet}")
 assert all(asked_quiet), "a picker mid-run is a picker per episode"
+
+# The picker heading, and the questions it leads to, name the season the same
+# way the row the viewer pressed does. Season 6 of One Pace is Arlong Park.
+_keep = (list(attempts), list(asked_quiet))
+store["season_labels"] = "1"
+kodistub.recorder.reset()
+er.download_season({"catalog_type": "series", "video_id": "pp_onepacee",
+                    "season": "6"})
+print(f"  arc mode dialog: {asked['heading']!r}")
+assert asked["heading"] == "Download Arlong Park", asked["heading"]
+store["season_labels"] = "2"
+kodistub.recorder.reset()
+er.download_season({"catalog_type": "series", "video_id": "pp_onepacee",
+                    "season": "6"})
+print(f"  both mode dialog: {asked['heading']!r}")
+assert asked["heading"] == "Download Season 6 · Arlong Park", asked["heading"]
+store["season_labels"] = "0"
+attempts[:], asked_quiet[:] = _keep
+kodistub.recorder.reset()
 
 # A sixty-episode arc must not fire sixty listing requests to answer a question.
 surveyed = []

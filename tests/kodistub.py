@@ -28,6 +28,7 @@ class Recorder:
         self.builtins = []         # executebuiltin strings
         self.resolved = []         # setResolvedUrl listitems
         self.content = None
+        self.category = None       # the breadcrumb a list set for itself
         self.infolabels = {}       # Container.* and friends
         self.progress = []         # DialogProgressBG calls
         self.rmdirs = []           # folders we asked Kodi to remove
@@ -277,7 +278,9 @@ def install(addon_root, fixtures, settings=None):
         recorder.content = content
 
     module("xbmcplugin", addDirectoryItems=_add_dir, endOfDirectory=_end,
-           setContent=_set_content, setPluginCategory=lambda *a: None,
+           setContent=_set_content,
+           setPluginCategory=lambda *a: setattr(recorder, "category",
+                                                a[-1] if a else None),
            setResolvedUrl=lambda h, ok, li: recorder.resolved.append(li),
            addSortMethod=lambda *a: None, SORT_METHOD_EPISODE=0)
     module("xbmcvfs", translatePath=lambda p: p, exists=lambda p: False,

@@ -282,4 +282,95 @@ META[0] = ONEPACE
 print("  own text when there is some, the show's when there is not  OK")
 
 print()
+print("=== a season is called what the viewer asked it to be called ===")
+import xml.etree.ElementTree as _ET
+from lib.provider_api import season_labeller
+
+
+def _labels(mode, meta=None):
+    S["season_labels"] = mode
+    return [li.label for _, li, _ in seasons(meta=meta).directories]
+
+
+_num = _labels("0")
+_arc = _labels("1")
+_both = _labels("2")
+print(f"  number -> {_num[:3]} ... {_num[-1]}")
+print(f"  arc    -> {_arc[:3]} ... {_arc[-1]}")
+print(f"  both   -> {_both[:2]} ... {_both[-1]}")
+
+assert _num[0] == "Season 1" and _num[-1] == "Specials", _num[:2]
+assert _arc[0] == "Romance Dawn" and _arc[1] == "Orange Town", _arc[:2]
+assert _both[0] == "Season 1 · Romance Dawn", _both[0]
+assert len(_num) == len(_arc) == len(_both), "a mode lost or gained a row"
+
+# The feed calls season 0 "Specials", which is what we call it already.
+assert _arc[-1] == "Specials" and _both[-1] == "Specials",     "Specials should not read as Specials twice"
+
+# Nothing silently keeps a number when a name exists, and vice versa.
+assert not any(l.startswith("Season ") for l in _arc[:-1]),     f"arc mode left a numbered row: {[l for l in _arc[:-1] if l.startswith('Season ')]}"
+assert all(" · " in l for l in _both[:-1]), "both mode missed a row"
+
+# A season the feed never named has to keep its number, in either mode.
+_noname = copy.deepcopy(ONEPACE)
+for _s in _noname["seasons"]:
+    if _s["season"] == 3:
+        _s["name"] = None
+    elif _s["season"] == 4:
+        _s.pop("name", None)
+_fb_arc = _labels("1", meta=_noname)
+_fb_both = _labels("2", meta=_noname)
+print(f"  unnamed seasons 3 and 4 -> {_fb_arc[2:4]} / {_fb_both[2:4]}")
+assert _fb_arc[2:4] == ["Season 3", "Season 4"], _fb_arc[2:4]
+assert _fb_both[2:4] == ["Season 3", "Season 4"], _fb_both[2:4]
+assert _fb_arc[0] == "Romance Dawn", "one unnamed season dragged the rest down"
+
+# This feed has sent season numbers as strings before, which once cost every
+# season its poster. The names are keyed the same way, so check them too.
+_strung2 = copy.deepcopy(ONEPACE)
+for _s in _strung2["seasons"]:
+    _s["season"] = str(_s["season"])
+S["season_labels"] = "1"
+assert season_labeller(_strung2)(1) == "Romance Dawn", "a string season lost its name"
+assert season_labeller(_strung2)(0) == "Specials", "specials lost their name"
+
+# An unset or unknown value must read as the plain number, never crash.
+for _odd in ("", "9", "arc", None):
+    S["season_labels"] = _odd if _odd is not None else ""
+    assert season_labeller(ONEPACE)(1) == "Season 1", _odd
+S["season_labels"] = "0"
+META[0] = ONEPACE
+
+# The notice when a season finishes has to name it like the row did.
+for _mode, _want in (("0", "Season 1 fully watched"),
+                     ("1", "Romance Dawn fully watched"),
+                     ("2", "Season 1 · Romance Dawn fully watched")):
+    S["season_labels"] = _mode
+    _said = [m for m, _ in episodes(1, S1, hide=True).notifications]
+    print(f"  mode {_mode} finished-season notice -> {_said}")
+    assert _want in _said, (_mode, _said)
+S["season_labels"] = "0"
+print("  three modes, the number when unnamed, the number when unset  OK")
+
+print()
+print("=== every season label comes from the one place ===")
+# Seven sites used to spell this out; the list and the download summary
+# disagreeing is exactly what the setting would expose.
+_spelled = []
+for _f in sorted((harness.ADDON / "lib").glob("*.py")):
+    for _n, _line in enumerate(_f.read_text(encoding="utf-8").splitlines(), 1):
+        if '"Specials" if' in _line:
+            _spelled.append(f"{_f.name}:{_n}")
+print(f"  spelled out in: {_spelled}")
+assert _spelled == ["provider_api.py:194"] or (
+    len(_spelled) == 1 and _spelled[0].startswith("provider_api.py")),     f"a season label is still built by hand: {_spelled}"
+
+_row = [s for s in _ET.parse(harness.ADDON / "resources" / "settings.xml")
+        .getroot().iter("setting") if s.get("id") == "season_labels"]
+assert _row, "the setting is missing from settings.xml"
+assert _row[0].get("default") == "0", "it should start on the season number"
+assert _row[0].get("values").split("|") == ["Season number", "Arc name", "Both"],     _row[0].get("values")
+print(f"  settings row: {_row[0].get('values')!r}, default {_row[0].get('default')}  OK")
+
+print()
 print("all assertions passed")

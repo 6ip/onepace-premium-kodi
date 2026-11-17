@@ -13,7 +13,7 @@ from .art import (_cast_list, _episode_number, _season_thumbnails,
 from .parser import parse_stream_info
 from .provider_api import (_compose_url, _fetch_provider_meta, countable_episode_ids,
                             episode_params, episode_play_url, listed_seasons,
-                            season_overviews,
+                            season_labeller, season_overviews,
                             _parse_air_date, _parse_release_year,
                             _parse_runtime_seconds)
 from .route_common import (_add_directory_items, _notify_error, _notify_info,
@@ -113,6 +113,7 @@ def list_seasons(params):
 
     seasons = listed_seasons(meta)
     season_overview_map = season_overviews(meta)
+    name_season = season_labeller(meta)
 
     show_title = meta.get("name") or ""
     series_watched = _watched.get_watched(video_id)
@@ -160,7 +161,7 @@ def list_seasons(params):
     downloads_on = _downloads_enabled()
     items = []
     for season in seasons:
-        label = "Specials" if season == 0 else f"Season {season}"
+        label = name_season(season)
         list_item = xbmcgui.ListItem(label=label, offscreen=True)
         tags = list_item.getVideoInfoTag()
         _set_video_tags(tags, meta, label)
@@ -377,7 +378,7 @@ def list_episodes(params):
     if not items:
         # Hiding every episode is the setting working, not a failure.
         if n_hidden:
-            where = "Specials" if selected_season == 0 else f"Season {selected_season}"
+            where = season_labeller(meta)(selected_season)
             _notify_info(f"{where} fully watched")
             end_directory()
         else:
@@ -730,7 +731,7 @@ def download_season(params):
               for episode_id, label, _ in episodes]
     preselect = [i for i, (episode_id, _, _) in enumerate(episodes)
                  if episode_id not in on_disk]
-    label = "Specials" if season == 0 else f"Season {season}"
+    label = season_labeller(meta)(season)
     chosen = xbmcgui.Dialog().multiselect(f"Download {label}", labels,
                                           preselect=preselect)
     if not chosen:
