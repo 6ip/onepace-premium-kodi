@@ -1876,6 +1876,79 @@ def _drawn_art(meta):
             poster if poster and xbmcvfs.exists(poster) else "")
 
 
+def held_meta(series_id):
+    """A provider meta built from what is on disk, for when the feed is away.
+
+    Only the episodes actually held are in it, so a list drawn from this shows
+    what can be played and nothing else. Each row kept the provider's own entry
+    for its episode, so these are the real ones, not a reconstruction.
+    """
+    if not enabled():
+        return None
+    data = read_index()
+    rows = [m for m in data["files"].values() if m.get("series_id") == series_id]
+    if not rows:
+        return None
+
+    name = next((m.get("series_name") for m in rows if m.get("series_name")), "")
+    show = _local_art(data["series"].get(name) or {})
+
+    videos, posters = [], {}
+    for row in rows:
+        video, episode_id = row.get("video") or {}, row.get("episode_id")
+        if not video or not episode_id:
+            continue
+        thumb, poster = _drawn_art(row)
+        videos.append(dict(video, thumbnail=thumb) if thumb else dict(video))
+        season = row.get("season")
+        if str(season).lstrip("-").isdigit():
+            kept = poster or row.get("season_poster")
+            if kept:
+                posters.setdefault(int(season), kept)
+    if not videos:
+        return None
+
+    meta = dict(show)
+    meta["videos"] = videos
+    # The series record keeps the whole seasons array, names and overviews with
+    # it, so only the pictures need swapping for the ones saved on disk.
+    kept_seasons = [
+        dict(s, poster=posters.get(int(s["season"])) or s.get("poster") or "")
+        for s in show.get("seasons") or ()
+        if str(s.get("season")).lstrip("-").isdigit()
+    ]
+    meta["seasons"] = kept_seasons or [
+        {"season": number, "poster": picture}
+        for number, picture in sorted(posters.items())
+    ]
+    if not meta.get("name"):
+        meta["name"] = name
+    log(f"[downloads] {name or series_id}: {len(videos)} episode(s) from the index")
+    return meta
+
+
+def held_series():
+    """Every series we hold something of, shaped like a catalogue entry."""
+    if not enabled():
+        return []
+    data = read_index()
+    names = {}
+    for row in data["files"].values():
+        series_id = row.get("series_id")
+        if series_id and series_id not in names:
+            names[series_id] = row.get("series_name") or ""
+    rows = []
+    for series_id, name in names.items():
+        show = _local_art(data["series"].get(name) or {})
+        rows.append((name, dict(show, id=series_id, name=show.get("name") or name)))
+    # Where the catalogue puts them, the way On Device reads. The index
+    # remembers it, so this holds with nothing to ask.
+    order = _series_order(data)
+    rows.sort(key=lambda pair: (order.get(pair[0], 10 ** 6),
+                                (pair[1]["name"] or "").lower()))
+    return [show for _, show in rows]
+
+
 def _season_art(meta_for_series, metas):
     """Prefer the season poster we kept, then the one the provider gave us."""
     for meta in metas:

@@ -11,7 +11,7 @@ from .provider_api import (_catalog_priority, _catalog_specs, _catalog_url,
 from .route_common import (_add_directory_items, _notify_error, end_directory,
                            set_category, set_content)
 from .utils import (ADDON_ID, background, build_url, ensure_configured,
-                    fetch_data, get_setting, set_defaults_for_new_install)
+                    fetch_data, get_setting, log, set_defaults_for_new_install)
 
 CATALOG_PAGE_SIZE = 25
 SUPPORTED_CATALOG_TYPES = {"movie", "series", "anime"}
@@ -89,6 +89,54 @@ def list_root():
         maybe_offer()
 
 
+def _browse_held():
+    """With no connection, offer the series we hold instead of a blank screen."""
+    from .downloads import held_series
+
+    rows = held_series()
+    if not rows:
+        end_directory()
+        return
+
+    set_content("tvshows")
+    set_category("Browse")
+    stats = _watched.get_all_series_stats()
+    items = []
+    for show in rows:
+        series_id = show["id"]
+        list_item = xbmcgui.ListItem(label=show["name"], offscreen=True)
+        tags = list_item.getVideoInfoTag()
+        _set_ids(tags, series_id)
+        _set_video_tags(tags, show, show["name"])
+        _set_show_tags(tags, show)
+        _set_art(list_item, show)
+        tags.setMediaType("tvshow")
+        # Counted from the watched store, which remembers the real total. The
+        # index knows only the episodes kept, and would read far too low.
+        watched_count, total = stats.get(series_id, (0, None))
+        if total:
+            props = {"UnWatchedEpisodes": str(max(0, total - watched_count)),
+                     "TotalEpisodes": str(total)}
+            if watched_count > 0:
+                props["WatchedEpisodes"] = str(watched_count)
+            list_item.setProperties(props)
+            if watched_count >= total:
+                tags.setPlaycount(1)
+        list_item.addContextMenuItems([(
+            "[B]Mark Unwatched[/B]" if (total and watched_count >= total)
+            else "[B]Mark Watched[/B]",
+            f"RunPlugin({build_url('mark_watched', scope='series', series_id=series_id, catalog_type='series')})",
+        )])
+        items.append((
+            build_url("list_seasons", catalog_type="series", video_id=series_id),
+            list_item,
+            True,
+        ))
+    _add_directory_items(items)
+    log(f"[browse] {len(items)} series from the index, with no connection")
+    end_directory()
+
+
 def list_browse(params):
     if not ensure_configured():
         end_directory(succeeded=False)
@@ -96,7 +144,7 @@ def list_browse(params):
 
     manifest = _fetch_provider_manifest()
     if not manifest:
-        end_directory()
+        _browse_held()
         return
 
     series_specs = _catalog_specs(manifest, "series")
@@ -114,7 +162,7 @@ def list_browse(params):
 
     response = _fetch_catalog(_catalog_url(catalog_type, catalog_id, "skip=0"))
     if not response:
-        end_directory()
+        _browse_held()
         return
 
     videos = response.get("metas", ())

@@ -85,22 +85,16 @@ def fetch_data(url: str):
     try:
         response = session().get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
-        return response.json()
+        answer = response.json()
+        _heard_from_the_server()
+        return answer
     except requests.RequestException as exc:
         resp = exc.response
         status_code = resp.status_code if resp is not None else None
         target = parse.urlparse(url).netloc or url
-        log(f"Request failed for {url}: {exc}", xbmc.LOGERROR)
-        with _TOLD_LOCK:
-            first, _TOLD[0] = not _TOLD[0], True
-        if first:
-            xbmcgui.Dialog().notification(
-                ADDON_NAME,
-                f"Request failed ({status_code}) on {target}"
-                if status_code
-                else f"Request failed on {target}",
-                xbmcgui.NOTIFICATION_ERROR, 5000, False,
-            )
+        log(f"Request failed for {url} ({target}): {exc}", xbmc.LOGERROR)
+        _say_once(f"The server answered {status_code}." if status_code
+                  else "No connection — showing what you have.")
         return None
 
 
@@ -174,10 +168,30 @@ def refresh_container():
 # Climbs past 1 only when Kodi reuses the interpreter.
 _INVOCATIONS = [0]
 
-# A list of failures is no more use than one, and the prefetch fails in
-# parallel, so the first thread through takes the message.
-_TOLD = [False]
+# Said once each time the connection goes, not once a screen. The property
+# lives on the home window, so it outlasts a plugin call without outlasting
+# Kodi, and the prefetch fails in parallel, so the lock settles who speaks.
+_HOME = 10000
+_OFFLINE = "pp.offline.said"
 _TOLD_LOCK = threading.Lock()
+
+
+def _say_once(message):
+    """Tell the viewer the server is away, once, until it answers again."""
+    window = xbmcgui.Window(_HOME)
+    with _TOLD_LOCK:
+        if window.getProperty(_OFFLINE):
+            return
+        window.setProperty(_OFFLINE, "1")
+    xbmcgui.Dialog().notification(
+        ADDON_NAME, message, xbmcgui.NOTIFICATION_INFO, 4000, False)
+
+
+def _heard_from_the_server():
+    """A good answer, so the next time it goes quiet is worth saying again."""
+    window = xbmcgui.Window(_HOME)
+    if window.getProperty(_OFFLINE):
+        window.clearProperty(_OFFLINE)
 
 
 def reset_for_invocation():
@@ -186,7 +200,6 @@ def reset_for_invocation():
     ADDON = xbmcaddon.Addon()
     _DEBUG = None
     _INVOCATIONS[0] += 1
-    _TOLD[0] = False
     log(f"[boot] invocation {_INVOCATIONS[0]} in pid {os.getpid()}")
     from . import cache as _c
     _c.sweep()

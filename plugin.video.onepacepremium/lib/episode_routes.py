@@ -90,6 +90,10 @@ def list_seasons(params):
     video_id = params["video_id"]
 
     meta = _fetch_provider_meta(catalog_type, video_id)
+    held = not meta
+    if held:
+        from .downloads import held_meta
+        meta = held_meta(video_id)
     if not meta:
         end_directory(succeeded=False)
         return
@@ -139,7 +143,9 @@ def list_seasons(params):
         return list_episodes({**params, "season": str(seasons[0])})
 
     all_ep_ids = countable_episode_ids(meta)
-    if all_ep_ids:
+    # Never from a list built out of what is on disk: it holds only the
+    # episodes kept, and that total would outlive the connection coming back.
+    if all_ep_ids and not held:
         _watched.cache_total(video_id, len(all_ep_ids))
 
     # Pre-build per-season episode ID lists for count display
@@ -230,6 +236,9 @@ def list_episodes(params):
     selected_season = int(params["season"])
 
     meta = _fetch_provider_meta(catalog_type, video_id)
+    if not meta:
+        from .downloads import held_meta
+        meta = held_meta(video_id)
     if not meta:
         end_directory(succeeded=False)
         return

@@ -86,6 +86,10 @@ def _next_episode(series_id, episode_id):
 
     meta = _fetch_provider_meta("series", series_id)
     if not meta:
+        # Offline the running order has to come from what we hold.
+        from .downloads import held_meta
+        meta = held_meta(series_id)
+    if not meta:
         return None
 
     videos = [

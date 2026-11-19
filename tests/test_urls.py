@@ -49,7 +49,7 @@ for label, path, season, want in cases:
     assert got is want, label
 
 print()
-print("=== a provider that cannot be reached fails once, and quietly ===")
+print("=== a provider that cannot be reached is mentioned once ===")
 import kodistub
 import requests as _requests
 from lib import utils
@@ -86,23 +86,59 @@ def _no_connection(self, *a, **k):
     raise _requests.RequestException("no connection")
 
 
-# Eight parallel failures are one problem, so they get one message.
+# Eight parallel failures are one problem, and so is the next screen: the
+# connection has gone, and hearing that once is enough.
 _was_session = utils.session
 utils.session = lambda: type("S", (), {"get": _no_connection})()
-kodistub.recorder.reset()
+kodistub.recorder.reset()          # also clears the home window
 utils.reset_for_invocation()
 for _n in range(5):
     assert utils.fetch_data(f"https://srv/meta/series/pp_{_n}.json") is None
-_said = [m for m, _ in kodistub.recorder.notifications if "Request failed" in m]
-print(f"  five failures in one plugin call -> {len(_said)} message(s)")
+_said = [m for m, _ in kodistub.recorder.notifications]
+print(f"  five failures in one plugin call -> {len(_said)}: {_said}")
 assert len(_said) == 1, _said
+assert "No connection" in _said[0], "it should name the connection, not blame a host"
 
+# Moving to the next screen is the same lost connection, not a new one.
 utils.reset_for_invocation()
 assert utils.fetch_data("https://srv/meta/series/pp_x.json") is None
-_said = [m for m, _ in kodistub.recorder.notifications if "Request failed" in m]
-assert len(_said) == 2, "the next plugin call should be allowed to speak"
+print(f"  the screen after that -> {len(kodistub.recorder.notifications)} message(s)")
+assert len(kodistub.recorder.notifications) == 1,     "a message a screen is what the fallback was meant to stop"
+
+
+class _Answers:
+    def get(self, url, timeout=None):
+        return type("R", (), {"raise_for_status": lambda s: None,
+                              "json": lambda s: {"ok": True}})()
+
+
+# Losing it a second time is worth saying again, so a real outage is never
+# swallowed by one that has already been mentioned.
+utils.session = lambda: _Answers()
+assert utils.fetch_data("https://srv/meta/series/pp_x.json") == {"ok": True}
+utils.session = lambda: type("S", (), {"get": _no_connection})()
+assert utils.fetch_data("https://srv/meta/series/pp_y.json") is None
+print(f"  after the server answered again -> "
+      f"{len(kodistub.recorder.notifications)} message(s)")
+assert len(kodistub.recorder.notifications) == 2, "losing it again went unsaid"
+
+# A server that answers with an error is a different thing to say.
+kodistub.recorder.reset()
+
+
+def _refused(self, *a, **k):
+    err = _requests.RequestException("boom")
+    err.response = type("R", (), {"status_code": 503})()
+    raise err
+
+
+utils.session = lambda: type("S", (), {"get": _refused})()
+assert utils.fetch_data("https://srv/meta/series/pp_z.json") is None
+_said = [m for m, _ in kodistub.recorder.notifications]
+print(f"  a server error -> {_said}")
+assert _said and "503" in _said[0], _said
 utils.session = _was_session
-print("  one message a call, and the next call may speak again  OK")
+print("  once a connection, not once a screen  OK")
 
 print()
 print("=== My Lists falls back to what is on disk ===")
@@ -163,6 +199,132 @@ assert my_lists._get_series_meta("pp_onepacee")[0] is None, "it read the index a
  my_lists._fetch_provider_meta, downloads.enabled) = (_was_read, _was_exists,
                                                       _was_meta, _was_enabled)
 print("  held episodes offline, nothing invented, and off means off  OK")
+
+print()
+print("=== with no connection, what is on disk stands in ===")
+from lib import catalog_routes, playback
+
+_TWO = {
+    "files": {
+        "C:/dl/One Pace/Season 01/1x01.mkv": {
+            "series_id": "pp_onepacee", "series_name": "One Pace",
+            "episode_id": "RO_1", "season": "1", "episode": "1",
+            "video": {"id": "RO_1", "season": 1, "episode": 1,
+                      "title": "Romance Dawn 01"},
+        },
+        "C:/dl/One Pace/Season 01/1x02.mkv": {
+            "series_id": "pp_onepacee", "series_name": "One Pace",
+            "episode_id": "RO_2", "season": "1", "episode": "2",
+            "video": {"id": "RO_2", "season": 1, "episode": 2,
+                      "title": "Romance Dawn 02"},
+        },
+        "C:/dl/Muhn Pace/Season 17/17x01.mkv": {
+            "series_id": "pp_muhnpace", "series_name": "Muhn Pace",
+            "episode_id": "MP_1", "season": "17", "episode": "1",
+            "video": {"id": "MP_1", "season": 17, "episode": 1,
+                      "title": "Enies Lobby 01"},
+        },
+    },
+    "series": {
+        "One Pace": {"name": "One Pace", "description": "The show's own words.",
+                     "order": 0,
+                     "seasons": [{"season": 1, "name": "Romance Dawn",
+                                  "overview": "Luffy sets out.",
+                                  "poster": "https://img/s1.jpg"},
+                                 {"season": 2, "name": "Orange Town",
+                                  "poster": "https://img/s2.jpg"}]},
+        "Muhn Pace": {"name": "Muhn Pace", "order": 1},
+    },
+}
+downloads.read_index = lambda: _TWO
+downloads.enabled = lambda: True
+downloads.xbmcvfs.exists = lambda path: False
+
+_held = downloads.held_meta("pp_onepacee")
+print(f"  held_meta -> {len(_held['videos'])} video(s), "
+      f"{len(_held['seasons'])} season(s), {_held['name']!r}")
+assert [v["id"] for v in _held["videos"]] == ["RO_1", "RO_2"], _held["videos"]
+assert _held["description"] == "The show's own words.", "the series record was dropped"
+# The whole seasons array rides along, so names and overviews survive offline.
+assert _held["seasons"][0]["name"] == "Romance Dawn", _held["seasons"]
+assert _held["seasons"][0]["overview"] == "Luffy sets out.", _held["seasons"]
+assert downloads.held_meta("pp_nothing") is None, "it invented a series"
+downloads.enabled = lambda: False
+assert downloads.held_meta("pp_onepacee") is None, "downloads are off"
+downloads.enabled = lambda: True
+print("  the provider's own episode entries, kept whole  OK")
+
+_series = downloads.held_series()
+print(f"  held_series -> {[s['name'] for s in _series]}")
+# Where the catalogue puts them, not the alphabet: One Pace sits first online
+# and under On Device, so it has to sit first here too.
+assert [s["id"] for s in _series] == ["pp_onepacee", "pp_muhnpace"], _series
+assert all("name" in s and "id" in s for s in _series), "a catalogue row needs both"
+
+# A series the index has never ranked goes last, rather than jumping the queue.
+_unranked = {"files": dict(_TWO["files"]), "series": dict(_TWO["series"])}
+_unranked["files"]["C:/dl/Zed/1x01.mkv"] = {
+    "series_id": "pp_zed", "series_name": "Aaa Pace", "episode_id": "ZZ_1",
+    "season": "1", "episode": "1",
+    "video": {"id": "ZZ_1", "season": 1, "episode": 1, "title": "Zed"},
+}
+_unranked["series"]["Aaa Pace"] = {"name": "Aaa Pace"}
+_was_ranks = provider_api.series_order
+provider_api.series_order = lambda: {}
+downloads.read_index = lambda: _unranked
+print(f"  with one unranked -> {[s['name'] for s in downloads.held_series()]}")
+assert [s["id"] for s in downloads.held_series()] ==     ["pp_onepacee", "pp_muhnpace", "pp_zed"], "an unranked series jumped the queue"
+provider_api.series_order = _was_ranks
+downloads.read_index = lambda: _TWO
+print("  the order the catalogue gave them, kept offline  OK")
+
+# The next episode is still offered once the provider has gone quiet.
+_was_next = (provider_api._fetch_provider_meta, downloads.path_for)
+provider_api._fetch_provider_meta = lambda ct, sid: None
+downloads.path_for = lambda eid: "C:/dl/x.mkv" if eid in {"RO_1", "RO_2"} else ""
+playback._watched.get_watched = lambda sid: set()
+_up = playback._next_episode("pp_onepacee", "RO_1")
+print(f"  after RO_1 -> {_up and _up['title']!r}")
+assert _up and _up["title"] == "Romance Dawn 02", _up
+assert playback._next_episode("pp_onepacee", "RO_2") is None, "there is no third"
+provider_api._fetch_provider_meta, downloads.path_for = _was_next
+print("  autoplay carries on past the six hours the cache lasts  OK")
+
+# Browse is the only way into a season list, so without this the fallback
+# there is unreachable once the catalogue has gone too.
+_was_browse = (catalog_routes._fetch_provider_manifest,
+               catalog_routes.ensure_configured,
+               catalog_routes._watched.get_all_series_stats)
+catalog_routes._fetch_provider_manifest = lambda: None
+catalog_routes.ensure_configured = lambda: True
+catalog_routes._watched.get_all_series_stats = lambda: {"pp_onepacee": (2, 479)}
+
+kodistub.recorder.reset()
+catalog_routes.list_browse({})
+_rows = [(url, li) for url, li, _ in kodistub.recorder.directories]
+print(f"  browse with no manifest -> {[li.label for _, li in _rows]}")
+assert [li.label for _, li in _rows] == ["One Pace", "Muhn Pace"], _rows
+assert all("list_seasons" in url for url, _ in _rows), "they must open a season list"
+
+# Two rows are held of One Pace; the real show has 479 episodes. The count has
+# to come from the watched store or every series would read as finished.
+_props = dict(_rows[0][1].properties)
+print(f"  One Pace row -> {_props}")
+assert _props.get("TotalEpisodes") == "479", _props
+assert _props.get("WatchedEpisodes") == "2", _props
+
+# Nothing held at all is still an empty screen, not an error.
+downloads.read_index = lambda: {"files": {}, "series": {}}
+kodistub.recorder.reset()
+catalog_routes.list_browse({})
+print(f"  nothing held -> {len(kodistub.recorder.directories)} row(s), "
+      f"closed {kodistub.recorder.ended}")
+assert not kodistub.recorder.directories and kodistub.recorder.ended == [True]
+downloads.read_index = lambda: _TWO
+
+(catalog_routes._fetch_provider_manifest, catalog_routes.ensure_configured,
+ catalog_routes._watched.get_all_series_stats) = _was_browse
+print("  browse offers what is held, counted from the watched store  OK")
 
 print()
 print("all assertions passed")

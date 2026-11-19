@@ -373,4 +373,85 @@ assert _row[0].get("values").split("|") == ["Season number", "Arc name", "Both"]
 print(f"  settings row: {_row[0].get('values')!r}, default {_row[0].get('default')}  OK")
 
 print()
+print("=== with no connection the lists fall back to what is held ===")
+from lib import downloads as _dl
+
+_INDEX = {
+    "files": {
+        "C:/dl/One Pace/Season 01/1x01.mkv": {
+            "series_id": "pp_onepacee", "series_name": "One Pace",
+            "episode_id": "RO_1", "season": "1", "episode": "1",
+            "video": {"id": "RO_1", "season": 1, "episode": 1, "title": "Ep one"},
+        },
+        "C:/dl/One Pace/Season 02/2x01.mkv": {
+            "series_id": "pp_onepacee", "series_name": "One Pace",
+            "episode_id": "OT_1", "season": "2", "episode": "1",
+            "video": {"id": "OT_1", "season": 2, "episode": 1, "title": "Ep two"},
+        },
+    },
+    "series": {"One Pace": {"name": "One Pace",
+                            "description": "The show's own words.",
+                            "seasons": [{"season": 1, "name": "Romance Dawn"},
+                                        {"season": 2, "name": "Orange Town"}]}},
+}
+_keep = (_dl.read_index, _dl.enabled, _dl.xbmcvfs.exists,
+         er._fetch_provider_meta, er._watched.cache_total)
+_dl.read_index, _dl.enabled = (lambda: _INDEX), (lambda: True)
+_dl.xbmcvfs.exists = lambda p: False
+WATCHED[0] = set()
+
+_totals = []
+er._watched.cache_total = lambda sid, total: _totals.append((sid, total))
+
+er._fetch_provider_meta = lambda ct, sid: None
+_rec = harness.recorder()
+er.list_seasons({"catalog_type": "series", "video_id": "pp_onepacee"})
+_offline = [li.label for _, li, _ in _rec.directories]
+print(f"  offline season list -> {_offline}, closed {_rec.ended}")
+assert _offline == ["Season 1", "Season 2"], _offline
+assert _rec.ended == [True], "an offline list still has to close cleanly"
+
+# The index holds two episodes; the real show has hundreds. Writing that count
+# would still be wrong once the connection came back.
+print(f"  totals written to the watched store: {_totals or 'none'}")
+assert not _totals, "an offline count would outlive the connection coming back"
+
+_rec = harness.recorder()
+er.list_episodes({"catalog_type": "series", "video_id": "pp_onepacee",
+                  "season": "1"})
+print(f"  offline episode list -> {len(_rec.directories)} row(s)")
+assert len(_rec.directories) == 1, "only the episode actually held belongs here"
+assert _rec.ended == [True]
+
+# Seasons carry their names offline too: the index kept the whole array.
+S["season_labels"] = "1"
+_rec = harness.recorder()
+er.list_seasons({"catalog_type": "series", "video_id": "pp_onepacee"})
+_named = [li.label for _, li, _ in _rec.directories]
+print(f"  offline, named -> {_named}")
+assert _named == ["Romance Dawn", "Orange Town"], _named
+S["season_labels"] = "0"
+
+# Nothing held, nothing to show: it must not draw an empty list as success.
+er._fetch_provider_meta = lambda ct, sid: None
+_rec = harness.recorder()
+er.list_seasons({"catalog_type": "series", "video_id": "pp_nothing"})
+print(f"  nothing held -> {len(_rec.directories)} row(s), closed {_rec.ended}")
+assert not _rec.directories and _rec.ended == [False], _rec.ended
+
+# Back online the real count is written again.
+er._fetch_provider_meta = lambda ct, sid: ONEPACE
+_totals.clear()
+_rec = harness.recorder()
+er.list_seasons({"catalog_type": "series", "video_id": "pp_onepacee"})
+print(f"  back online -> {len(_rec.directories)} season(s), totals {_totals}")
+assert len(_rec.directories) > 2, "the provider's own list should be used again"
+assert _totals and _totals[0][1] > 100, _totals
+
+(_dl.read_index, _dl.enabled, _dl.xbmcvfs.exists,
+ er._fetch_provider_meta, er._watched.cache_total) = _keep
+META[0] = ONEPACE
+print("  held when away, the provider's when back, and no count either way  OK")
+
+print()
 print("all assertions passed")
