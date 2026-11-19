@@ -1839,18 +1839,19 @@ def downloaded_ids():
             if m.get("episode_id")}
 
 
-def still_held(episode_ids):
+def still_held(episode_ids, data=None):
     """Of these, the ones whose file is really still there.
 
     Asked only about the rows a list is drawing, so a season costs a handful of
-    lookups instead of one for every download ever made.
+    lookups instead of one for every download ever made. `data` lets a caller
+    that has already read the index share it.
     """
     wanted = {episode_id for episode_id in episode_ids if episode_id}
     if not wanted or not enabled():
         return set()
 
     paths = {}
-    for path, meta in read_index()["files"].items():
+    for path, meta in (data if data is not None else read_index())["files"].items():
         episode_id = meta.get("episode_id")
         if episode_id in wanted:
             paths.setdefault(episode_id, path)
@@ -1869,6 +1870,32 @@ def still_held(episode_ids):
         if here[episode_id] or not attached.get(folder, True):
             kept.add(episode_id)
     return kept
+
+
+def held_marks(episode_ids=()):
+    """The three sets a list needs to mark its rows, in one read of the index.
+
+    The same answers as downloaded_ids, outdated_ids and imported_ids, which
+    cost a read each. Narrowed to the rows being drawn, so a file deleted
+    elsewhere loses its mark here as it does in a season list.
+    """
+    if not enabled():
+        return set(), set(), set()
+    data = read_index()
+    ours, theirs, stale = set(), set(), set()
+    for meta in data["files"].values():
+        episode_id = meta.get("episode_id")
+        if not episode_id:
+            continue
+        (theirs if meta.get("imported") else ours).add(episode_id)
+        if meta.get("outdated"):
+            stale.add(episode_id)
+
+    on_disk = ours | theirs
+    wanted = {episode_id for episode_id in episode_ids if episode_id}
+    if wanted:
+        on_disk &= still_held(wanted, data)
+    return on_disk, stale, theirs - ours
 
 
 def imported_ids():

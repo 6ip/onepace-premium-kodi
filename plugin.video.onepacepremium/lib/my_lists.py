@@ -39,7 +39,7 @@ def _folder_item(label, icon):
 
 def _build_episode_item(video, ep_id, series_id, meta, show_title,
                          season_poster_map, bm=None, is_watched=False,
-                         actors=None):
+                         actors=None, marks=None):
     """Build an IsPlayable episode ListItem."""
     episode_number = _episode_number(video)
     if episode_number is None:
@@ -49,11 +49,12 @@ def _build_episode_item(video, ep_id, series_id, meta, show_title,
     title = video.get("name") or video.get("title") or f"Episode {episode_number}"
     colour = get_setting("highlight_color") or "ff00d4ff"
     display_label = f"[[COLOR {colour}]{show_title}[/COLOR]] {title}" if show_title else title
-    from .downloads import (downloaded_ids, enabled, imported_ids,
-                            mark as _download_mark, offer_manual, outdated_ids)
-    on_disk, stale = downloaded_ids(), outdated_ids()
+    from .downloads import (enabled, held_marks, mark as _download_mark,
+                            offer_manual)
+    # Worked out once for the whole list; a lone row still asks for itself.
+    on_disk, stale, mine = marks if marks else held_marks([ep_id])
     display_label = _download_mark(display_label, ep_id, on_disk, stale=stale,
-                                   mine=imported_ids())
+                                   mine=mine)
     list_item = xbmcgui.ListItem(label=display_label, offscreen=True)
     tags = list_item.getVideoInfoTag()
     tags.setTitle(title)
@@ -199,7 +200,7 @@ def list_in_progress(params):
     set_content("episodes")
     set_category("In Progress")
     _prefetch_metas(_CATALOG_TYPE, by_series)
-    built = []
+    picked = []
 
     for series_id, bookmarks in by_series.items():
         meta, video_map, season_poster_map, show_title = _get_series_meta(series_id)
@@ -213,12 +214,20 @@ def list_in_progress(params):
             video = video_map.get(ep_id)
             if not video:
                 continue
-            result = _build_episode_item(
-                video, ep_id, series_id, meta, show_title, season_poster_map, bm,
-                actors=series_actors,
-            )
-            if result:
-                built.append(result)
+            picked.append((video, ep_id, series_id, meta, show_title,
+                           season_poster_map, bm, series_actors))
+
+    # Once for the list, not once a row: each of these used to read the index.
+    from .downloads import held_marks
+    marks = held_marks([row[1] for row in picked])
+    built = []
+    for video, ep_id, series_id, meta, show_title, posters, bm, actors in picked:
+        result = _build_episode_item(
+            video, ep_id, series_id, meta, show_title, posters, bm,
+            actors=actors, marks=marks,
+        )
+        if result:
+            built.append(result)
 
     if not built:
         end_directory()
@@ -248,7 +257,7 @@ def list_next_episodes(params):
     set_content("episodes")
     set_category("Next Episodes")
     _prefetch_metas(_CATALOG_TYPE, all_series)
-    built = []
+    picked = []
 
     for series_id in all_series:
         meta, video_map, season_poster_map, show_title = _get_series_meta(series_id)
@@ -271,10 +280,16 @@ def list_next_episodes(params):
             continue
 
         ep_id = next_video.get("id")
-        bm = _bookmarks.get(ep_id)
+        picked.append((next_video, ep_id, series_id, meta, show_title,
+                       season_poster_map, _bookmarks.get(ep_id), _cast_list(meta)))
+
+    from .downloads import held_marks
+    marks = held_marks([row[1] for row in picked])
+    built = []
+    for video, ep_id, series_id, meta, show_title, posters, bm, actors in picked:
         result = _build_episode_item(
-            next_video, ep_id, series_id, meta, show_title, season_poster_map, bm,
-            actors=_cast_list(meta),
+            video, ep_id, series_id, meta, show_title, posters, bm,
+            actors=actors, marks=marks,
         )
         if result:
             built.append(result)

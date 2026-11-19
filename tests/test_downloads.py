@@ -2308,6 +2308,7 @@ assert all(p[2]["video_id"] == p[0] for p in picks), "a pick must carry its own 
 
 er._fetch_provider_meta = lambda ct, vid: META
 er.ensure_configured = lambda: True
+_real_downloaded_ids = downloads.downloaded_ids
 downloads.downloaded_ids = lambda: {"AR_1"}
 # The picker now asks whether a held file is still there; here it is.
 _real_still_held = downloads.still_held
@@ -2603,6 +2604,36 @@ _src3 = (harness.ADDON / "lib" / "episode_routes.py").read_text(encoding="utf-8"
 assert "still_held(video.get(\"id\") for video in season_videos)" in _src3,     "the episode list does not narrow the check to the rows it draws"
 assert "_sweep(" not in _src3, "the episode list must not sweep the whole index"
 print("  the episode list asks only about its own rows  OK")
+
+print()
+print("=== one read of the index gives the same three answers as three did ===")
+downloads.downloaded_ids = _real_downloaded_ids
+_mix = {"files": {
+    "C:/dl/a.mkv": {"episode_id": "A", "series_id": "pp"},
+    "C:/dl/b.mkv": {"episode_id": "B", "series_id": "pp", "outdated": True},
+    "C:/dl/c.mkv": {"episode_id": "C", "series_id": "pp", "imported": True},
+    "C:/dl/d.mkv": {"episode_id": "D", "series_id": "pp", "imported": True},
+    "C:/dl/d2.mkv": {"episode_id": "D", "series_id": "pp"},
+    "C:/dl/e.mkv": {"series_id": "pp"},
+}, "series": {}}
+_keep4 = (downloads.read_index, downloads.enabled, downloads.xbmcvfs.exists)
+downloads.read_index = lambda: _mix
+downloads.enabled = lambda: True
+downloads.xbmcvfs.exists = lambda p: True
+
+_on, _stale, _mine = downloads.held_marks()
+print(f"  on disk {sorted(_on)}, outdated {sorted(_stale)}, theirs {sorted(_mine)}")
+assert _on == downloads.downloaded_ids(), (_on, downloads.downloaded_ids())
+assert _stale == downloads.outdated_ids(), (_stale, downloads.outdated_ids())
+assert _mine == downloads.imported_ids(), (_mine, downloads.imported_ids())
+# D is held both ways, so it counts as ours: that is the copy Delete removes.
+assert "D" in _on and "D" not in _mine, (_on, _mine)
+assert downloads.held_marks(["A"])[0] == {"A"}, "narrowing should drop the rest"
+
+downloads.enabled = lambda: False
+assert downloads.held_marks() == (set(), set(), set()), "downloads are off"
+(downloads.read_index, downloads.enabled, downloads.xbmcvfs.exists) = _keep4
+print("  the same answers, in one pass  OK")
 
 print()
 print("all assertions passed")

@@ -493,4 +493,63 @@ assert len([l for l in _rows if "[D]" in l]) == 2, "the row was dropped, not unm
 print("  unmarked while it is gone, marked again when it is back  OK")
 
 print()
+print("=== My Lists reads the index once, not once a row ===")
+from lib import my_lists as _ml
+
+_rows = [v["id"] for s in (1, 2, 7) for v in harness.episodes(ONEPACE, s)]
+_ml_index = {"files": {
+    f"C:/dl/One Pace/Season 01/{_i}.mkv": {
+        "series_id": "pp_onepacee", "series_name": "One Pace",
+        "episode_id": _eid, "season": "1", "episode": str(_i + 1),
+    } for _i, _eid in enumerate(_rows)
+}, "series": {}}
+_ml_live = {p for p in _ml_index["files"]} | {"C:/dl/One Pace/Season 01/"}
+_ml_live.discard(f"C:/dl/One Pace/Season 01/3.mkv")      # deleted in Explorer
+
+_reads = []
+_ml_keep = (_dl.read_index, _dl.xbmcvfs.exists, _dl.enabled,
+            _ml._bookmarks.get_all, _ml._watched.get_watched,
+            _ml._watched.get_all_series_ids, _ml._prefetch_metas,
+            _ml._fetch_provider_meta)
+_dl.read_index = lambda: (_reads.append(1), _ml_index)[1]
+_dl.xbmcvfs.exists = lambda p: p in _ml_live
+_dl.enabled = lambda: True
+_ml._bookmarks.get_all = lambda: {
+    eid: {"series_id": "pp_onepacee", "pos": 10.0, "total": 100.0}
+    for eid in _rows}
+_ml._watched.get_watched = lambda sid: set()
+_ml._watched.get_all_series_ids = lambda: ["pp_onepacee"]
+_ml._prefetch_metas = lambda ct, ids: None
+_ml._fetch_provider_meta = lambda ct, sid: ONEPACE
+
+_reads.clear()
+_rec = harness.recorder()
+_ml.list_in_progress({})
+_drawn = [li.label for _, li, _ in _rec.directories]
+print(f"  In Progress: {len(_drawn)} row(s), {len(_reads)} index read(s)")
+assert len(_drawn) == len(_rows), _drawn
+# It used to be three reads a row, so these rows cost three times as many.
+print(f"  (it used to cost {len(_rows) * 3} reads for the same list)")
+assert len(_reads) <= 2, f"the index is still being read per row: {len(_reads)}"
+
+_marked = [l for l in _drawn if "[D]" in l]
+print(f"  marked {len(_marked)} of {len(_drawn)} (one file was deleted)")
+assert len(_marked) == len(_rows) - 1, _marked
+
+# A next episode only exists once something has been watched.
+_ml._watched.get_watched = lambda sid: {_rows[0]}
+_reads.clear()
+_rec = harness.recorder()
+_ml.list_next_episodes({})
+print(f"  Next Episodes: {len(_rec.directories)} row(s), {len(_reads)} index read(s)")
+assert len(_rec.directories) == 1, "one row a series is the whole point of it"
+assert len(_reads) <= 2, f"the index is still being read per row: {len(_reads)}"
+
+(_dl.read_index, _dl.xbmcvfs.exists, _dl.enabled,
+ _ml._bookmarks.get_all, _ml._watched.get_watched,
+ _ml._watched.get_all_series_ids, _ml._prefetch_metas,
+ _ml._fetch_provider_meta) = _ml_keep
+print("  one read for the list, and a deleted file unmarked here too  OK")
+
+print()
 print("all assertions passed")
