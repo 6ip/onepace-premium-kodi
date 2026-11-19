@@ -1,5 +1,7 @@
 """Reuse Language Invoker: faster menus, at a risk only Kodi can remove."""
+import os
 import re
+import xml.etree.ElementTree as ET
 
 import xbmc
 import xbmcaddon
@@ -28,17 +30,54 @@ def _read():
         return ""
 
 
-def _write(value):
-    """Set it, then read it back: some systems keep the folder read-only."""
+def _swap(spare, path):
+    # Atomic on Windows and POSIX, so the manifest is never half a file.
+    os.replace(spare, path)
+
+
+def _discard(spare):
     try:
-        with xbmcvfs.File(_manifest()) as handle:
+        if xbmcvfs.exists(spare):
+            xbmcvfs.delete(spare)
+    except Exception as exc:
+        log(f"[invoker] could not clear up {spare}: {exc}")
+
+
+def _sound(spare, value):
+    """A spare copy Kodi could still load, saying what we meant it to say."""
+    try:
+        with xbmcvfs.File(spare) as handle:
+            written = handle.read() or ""
+        ET.fromstring(written)
+    except Exception as exc:
+        log(f"[invoker] the spare manifest is not usable: {exc}")
+        return False
+    found = _REUSE.search(written)
+    return bool(found) and found.group(2) == value
+
+
+def _write(value):
+    """Write a spare copy, read it back, then swap it in.
+
+    Writing over addon.xml in place risks leaving half a file behind, and an
+    add-on with a broken manifest will not load at all.
+    """
+    path = _manifest()
+    spare = path + ".new"
+    try:
+        with xbmcvfs.File(path) as handle:
             source = handle.read() or ""
         if not _REUSE.search(source):
             return False
-        with xbmcvfs.File(_manifest(), "w") as handle:
+        with xbmcvfs.File(spare, "w") as handle:
             handle.write(_REUSE.sub(rf"\g<1>{value}\g<3>", source))
+        if not _sound(spare, value):
+            _discard(spare)
+            return False
+        _swap(spare, path)
     except Exception as exc:
         log(f"[invoker] could not write the manifest: {exc}")
+        _discard(spare)
         return False
     return _read() == value
 

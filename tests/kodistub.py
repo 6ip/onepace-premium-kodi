@@ -259,14 +259,18 @@ def install(addon_root, fixtures, settings=None):
            INPUT_ALPHANUM=INPUT_ALPHANUM)
 
     class _Stat:
-        """Kodi's file stat. Tests override sizes through Stat.sizes."""
+        """Kodi's file stat. Tests override through Stat.sizes / Stat.mtimes."""
         sizes = {}
+        mtimes = {}
 
         def __init__(self, path):
             self.path = path
 
         def st_size(self):
             return _Stat.sizes.get(self.path, 0)
+
+        def st_mtime(self):
+            return _Stat.mtimes.get(self.path, 0)
 
     def _add_dir(handle, items, total=None):
         recorder.directories.extend(items)

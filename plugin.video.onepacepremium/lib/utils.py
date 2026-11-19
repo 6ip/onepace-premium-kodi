@@ -188,6 +188,8 @@ def reset_for_invocation():
     _INVOCATIONS[0] += 1
     _TOLD[0] = False
     log(f"[boot] invocation {_INVOCATIONS[0]} in pid {os.getpid()}")
+    from . import cache as _c
+    _c.sweep()
     from . import bookmarks as _b, watched as _w
     _b.invalidate()
     _w.invalidate()

@@ -11,24 +11,25 @@ MANIFEST = '<?xml version="1.0"?>\n<addon id="x">\n  <extension>\n' \
 
 DISK = {"addon.xml": MANIFEST}
 READ_ONLY = [False]
+HALF = [False]          # a write that stops partway, as a full disk would
 
 
 class _File:
-    """A manifest in memory, which can be made read-only."""
+    """A small filesystem in a dict, so the spare copy is a real second file."""
 
     def __init__(self, path, mode="r"):
-        self.mode, self.buffer = mode, ""
+        self.path, self.mode, self.buffer = path, mode, ""
 
     def __enter__(self):
         return self
 
     def __exit__(self, *a):
         if self.mode == "w" and not READ_ONLY[0]:
-            DISK["addon.xml"] = self.buffer
+            DISK[self.path] = self.buffer[:40] if HALF[0] else self.buffer
         return False
 
     def read(self):
-        return DISK["addon.xml"]
+        return DISK.get(self.path, "")
 
     def write(self, blob):
         self.buffer += blob
@@ -36,7 +37,10 @@ class _File:
 
 
 invoker.xbmcvfs.File = _File
+invoker.xbmcvfs.exists = lambda path: path in DISK
+invoker.xbmcvfs.delete = lambda path: DISK.pop(path, None) is not None
 invoker._manifest = lambda: "addon.xml"
+invoker._swap = lambda spare, path: DISK.__setitem__(path, DISK.pop(spare))
 
 ANSWERS = []
 ASKED = []
@@ -69,6 +73,17 @@ assert invoker._read() == "true", "it reported failure but changed the file"
 READ_ONLY[0] = False
 invoker._write("false")
 print("  a read-only folder is reported, not silently ignored  OK")
+
+assert "addon.xml.new" not in DISK, "the spare copy was left lying about"
+
+# The whole point: a write that stops partway must not reach addon.xml.
+HALF[0] = True
+assert invoker._write("true") is False, "half a manifest was accepted"
+assert invoker._read() == "false", "the manifest changed although the spare was broken"
+assert "<extension>" in DISK["addon.xml"], "the manifest was damaged anyway"
+assert "addon.xml.new" not in DISK, "the broken spare was left behind"
+HALF[0] = False
+print("  a half-written spare never reaches the manifest  OK")
 
 print()
 print("=== the warning names the risk, and no version ===")
