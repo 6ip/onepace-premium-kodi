@@ -2348,6 +2348,7 @@ def _fake_choose(p, downloadable_only=False, quiet=False, prefer=None, survey=Fa
 
 er._choose_stream = _fake_choose
 import lib.downloads as _dl
+_real_download = _dl.download
 _dl.download = _fake_download
 
 kodistub.recorder.reset()
@@ -2634,6 +2635,81 @@ downloads.enabled = lambda: False
 assert downloads.held_marks() == (set(), set(), set()), "downloads are off"
 (downloads.read_index, downloads.enabled, downloads.xbmcvfs.exists) = _keep4
 print("  the same answers, in one pass  OK")
+
+print()
+print("=== the bar is told a few times a second, not once a chunk ===")
+
+
+class _Many:
+    """Two hundred chunks, handed over as fast as the loop will take them."""
+
+    url, headers = "https://srv/big.mkv", {"Content-Length": "200"}
+
+    def raise_for_status(self):
+        pass
+
+    def iter_content(self, chunk_size=0):
+        for _ in range(200):
+            yield b"x"
+
+
+_told = []
+
+
+class _Bar:
+    """Stands in for the background bar, and counts what it is told."""
+
+    def create(self, *a, **k):
+        pass
+
+    def update(self, *a, **k):
+        _told.append(a)
+
+    def close(self):
+        pass
+
+
+kodistub._WINDOW_PROPS.clear()
+downloads.download = _real_download          # the genuine transfer again
+_thrown, _saved = [], []
+downloads.read_index = lambda: {"files": {}, "series": {}}
+downloads.folder = lambda: "C:/dl/"
+downloads.xbmcvfs.File = lambda p, mode="r": _Handle()
+downloads.xbmcvfs.exists = lambda p: False
+downloads.xbmcvfs.mkdirs = lambda p: True
+downloads.xbmcvfs.delete = lambda p: _thrown.append(p) or True
+downloads._write_index = lambda data: _saved.append(data)
+_real_bar = downloads.xbmcgui.DialogProgressBG
+downloads.xbmcgui.DialogProgressBG = _Bar
+downloads.session = lambda: type("S", (), {"get": lambda s, *a, **k: _Many()})()
+_outcome = downloads.download({
+    "video_url": "https://srv/play/k/h/1/realdebrid/DI_8", "episode_id": "DI_8",
+    "series_name": "One Pace", "episode_title": "T", "season": "1",
+    "episode": "8", "filename": "y.mkv", "video_size": 200})
+print(f"  200 chunks -> {len(_told)} update(s), outcome {_outcome}")
+assert _outcome == downloads.OK, _outcome
+# Every chunk used to reach into Kodi's dialogs from this thread.
+assert len(_told) <= 5, f"the bar is still told every chunk: {len(_told)}"
+assert _told and _told[-1][0] == 100, f"the bar should end full: {_told[-1:]}"
+downloads.xbmcgui.DialogProgressBG = _real_bar
+print("  a couple of updates where there used to be two hundred  OK")
+
+print()
+print("=== no progress bar can be left on the screen ===")
+# Only restarting Kodi clears one, so every bar closes however we leave.
+import ast as _ast
+
+for _name in ("downloads.py", "episode_routes.py", "import_folder.py"):
+    _tree = _ast.parse((harness.ADDON / "lib" / _name).read_text(encoding="utf-8"))
+    for _fn in [n for n in _ast.walk(_tree) if isinstance(n, _ast.FunctionDef)]:
+        if not [n for n in _ast.walk(_fn) if isinstance(n, _ast.Call)
+                and getattr(n.func, "attr", "") in ("DialogProgressBG", "DialogProgress")]:
+            continue
+        _safe = [n for t in _ast.walk(_fn) if isinstance(t, _ast.Try)
+                 for s in t.finalbody for n in _ast.walk(s)
+                 if isinstance(n, _ast.Call) and getattr(n.func, "attr", "") == "close"]
+        print(f"  {_name}:{_fn.name}() closes in a finally: {bool(_safe)}")
+        assert _safe, f"{_name}:{_fn.name}() can leave its bar on the screen"
 
 print()
 print("all assertions passed")

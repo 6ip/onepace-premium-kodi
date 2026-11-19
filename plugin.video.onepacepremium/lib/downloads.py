@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import time
 
 import xbmc
 import xbmcaddon
@@ -19,6 +20,10 @@ _ADDON = xbmcaddon.Addon()
 
 _INDEX = "downloads.json"
 _CHUNK = 1024 * 256
+# Telling Kodi how far along we are reaches into its windows from this thread.
+# Four times a second is past what the eye catches, and a quarter of a second
+# is still a prompt answer to Cancel.
+_TICK = 0.25
 _ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 # Anything else we cannot fetch ourselves, like an Elementum magnet.
@@ -418,6 +423,7 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
     partial = destination + ".part"
     monitor = xbmc.Monitor()
     written, total, stopped = 0, 0, False
+    started, last_tick, updates = time.monotonic(), 0.0, 0
     try:
         response = session().get(url, stream=True, timeout=30)
         response.raise_for_status()
@@ -432,18 +438,24 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
                 if monitor.abortRequested():
                     raise InterruptedError("Kodi is shutting down")
                 if download_queue.cancelled(ticket):
-                    # Not straight out: the part file is still open.
+                    # Not straight out: the part file is still open. Asked
+                    # every chunk: a cancel should land at once.
                     stopped = True
                     break
                 if not chunk:
                     continue
                 handle.write(bytearray(chunk))
                 written += len(chunk)
-                if total:
+                now = time.monotonic()
+                if total and now - last_tick >= _TICK:
+                    last_tick = now
                     # A short Content-Length would pass 100; Kodi refuses.
                     pct = min(100, int(written * 100 / total))
                     progress.update(pct, "Downloading", name)
                     download_queue.beat(ticket, pct)
+                    updates += 1
+            if not stopped and total:
+                progress.update(100, "Downloading", name)
     except Exception as exc:
         progress.close()
         log(f"[downloads] {name!r} failed after {written} bytes: {exc}")
@@ -452,6 +464,9 @@ def _fetch(params, meta, directory, name, already, progress, ticket):
         return FAILED
 
     progress.close()
+    spent = max(time.monotonic() - started, 0.001)
+    log(f"[downloads] {name!r}: {written} bytes in {spent:.1f}s "
+        f"({written / spent / 1048576:.1f} MB/s), {updates} progress update(s)")
     if stopped:
         log(f"[downloads] {name!r} cancelled after {written} bytes")
         xbmcvfs.delete(partial)
@@ -999,26 +1014,29 @@ def rescan(_params=None):
     if missing:
         progress.create("Rescanning downloads")
     ids = _series_ids() if missing else {}
-    for index, entry in enumerate(missing, 1):
-        progress.update(int(index * 100 / len(missing)), "Rescanning downloads",
-                        os.path.basename(entry["path"]))
-        series_id = ids.get(entry["series_name"])
-        meta = _fetch_provider_meta("series", series_id) if series_id else None
-        video = _match_episode(meta, entry) if meta else None
-        if not video:
-            unknown += 1
-            log(f"[rescan] no provider entry for {entry['path']!r}")
-            continue
-        # "Farewell (Filler)" is the episode's name, not a cut of it.
-        real = safe_name(video.get("name") or video.get("title") or "")
-        if entry["cut"] and f"{entry['title']} ({entry['cut']})" == real:
-            log(f"[rescan] {real!r} is the title, not a cut")
-            entry["variant"] = ""
-        _remember(entry["path"], _rebuilt(entry, video, meta), meta,
-                  _sidecars(entry["path"]),
-                  _adopted_art(entry["path"], entry["season"]))
-        added += 1
-    progress.close()
+    try:
+        for index, entry in enumerate(missing, 1):
+            progress.update(int(index * 100 / len(missing)), "Rescanning downloads",
+                            os.path.basename(entry["path"]))
+            series_id = ids.get(entry["series_name"])
+            meta = _fetch_provider_meta("series", series_id) if series_id else None
+            video = _match_episode(meta, entry) if meta else None
+            if not video:
+                unknown += 1
+                log(f"[rescan] no provider entry for {entry['path']!r}")
+                continue
+            # "Farewell (Filler)" is the episode's name, not a cut of it.
+            real = safe_name(video.get("name") or video.get("title") or "")
+            if entry["cut"] and f"{entry['title']} ({entry['cut']})" == real:
+                log(f"[rescan] {real!r} is the title, not a cut")
+                entry["variant"] = ""
+            _remember(entry["path"], _rebuilt(entry, video, meta), meta,
+                      _sidecars(entry["path"]),
+                      _adopted_art(entry["path"], entry["season"]))
+            added += 1
+    finally:
+        # However we leave, the bar must not be left on the screen.
+        progress.close()
 
     lines = [f"Added {added} of {len(missing)} found"] if missing else []
     if unknown:
@@ -1155,38 +1173,41 @@ def check_updates(_params=None):
         _said("Check for Updates", "Could not check for updates")
         return
 
-    for index, (path, meta) in enumerate(held, 1):
-        episode_id = meta["episode_id"]
-        progress.update(int(index * 100 / len(held)), "Checking downloads",
-                        meta.get("episode_title", ""))
-        current = hashes.get(f"stream/{stream_path(episode_id)}.json", "")
-        if current and current == meta.get("stream_sha"):
-            continue                      # untouched since we fetched it
-        checked += 1
-        try:
-            info_hash, size = _release_of(episode_id, meta.get("variant", ""))
-        except Exception as exc:
-            log(f"[updates] {episode_id}: {exc}")
-            failed += 1
-            continue
-        # An edited file is not a new release; the infoHash decides.
-        was, was_size = meta.get("info_hash") or "", meta.get("video_size") or 0
-        if info_hash and was:
-            stale = info_hash != was
-        elif size and was_size:
-            stale = size != was_size
-        else:
-            stale = False
-            meta.setdefault("info_hash", info_hash)
-            meta.setdefault("video_size", size)
-        meta["stream_sha"] = current
-        meta["outdated"] = stale
-        if stale:
-            changed += 1
-            log(f"[updates] {episode_id} was re-released")
-    _write_index(data)
-    pictures = refresh_artwork(progress)
-    progress.close()
+    try:
+        for index, (path, meta) in enumerate(held, 1):
+            episode_id = meta["episode_id"]
+            progress.update(int(index * 100 / len(held)), "Checking downloads",
+                            meta.get("episode_title", ""))
+            current = hashes.get(f"stream/{stream_path(episode_id)}.json", "")
+            if current and current == meta.get("stream_sha"):
+                continue                      # untouched since we fetched it
+            checked += 1
+            try:
+                info_hash, size = _release_of(episode_id, meta.get("variant", ""))
+            except Exception as exc:
+                log(f"[updates] {episode_id}: {exc}")
+                failed += 1
+                continue
+            # An edited file is not a new release; the infoHash decides.
+            was, was_size = meta.get("info_hash") or "", meta.get("video_size") or 0
+            if info_hash and was:
+                stale = info_hash != was
+            elif size and was_size:
+                stale = size != was_size
+            else:
+                stale = False
+                meta.setdefault("info_hash", info_hash)
+                meta.setdefault("video_size", size)
+            meta["stream_sha"] = current
+            meta["outdated"] = stale
+            if stale:
+                changed += 1
+                log(f"[updates] {episode_id} was re-released")
+        _write_index(data)
+        pictures = refresh_artwork(progress)
+    finally:
+        # However we leave, the bar must not be left on the screen.
+        progress.close()
 
     lines = [f"{changed} of {len(held)} look re-released",
              f"{checked} needed a closer look, {len(held) - checked} unchanged"]
@@ -1525,28 +1546,31 @@ def move_downloads(_params=None):
     progress = xbmcgui.DialogProgressBG()
     progress.create("Moving downloads")
     moved, failed, left = 0, 0, set()
-    for index, (path, directory, name) in enumerate(planned, 1):
-        progress.update(int(index * 100 / len(planned)), "Moving downloads", name)
-        if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
-            failed += 1
-            continue
-        destination = directory + name
-        if xbmcvfs.exists(destination) or not _relocate(path, destination):
-            log(f"[downloads] could not move {path!r}")
-            failed += 1
-            continue
-        entry = data["files"].pop(path)
-        # Subtitles only work where the video is, so they go with it.
-        entry["subtitles"] = _move_subtitles(entry.get("subtitles", ()), path, destination)
-        entry["artwork"] = _move_artwork(entry.get("artwork"), path, destination)
-        _move_series_art(data, entry.get("series_name") or "Downloads", destination)
-        data["files"][destination] = entry
-        was = _root_of(path)
-        _prune(path, was)
-        if was:
-            left.add(was)
-        moved += 1
-    progress.close()
+    try:
+        for index, (path, directory, name) in enumerate(planned, 1):
+            progress.update(int(index * 100 / len(planned)), "Moving downloads", name)
+            if not xbmcvfs.mkdirs(directory) and not xbmcvfs.exists(directory):
+                failed += 1
+                continue
+            destination = directory + name
+            if xbmcvfs.exists(destination) or not _relocate(path, destination):
+                log(f"[downloads] could not move {path!r}")
+                failed += 1
+                continue
+            entry = data["files"].pop(path)
+            # Subtitles only work where the video is, so they go with it.
+            entry["subtitles"] = _move_subtitles(entry.get("subtitles", ()), path, destination)
+            entry["artwork"] = _move_artwork(entry.get("artwork"), path, destination)
+            _move_series_art(data, entry.get("series_name") or "Downloads", destination)
+            data["files"][destination] = entry
+            was = _root_of(path)
+            _prune(path, was)
+            if was:
+                left.add(was)
+            moved += 1
+    finally:
+        # However we leave, the bar must not be left on the screen.
+        progress.close()
 
     # Only ever rmdir: anything of theirs in there keeps its folder, and the
     # summary says so rather than leaving them to find it.
