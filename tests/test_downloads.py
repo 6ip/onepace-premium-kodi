@@ -2309,6 +2309,9 @@ assert all(p[2]["video_id"] == p[0] for p in picks), "a pick must carry its own 
 er._fetch_provider_meta = lambda ct, vid: META
 er.ensure_configured = lambda: True
 downloads.downloaded_ids = lambda: {"AR_1"}
+# The picker now asks whether a held file is still there; here it is.
+_real_still_held = downloads.still_held
+downloads.still_held = lambda ids: {"AR_1"}
 downloads.enabled = lambda: True
 
 asked = {}
@@ -2544,6 +2547,62 @@ assert "_GIVE_UP_AFTER" in season_run, "a broken run works through the whole sea
 assert "in_a_row = 0" in season_run, "the counter never resets, so scattered failures stop the run"
 print("  a run that keeps failing gives up instead of grinding on  OK")
 print("  shown in the same window as What's New  OK")
+
+print()
+print("=== a file deleted elsewhere loses its mark, without a full sweep ===")
+_big = {"files": {}, "series": {}}
+for _i in range(200):
+    _big["files"][f"C:/dl/One Pace/Season 01/{_i}.mkv"] = {
+        "series_id": "pp", "series_name": "One Pace",
+        "episode_id": f"EP_{_i}", "season": "1", "episode": str(_i),
+    }
+_there = {f"C:/dl/One Pace/Season 01/{_i}.mkv" for _i in range(200)}
+_there.add("C:/dl/One Pace/Season 01/")          # the drive is plugged in
+_there.discard("C:/dl/One Pace/Season 01/7.mkv")  # this one was deleted
+
+downloads.still_held = _real_still_held      # the genuine article again
+_looked = []
+_keep3 = (downloads.read_index, downloads.xbmcvfs.exists, downloads.enabled)
+downloads.read_index = lambda: _big
+downloads.enabled = lambda: True
+downloads.xbmcvfs.exists = lambda p: _looked.append(p) or (p in _there)
+
+_kept = downloads.still_held([f"EP_{n}" for n in (5, 6, 7)])
+print(f"  asked about 3 of 200 -> kept {sorted(_kept)}, {len(_looked)} lookup(s)")
+assert _kept == {"EP_5", "EP_6"}, _kept
+# The whole point of doing it this way: a season must not cost a lookup for
+# every download ever made.
+assert len(_looked) <= 5, f"it went through the whole library: {len(_looked)}"
+
+# A drive that is not plugged in has lost nothing, so the mark stays.
+_there.discard("C:/dl/One Pace/Season 01/")
+_looked.clear()
+_kept = downloads.still_held(["EP_7"])
+print(f"  the same file, drive unplugged -> {sorted(_kept)}")
+assert _kept == {"EP_7"}, "an unplugged drive must not erase anything"
+_there.add("C:/dl/One Pace/Season 01/")
+
+# Nothing is claimed for episodes we never held, or when downloads are off.
+assert downloads.still_held(["never_held"]) == set()
+assert downloads.still_held([]) == set()
+assert downloads.still_held([None, ""]) == set()
+downloads.enabled = lambda: False
+assert downloads.still_held(["EP_5"]) == set(), "downloads are switched off"
+downloads.enabled = lambda: True
+
+# Nothing missing means no folder checks at all.
+_looked.clear()
+assert downloads.still_held(["EP_5", "EP_6"]) == {"EP_5", "EP_6"}
+print(f"  nothing missing -> {len(_looked)} lookup(s) for 2 rows")
+assert len(_looked) == 2, _looked
+
+(downloads.read_index, downloads.xbmcvfs.exists, downloads.enabled) = _keep3
+print("  only the rows being drawn, and an absent drive is not a deletion  OK")
+
+_src3 = (harness.ADDON / "lib" / "episode_routes.py").read_text(encoding="utf-8")
+assert "still_held(video.get(\"id\") for video in season_videos)" in _src3,     "the episode list does not narrow the check to the rows it draws"
+assert "_sweep(" not in _src3, "the episode list must not sweep the whole index"
+print("  the episode list asks only about its own rows  OK")
 
 print()
 print("all assertions passed")

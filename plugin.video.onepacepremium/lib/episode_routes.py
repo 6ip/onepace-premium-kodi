@@ -273,9 +273,14 @@ def list_episodes(params):
     hide_watched = get_setting("hide_watched") == "true"
     from .downloads import (downloaded_ids, enabled, imported_ids,
                             mark as _download_mark,
-                            offer_manual as _offer_manual, outdated_ids)
+                            offer_manual as _offer_manual, outdated_ids,
+                            still_held)
     on_disk, downloads_on = downloaded_ids(), enabled()
     stale, mine = outdated_ids(), imported_ids()
+    if on_disk:
+        # Asked about these rows only: a file deleted elsewhere loses its mark
+        # here without the list checking the whole library to find out.
+        on_disk &= still_held(video.get("id") for video in season_videos)
     items = []
     n_watched = n_resume = n_hidden = 0
     for video in season_videos:
@@ -736,6 +741,10 @@ def download_season(params):
 
     # Already on disk starts unticked, so a press re-fetches nothing.
     on_disk, mine = downloaded_ids(), imported_ids()
+    if on_disk:
+        # One deleted since should be offered again, not quietly skipped.
+        from .downloads import still_held
+        on_disk &= still_held(episode_id for episode_id, _, _ in episodes)
     labels = [_download_mark(label, episode_id, on_disk, plain=True, mine=mine)
               for episode_id, label, _ in episodes]
     preselect = [i for i, (episode_id, _, _) in enumerate(episodes)

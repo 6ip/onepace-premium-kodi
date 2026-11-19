@@ -1839,6 +1839,38 @@ def downloaded_ids():
             if m.get("episode_id")}
 
 
+def still_held(episode_ids):
+    """Of these, the ones whose file is really still there.
+
+    Asked only about the rows a list is drawing, so a season costs a handful of
+    lookups instead of one for every download ever made.
+    """
+    wanted = {episode_id for episode_id in episode_ids if episode_id}
+    if not wanted or not enabled():
+        return set()
+
+    paths = {}
+    for path, meta in read_index()["files"].items():
+        episode_id = meta.get("episode_id")
+        if episode_id in wanted:
+            paths.setdefault(episode_id, path)
+
+    here = {episode_id: xbmcvfs.exists(path)
+            for episode_id, path in paths.items()}
+    adrift = [paths[episode_id] for episode_id, found in here.items() if not found]
+    if not adrift:
+        return set(paths)
+
+    # A drive that is not plugged in has lost nothing, so those keep their mark.
+    attached = _folders_present(adrift)
+    kept = set()
+    for episode_id, path in paths.items():
+        folder = path.rsplit("/", 1)[0] + "/" if "/" in path else path
+        if here[episode_id] or not attached.get(folder, True):
+            kept.add(episode_id)
+    return kept
+
+
 def imported_ids():
     """Episode ids held only as the viewer's own files."""
     if not enabled():

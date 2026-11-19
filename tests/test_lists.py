@@ -454,4 +454,43 @@ META[0] = ONEPACE
 print("  held when away, the provider's when back, and no count either way  OK")
 
 print()
+print("=== a file deleted elsewhere loses its mark on the next list ===")
+from lib import downloads as _dl
+
+_two = S1[:2]
+_index = {"files": {
+    f"C:/dl/One Pace/Season 01/{_i}.mkv": {
+        "series_id": "pp_onepacee", "series_name": "One Pace",
+        "episode_id": _eid, "season": "1", "episode": str(_i + 1),
+    } for _i, _eid in enumerate(_two)
+}, "series": {}}
+# The second one was deleted in Explorer; the folder is still there.
+_live = {"C:/dl/One Pace/Season 01/0.mkv", "C:/dl/One Pace/Season 01/"}
+
+_held_keep = (_dl.read_index, _dl.xbmcvfs.exists, _dl.enabled,
+              _dl.downloaded_ids, _dl.outdated_ids, _dl.imported_ids)
+_dl.read_index = lambda: _index
+_dl.enabled = lambda: True
+_dl.xbmcvfs.exists = lambda p: p in _live
+_dl.downloaded_ids = lambda: set(_two)
+_dl.outdated_ids = lambda: set()
+_dl.imported_ids = lambda: set()
+
+_rows = [li.label for _, li, _ in episodes(1).directories]
+_marked = [l for l in _rows if "[D]" in l]
+print(f"  index claims 2 held, {len(_marked)} still marked")
+assert len(_marked) == 1, _marked
+assert _marked[0].count("[D]") == 1, _marked
+
+# Put the file back and the mark returns: nothing was forgotten, only unmarked.
+_live.add("C:/dl/One Pace/Season 01/1.mkv")
+_rows = [li.label for _, li, _ in episodes(1).directories]
+print(f"  with the file back -> {len([l for l in _rows if '[D]' in l])} marked")
+assert len([l for l in _rows if "[D]" in l]) == 2, "the row was dropped, not unmarked"
+
+(_dl.read_index, _dl.xbmcvfs.exists, _dl.enabled,
+ _dl.downloaded_ids, _dl.outdated_ids, _dl.imported_ids) = _held_keep
+print("  unmarked while it is gone, marked again when it is back  OK")
+
+print()
 print("all assertions passed")
