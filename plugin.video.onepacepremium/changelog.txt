@@ -1,3 +1,24 @@
+[B]v2.5.0[/B]  [COLOR FF888899]20 November 2026[/COLOR]
+
+[COLOR FF81A6C6][B]New[/B][/COLOR]
+  •  Seasons can show their arc name, their number, or both. Under Lists, Show Seasons As.
+  •  Each season shows its own description, where One Pace wrote one for it.
+
+[COLOR FF81A6C6][B]Changed[/B][/COLOR]
+  •  With no connection, Browse and the lists now offer what you have downloaded.
+  •  The next episode is still offered with no connection, for anything on disk.
+  •  Losing the connection is mentioned once, instead of on every screen you open.
+
+[COLOR FF81A6C6][B]Fixes[/B][/COLOR]
+  •  Downloading no longer slows Kodi down while it runs.
+  •  A progress bar is never left behind on the screen when something goes wrong.
+  •  An episode deleted outside Kodi loses its mark the next time the list is drawn.
+  •  In Progress and Next Episodes are quicker to draw.
+  •  Elementum no longer asks about resuming when Direct Playback is on.
+  •  Changing Reuse Language Invoker can no longer leave the add-on unable to start.
+  •  Cached data nothing will read again is cleared once a Kodi start.
+
+
 [B]v2.4.9[/B]  [COLOR FF888899]9 November 2026[/COLOR]
 
 [COLOR FF81A6C6][B]New[/B][/COLOR]
