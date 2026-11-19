@@ -44,8 +44,8 @@ def resolve_stream(uri, file_idx=None):
     url = f"{base}/play?uri={parse.quote(uri, safe='')}"
     if file_idx is not None:
         url += f"&index={file_idx}&oindex={file_idx}"
-    # Resume is ours (bookmarks + Kodi's dialog); stop Elementum asking too.
-    url += "&doresume=false"
+    # Resume is ours; "never", because Elementum ignores "false" from add-ons.
+    url += "&doresume=never"
 
     import requests
     session = requests.Session()

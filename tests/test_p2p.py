@@ -232,4 +232,42 @@ assert _asked[-1] is False, _asked
 S["base_url"], S["secret_string"] = "https://onepace.e6ip.com", ""
 
 print()
+print("=== direct playback tells Elementum not to ask about resume ===")
+from lib import elementum as _el
+
+_asked = {}
+
+
+class _Session:
+    trust_env = True
+
+    def get(self, url, **kwargs):
+        _asked["url"] = url
+        return type("R", (), {
+            "url": "http://127.0.0.1:65220/files/x.mkv", "status_code": 200,
+            "close": lambda s: None})()
+
+    def close(self):
+        pass
+
+
+# resolve_stream imports requests inside the call, so it has to be injected.
+import sys as _sys, types as _types
+_fake = _types.ModuleType("requests")
+_fake.Session = _Session
+_fake.RequestException = Exception
+_sys.modules["requests"] = _fake
+_el._connection = lambda: ("http://127.0.0.1:65220", None)
+_got = _el.resolve_stream("magnet:?xt=urn:btih:abc", 2)
+print(f"  resolved -> {_got}")
+print(f"  asked    -> {_asked['url'].split('?', 1)[1]}")
+assert _got.endswith("/files/x.mkv"), _got
+assert "index=2&oindex=2" in _asked["url"], _asked["url"]
+# "false" is not enough: Elementum distrusts it, because Kodi sends
+# resume:false on every plain play, so only "never" silences its dialog.
+assert "doresume=never" in _asked["url"], _asked["url"]
+assert "doresume=false" not in _asked["url"], _asked["url"]
+print("  doresume=never, so its dialog stays shut  OK")
+
+print()
 print("all assertions passed")

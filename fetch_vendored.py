@@ -14,7 +14,7 @@ DIST = Path("dist")
 # id -> (version, release zip url)
 VENDORED = {
     "repository.elementumorg": (
-        "0.0.7",
+        "0.0.9",
         "https://github.com/ElementumOrg/repository.elementumorg"
         "/releases/download/v{version}/{id}-{version}.zip",
     ),
